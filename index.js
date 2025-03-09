@@ -4,24 +4,27 @@ const { Telegraf, Markup } = require('telegraf');
 const schedule = require('node-schedule');
 const { google } = require('googleapis');
 
+// Вывод версии Telegraf для отладки
+console.log('Telegraf version:', require('telegraf').version);
+
 // Настройка Google Drive API
 const auth = new google.auth.GoogleAuth({
-  credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS), // Локально используем файл, на Render — переменную окружения
-  scopes: ['https://www.googleapis.com/auth/drive']
+  credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
+  scopes: ['https://www.googleapis.com/auth/drive'],
 });
 const drive = google.drive({ version: 'v3', auth });
 
 // Инициализация бота
-const bot = new Telegraf(process.env.BOT_TOKEN || 'YOUR_BOT_TOKEN_HERE'); // Замените на ваш токен для локального тестирования
-const ADMIN_ID = process.env.ADMIN_ID || 'YOUR_ADMIN_ID_HERE'; // Замените на ваш ID для локального тестирования
-const GENERAL_GROUP_CHAT_ID = '-1002266023014'; // Замените на ваш чат ID
+const bot = new Telegraf(process.env.BOT_TOKEN || 'YOUR_BOT_TOKEN_HERE');
+const ADMIN_ID = process.env.ADMIN_ID || 'YOUR_ADMIN_ID_HERE';
+const GENERAL_GROUP_CHAT_ID = '-1002266023014';
 
 // Объекты и их транслитерация
 const OBJECTS = ['Кольцевой МНПП', 'Ярославль-Москва', 'Ярославль-Кириши 1'];
 const OBJECTS_TRANSLIT = {
   'Кольцевой МНПП': 'Kolcevoy_MNPP',
   'Ярославль-Москва': 'Yaroslavl_Moskva',
-  'Ярославль-Кириши 1': 'Yaroslavl_Kirishi1'
+  'Ярославль-Кириши 1': 'Yaroslavl_Kirishi1',
 };
 const OBJECTS_TRANSLIT_REVERSE = Object.fromEntries(
     Object.entries(OBJECTS_TRANSLIT).map(([k, v]) => [v, k])
@@ -34,16 +37,16 @@ let users = {};
 async function loadUsers() {
   try {
     const response = await drive.files.get({
-      fileId: '1XUiCno-FuhDHLNrgVMgvXSOPstbsuosB', // Замените на ваш ID файла users.json
-      alt: 'media'
+      fileId: '1XUiCno-FuhDHLNrgVMgvXSOPstbsuosB',
+      alt: 'media',
     }, { responseType: 'stream' });
     let data = '';
-    response.data.on('data', chunk => data += chunk);
+    response.data.on('data', chunk => (data += chunk));
     await new Promise(resolve => response.data.on('end', resolve));
     users = data ? JSON.parse(data) : {};
     console.log('Пользователи загружены из Google Drive');
   } catch (err) {
-    console.error('Ошибка загрузки users из Google Drive:', err.message);
+    console.error('Ошибка загрузки users из Google Drive:', err.response?.data || err.message);
     users = {};
   }
 }
@@ -53,29 +56,30 @@ async function saveUsers() {
   try {
     const fileContent = JSON.stringify(users, null, 2);
     await drive.files.update({
-      fileId: '1XUiCno-FuhDHLNrgVMgvXSOPstbsuosB', // Замените на ваш ID файла users.json
+      fileId: '1XUiCno-FuhDHLNrgVMgvXSOPstbsuosB',
       media: {
         mimeType: 'application/json',
-        body: fileContent
-      }
+        body: fileContent,
+      },
     });
     console.log('Данные сохранены в Google Drive (users.json)');
   } catch (err) {
-    console.error('Ошибка сохранения users в Google Drive:', err.message);
+    console.error('Ошибка сохранения users в Google Drive:', err.response?.data || err.message);
   }
 }
 
 // Сохранение отчета в Google Drive
 async function saveReportToFile(report, userId) {
-  const objectName = report.objectName.replace(/\s+/g, '_');
+  const objectName = report.objectName;
   const fileIds = {
-    'Kolcevoy_MNPP': '1_M078iwVesVTAMAB7qSmRa1dwLG1iu-c92azvD1mUd4', // Замените на ваш ID для Kolcevoy_MNPP.txt
-    'Yaroslavl_Moskva': '16PsM-EX_CIiTusbzN09-cUB25s-RQJDcoJUb6iOKDRE', // Замените на ваш ID для Yaroslavl_Moskva.txt
-    'Yaroslavl_Kirishi1': '1RAIL4NmSqhYgkTQc48uJvwZVWJtqv4Vv2S9NXxMPJBU' // Замените на ваш ID для Yaroslavl_Kirishi1.txt
+    'Kolcevoy_MNPP': '1MENymvBHx17H62uKZ75s50XtZGWOyXqG',
+    'Yaroslavl_Moskva': '1Ug7PkIYYp-zgJMYzIiy5cUQyE06ALbYx',
+    'Yaroslavl_Kirishi1': '1AsC8LTj-_9lVDXHdWE0YkkxE6Jr1EU9x',
   };
   const fileId = fileIds[objectName];
   const timestamp = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-  const reportText = `Дата: ${report.date}\n` +
+  const reportText =
+      `Дата: ${report.date}\n` +
       `Время: ${timestamp}\n` +
       `ИТР: ${users[userId].fullName}\n` +
       `Объект: ${OBJECTS_TRANSLIT_REVERSE[report.objectName]}\n` +
@@ -84,28 +88,43 @@ async function saveReportToFile(report, userId) {
       '--------------------------\n';
 
   try {
-    // Читаем текущее содержимое файла
-    const response = await drive.files.get({
-      fileId: fileId,
-      alt: 'media'
-    }, { responseType: 'stream' });
     let currentContent = '';
-    response.data.on('data', chunk => currentContent += chunk);
-    await new Promise(resolve => response.data.on('end', resolve));
+    try {
+      const response = await drive.files.get({
+        fileId: fileId,
+        alt: 'media',
+      }, { responseType: 'stream' });
+      response.data.on('data', chunk => (currentContent += chunk));
+      await new Promise(resolve => response.data.on('end', resolve));
+    } catch (err) {
+      if (err.response?.status === 404) {
+        console.log(`Файл ${objectName}.txt не найден, создаём новый`);
+        currentContent = '';
+      } else {
+        throw err;
+      }
+    }
 
-    // Добавляем новый отчет к существующему содержимому
     const updatedContent = currentContent + reportText;
     await drive.files.update({
       fileId: fileId,
       media: {
         mimeType: 'text/plain',
-        body: updatedContent
-      }
+        body: updatedContent,
+      },
     });
     console.log(`Отчет сохранен в Google Drive: ${objectName}.txt`);
   } catch (err) {
-    console.error(`Ошибка сохранения отчета ${objectName} в Google Drive:`, err.message);
+    console.error(`Ошибка сохранения отчета ${objectName} в Google Drive:`, err.response?.data || err.message);
   }
+}
+
+// Главное меню
+function getMainMenu(userId) {
+  const isAdmin = userId === ADMIN_ID;
+  const buttons = [['Создать отчет'], ['Выбрать объект', 'Мои объекты'], ['Мои отчеты']];
+  if (isAdmin) buttons.push(['Утвердить пользователя']);
+  return Markup.keyboard(buttons).resize();
 }
 
 // Команда /start
@@ -114,20 +133,24 @@ bot.start(async (ctx) => {
   const userId = ctx.from.id.toString();
   if (!users[userId]) {
     await ctx.reply('Пожалуйста, укажите ваше ФИО:');
-    bot.once('text', async (ctx) => {
-      const fullName = ctx.message.text;
-      users[userId] = {
-        fullName,
-        position: '',
-        selectedObjects: [],
-        status: 'в работе',
-        isApproved: false,
-        reports: {},
-        nextReportId: 1
-      };
-      await saveUsers();
-      await ctx.reply('ФИО сохранено. Выберите объект:', Markup.keyboard(OBJECTS).oneTime().resize());
-    });
+    const handler = async (ctx) => {
+      if (ctx.from.id.toString() === userId) {
+        const fullName = ctx.message.text;
+        users[userId] = {
+          fullName,
+          position: '',
+          selectedObjects: [],
+          status: 'в работе',
+          isApproved: false,
+          reports: {},
+          nextReportId: 1,
+        };
+        await saveUsers();
+        await ctx.reply('ФИО сохранено. Выберите объект:', Markup.keyboard(OBJECTS).oneTime().resize());
+        bot.off('text', handler); // Удаляем обработчик после использования
+      }
+    };
+    bot.on('text', handler);
   } else {
     await ctx.reply('Вы уже зарегистрированы. Выберите действие:', getMainMenu(userId));
   }
@@ -147,55 +170,56 @@ bot.on('text', async (ctx) => {
   }
 });
 
-// Главное меню
-function getMainMenu(userId) {
-  const isAdmin = userId === ADMIN_ID;
-  const buttons = [
-    ['Создать отчет'],
-    ['Выбрать объект', 'Мои объекты'],
-    ['Мои отчеты']
-  ];
-  if (isAdmin) buttons.push(['Утвердить пользователя']);
-  return Markup.keyboard(buttons).resize();
-}
-
 // Команда "Создать отчет"
 bot.hears('Создать отчет', async (ctx) => {
   const userId = ctx.from.id.toString();
-  if (!users[userId].isApproved) {
+  if (!users[userId]?.isApproved) {
     return ctx.reply('Вы не можете создавать отчеты, пока ваш профиль не утвержден администратором.');
   }
   if (!users[userId].selectedObjects.length) {
     return ctx.reply('Сначала выберите хотя бы один объект.');
   }
   await ctx.reply('Выберите объект для отчета:', Markup.keyboard(users[userId].selectedObjects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj])).oneTime().resize());
-});
 
-// Обработка выбора объекта для отчета
-bot.hears(Object.values(OBJECTS_TRANSLIT_REVERSE), async (ctx) => {
-  const userId = ctx.from.id.toString();
-  const objectName = OBJECTS_TRANSLIT[ctx.message.text];
-  if (users[userId].selectedObjects.includes(objectName)) {
-    const report = { objectName };
-    await ctx.reply('Укажите дату (например, 2025-03-09):');
-    bot.once('text', async (ctx) => {
-      report.date = ctx.message.text;
-      await ctx.reply('Укажите выполненные работы:');
-      bot.once('text', async (ctx) => {
-        report.workDone = ctx.message.text;
-        await ctx.reply('Укажите использованные материалы:');
-        bot.once('text', async (ctx) => {
-          report.materials = ctx.message.text;
-          const reportId = users[userId].nextReportId++;
-          users[userId].reports[reportId] = report;
-          await saveUsers();
-          await saveReportToFile(report, userId);
-          await ctx.reply('Отчет сохранен.', getMainMenu(userId));
-          await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, `Новый отчет от ${users[userId].fullName} по объекту ${ctx.message.text}`);
-        });
-      });
-    });
-  }
+  const handler = async (ctx) => {
+    const userId = ctx.from.id.toString();
+    const objectName = OBJECTS_TRANSLIT[ctx.message.text];
+    if (users[userId]?.selectedObjects.includes(objectName)) {
+      const report = { objectName };
+      await ctx.reply('Укажите дату (например, 2025-03-09):');
+      const dateHandler = async (ctx) => {
+        if (ctx.from.id.toString() === userId) {
+          report.date = ctx.message.text;
+          await ctx.reply('Укажите выполненные работы:');
+          const workHandler = async (ctx) => {
+            if (ctx.from.id.toString() === userId) {
+              report.workDone = ctx.message.text;
+              await ctx.reply('Укажите использованные материалы:');
+              const materialsHandler = async (ctx) => {
+                if (ctx.from.id.toString() === userId) {
+                  report.materials = ctx.message.text;
+                  const reportId = users[userId].nextReportId++;
+                  users[userId].reports[reportId] = report;
+                  await saveUsers();
+                  await saveReportToFile(report, userId);
+                  await ctx.reply('Отчет сохранен.', getMainMenu(userId));
+                  await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, `Новый отчет от ${users[userId].fullName} по объекту ${ctx.message.text}`);
+                  bot.off('text', materialsHandler);
+                }
+              };
+              bot.on('text', materialsHandler);
+              bot.off('text', workHandler);
+            }
+          };
+          bot.on('text', workHandler);
+          bot.off('text', dateHandler);
+        }
+      };
+      bot.on('text', dateHandler);
+      bot.off('text', handler);
+    }
+  };
+  bot.on('text', handler);
 });
 
 // Команда "Мои объекты"
@@ -208,9 +232,9 @@ bot.hears('Мои объекты', async (ctx) => {
 // Команда "Мои отчеты"
 bot.hears('Мои отчеты', async (ctx) => {
   const userId = ctx.from.id.toString();
-  const reports = Object.entries(users[userId].reports).map(([id, r]) =>
-      `Отчет #${id}\nОбъект: ${OBJECTS_TRANSLIT_REVERSE[r.objectName]}\nДата: ${r.date}\nРаботы: ${r.workDone}\nМатериалы: ${r.materials}`
-  ).join('\n\n');
+  const reports = Object.entries(users[userId].reports)
+      .map(([id, r]) => `Отчет #${id}\nОбъект: ${OBJECTS_TRANSLIT_REVERSE[r.objectName]}\nДата: ${r.date}\nРаботы: ${r.workDone}\nМатериалы: ${r.materials}`)
+      .join('\n\n');
   await ctx.reply(reports || 'У вас нет отчетов.', getMainMenu(userId));
 });
 
@@ -235,7 +259,7 @@ bot.action(/approve_(.+)/, async (ctx) => {
   }
 });
 
-// Напоминание в 19:00
+// Напоминание в 19:00 (по московскому времени)
 schedule.scheduleJob('0 0 19 * * *', async () => {
   const today = new Date().toISOString().split('T')[0];
   for (const [userId, user] of Object.entries(users)) {
@@ -246,11 +270,13 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
 });
 
 // Запуск бота после загрузки данных
-loadUsers().then(() => {
-  bot.launch()
-      .then(() => console.log('Бот успешно запущен'))
-      .catch(err => console.error('Ошибка запуска бота:', err));
-});
+loadUsers()
+    .then(() => {
+      bot.launch()
+          .then(() => console.log('Бот успешно запущен'))
+          .catch(err => console.error('Ошибка запуска бота:', err));
+    })
+    .catch(err => console.error('Ошибка при старте:', err));
 
 // Обработка остановки бота
 process.once('SIGINT', () => bot.stop('SIGINT'));
