@@ -70,13 +70,18 @@ async function saveUsers() {
 
 // Сохранение отчета в Google Drive
 async function saveReportToFile(report, userId) {
-  const objectName = report.objectName;
+  const objectName = report.objectName; // Например, 'Kolcevoy_MNPP'
   const fileIds = {
-    'Kolcevoy_MNPP.txt': '1MENymvBHx17H62uKZ75s50XtZGWOyXqG',
-    'Yaroslavl_Moskva.txt': '1Ug7PkIYYp-zgJMYzIiy5cUQyE06ALbYx',
-    'Yaroslavl_Kirishi1.txt': '1AsC8LTj-_9lVDXHdWE0YkkxE6Jr1EU9x',
+    'Kolcevoy_MNPP': '1MENymvBHx17H62uKZ75s50XtZGWOyXqG',
+    'Yaroslavl_Moskva': '1Ug7PkIYYp-zgJMYzIiy5cUQyE06ALbYx',
+    'Yaroslavl_Kirishi1': '1AsC8LTj-_9lVDXHdWE0YkkxE6Jr1EU9x',
   };
   const fileId = fileIds[objectName];
+  if (!fileId) {
+    console.error(`Не найден fileId для объекта: ${objectName}`);
+    return;
+  }
+
   const timestamp = new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
   const reportText =
       `Дата: ${report.date}\n` +
