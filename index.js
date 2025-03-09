@@ -34,7 +34,7 @@ let users = {};
 async function loadUsers() {
   try {
     const response = await drive.files.get({
-      fileId: '1Eq4IFLxlgaQ2ckIua_g5UA03YSIzErOyamGkHC8ij5o', // Замените на ваш ID файла users.json
+      fileId: '1XUiCno-FuhDHLNrgVMgvXSOPstbsuosB', // Замените на ваш ID файла users.json
       alt: 'media'
     }, { responseType: 'stream' });
     let data = '';
@@ -53,7 +53,7 @@ async function saveUsers() {
   try {
     const fileContent = JSON.stringify(users, null, 2);
     await drive.files.update({
-      fileId: '1Eq4IFLxlgaQ2ckIua_g5UA03YSIzErOyamGkHC8ij5o', // Замените на ваш ID файла users.json
+      fileId: '1XUiCno-FuhDHLNrgVMgvXSOPstbsuosB', // Замените на ваш ID файла users.json
       media: {
         mimeType: 'application/json',
         body: fileContent
