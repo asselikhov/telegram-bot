@@ -1,6 +1,6 @@
 console.log('Скрипт запущен');
 const { Telegraf, Markup } = require('telegraf');
-const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg'); // Новый импорт
 const schedule = require('node-schedule');
 require('dotenv').config();
 
@@ -9,38 +9,55 @@ const bot = new Telegraf(process.env.BOT_TOKEN || 'YOUR_BOT_TOKEN');
 const ADMIN_ID = process.env.ADMIN_ID || 'YOUR_ADMIN_ID';
 const GENERAL_GROUP_CHAT_ID = '-1002266023014';
 
-const db = new sqlite3.Database('./bot.db', (err) => {
-    if (err) console.error('Ошибка подключения к базе данных:', err.message);
-    else console.log('Подключено к базе данных SQLite');
+// Подключение к PostgreSQL
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false } // Требуется для Render
 });
 
-db.serialize(() => {
-    db.run(`
-        CREATE TABLE IF NOT EXISTS users (
-            userId TEXT PRIMARY KEY,
-            fullName TEXT,
-            position TEXT,
-            selectedObjects TEXT,
-            status TEXT DEFAULT 'в работе',
-            isApproved INTEGER DEFAULT 0,
-            nextReportId INTEGER DEFAULT 1
-        )
-    `);
-    db.run(`
-        CREATE TABLE IF NOT EXISTS reports (
-            reportId TEXT PRIMARY KEY,
-            userId TEXT,
-            objectName TEXT,
-            date TEXT,
-            timestamp TEXT,
-            workDone TEXT,
-            materials TEXT,
-            groupMessageId TEXT,
-            generalMessageId TEXT,
-            FOREIGN KEY (userId) REFERENCES users(userId)
-        )
-    `);
+pool.connect((err) => {
+    if (err) console.error('Ошибка подключения к базе данных:', err.message);
+    else console.log('Подключено к базе данных PostgreSQL');
 });
+
+// Инициализация таблиц
+async function initializeDatabase() {
+    const client = await pool.connect();
+    try {
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS users (
+                userId TEXT PRIMARY KEY,
+                fullName TEXT,
+                position TEXT,
+                selectedObjects TEXT,
+                status TEXT DEFAULT 'в работе',
+                isApproved INTEGER DEFAULT 0,
+                nextReportId INTEGER DEFAULT 1
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS reports (
+                reportId TEXT PRIMARY KEY,
+                userId TEXT,
+                objectName TEXT,
+                date TEXT,
+                timestamp TEXT,
+                workDone TEXT,
+                materials TEXT,
+                groupMessageId TEXT,
+                generalMessageId TEXT,
+                FOREIGN KEY (userId) REFERENCES users(userId)
+            );
+        `);
+        console.log('Таблицы созданы или уже существуют');
+    } catch (err) {
+        console.error('Ошибка при создании таблиц:', err);
+    } finally {
+        client.release();
+    }
+}
+
+initializeDatabase();
 
 const OBJECTS_LIST_CYRILLIC = ['Кольцевой МНПП', 'Ярославль-Москва', 'Ярославль-Кириши1'];
 const OBJECTS_LIST_LATIN = ['Kolcevoy_MNPP', 'Yaroslavl_Moskva', 'Yaroslavl_Kirishi1'];
@@ -67,26 +84,28 @@ let userStates = {};
 let lastMessageIds = {};
 
 async function loadUsers() {
-    return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM users', (err, rows) => {
-            if (err) reject(err);
-            else {
-                const users = {};
-                rows.forEach(row => {
-                    users[row.userId] = {
-                        fullName: row.fullName || '',
-                        position: row.position || '',
-                        selectedObjects: row.selectedObjects ? JSON.parse(row.selectedObjects) : [],
-                        status: row.status || 'в работе',
-                        isApproved: Boolean(row.isApproved),
-                        nextReportId: row.nextReportId || 1,
-                        reports: {}
-                    };
-                });
-                resolve(users);
-            }
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT * FROM users');
+        const users = {};
+        res.rows.forEach(row => {
+            users[row.userid] = {
+                fullName: row.fullname || '',
+                position: row.position || '',
+                selectedObjects: row.selectedobjects ? JSON.parse(row.selectedobjects) : [],
+                status: row.status || 'в работе',
+                isApproved: Boolean(row.isapproved),
+                nextReportId: row.nextreportid || 1,
+                reports: {}
+            };
         });
-    });
+        return users;
+    } catch (err) {
+        console.error('Ошибка загрузки пользователей:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
 }
 
 async function loadUserReports(userId) {
@@ -114,15 +133,20 @@ async function loadUserReports(userId) {
 
 async function saveUser(userId, userData) {
     const { fullName, position, selectedObjects, status, isApproved, nextReportId } = userData;
-    return new Promise((resolve, reject) => {
-        db.run(`
-            INSERT OR REPLACE INTO users (userId, fullName, position, selectedObjects, status, isApproved, nextReportId)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [userId, fullName, position, JSON.stringify(selectedObjects), status, isApproved ? 1 : 0, nextReportId], (err) => {
-            if (err) reject(err);
-            else resolve();
-        });
-    });
+    const client = await pool.connect();
+    try {
+        await client.query(`
+            INSERT INTO users (userId, fullName, position, selectedObjects, status, isApproved, nextReportId)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (userId) DO UPDATE
+            SET fullName = $2, position = $3, selectedObjects = $4, status = $5, isApproved = $6, nextReportId = $7
+        `, [userId, fullName, position, JSON.stringify(selectedObjects), status, isApproved ? 1 : 0, nextReportId]);
+    } catch (err) {
+        console.error('Ошибка сохранения пользователя:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
 }
 
 async function saveReport(userId, report) {
@@ -937,16 +961,16 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
 
 bot.launch().then(() => console.log('Бот запущен в режиме polling'));
 
-process.once('SIGINT', () => {
+process.once('SIGINT', async () => {
     bot.stop('SIGINT');
-    db.close();
+    await pool.end();
     console.log('Бот остановлен');
     process.exit(0);
 });
 
-process.once('SIGTERM', () => {
+process.once('SIGTERM', async () => {
     bot.stop('SIGTERM');
-    db.close();
+    await pool.end();
     console.log('Бот остановлен');
     process.exit(0);
 });
