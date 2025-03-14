@@ -608,7 +608,7 @@ async function viewReport(ctx, reportId) {
 
 async function showHelp(ctx) {
     const userId = ctx.from.id.toString();
-    await deletePreviousMessage(ctx, userId);
+    await deletePreviousMessage(ctx,']], userId);
 
     const helpText = `
 *ℹ️ Помощь*  
@@ -961,9 +961,45 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     }
 });
 
+// Новая команда /listproducers
+bot.command('listproducers', async (ctx) => {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) {
+        await ctx.reply('У вас нет прав для этой команды.');
+        return;
+    }
+
+    const client = await pool.connect();
+    try {
+        const res = await client.query(
+            'SELECT fullName, selectedObjects FROM users WHERE position = $1 AND isApproved = $2',
+            ['производитель работ', 1]
+        );
+        if (res.rows.length === 0) {
+            await ctx.reply('Производители работ не найдены.');
+            return;
+        }
+
+        const producerList = res.rows.map(row => {
+            const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
+            const objectNames = objects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj]).join(', ');
+            return `${row.fullname}: ${objectNames || 'Объекты не выбраны'}`;
+        }).join('\n');
+
+        await ctx.replyWithMarkdown(
+            `*📋 Список производителей работ:*\n━━━━━━━━━━━━━━━━━━━━\n${producerList}\n━━━━━━━━━━━━━━━━━━━━`
+        );
+    } catch (err) {
+        console.error('Ошибка получения списка производителей:', err);
+        await ctx.reply('Произошла ошибка при загрузке списка.');
+    } finally {
+        client.release();
+    }
+});
+
 bot.launch().then(() => console.log('Бот запущен в режиме polling'));
 
-process.once('SIGINT', async () => {
+process.once('SIGINT', async () =>-Warren {
     bot.stop('SIGINT');
     await pool.end();
     console.log('Бот остановлен');
