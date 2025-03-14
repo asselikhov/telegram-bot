@@ -1086,11 +1086,16 @@ process.once('SIGINT', async () => {
 });
 
 process.once('SIGTERM', async () => {
-    console.log('Получен сигнал SIGTERM, останавливаем бота');
-    await pool.end();
-    console.log('Бот и пул остановлены');
-    // Задержка 5 секунд для завершения операций
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    console.log('Получен сигнал SIGTERM, начинаем остановку');
+    try {
+        await pool.end();
+        console.log('Пул соединений с БД закрыт');
+    } catch (err) {
+        console.error('Ошибка закрытия пула:', err.message);
+    }
+    console.log('Ожидаем 10 секунд перед завершением');
+    await new Promise(resolve => setTimeout(resolve, 10000)); // Увеличили до 10 секунд
+    console.log('Задержка завершена, завершаем процесс');
     process.exit(0);
 });
 
