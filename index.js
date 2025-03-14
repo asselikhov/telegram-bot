@@ -961,7 +961,7 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     }
 });
 
-// Новая команда /listproducers
+// Команда /listproducers с отладкой
 bot.command('listproducers', async (ctx) => {
     console.log('Команда /listproducers получена от userId:', ctx.from.id);
     const userId = ctx.from.id.toString();
@@ -1000,19 +1000,28 @@ bot.command('listproducers', async (ctx) => {
     }
 });
 
-bot.launch()
+// Запуск бота с улучшенной отладкой
+console.log('Начинаем запуск бота...');
+bot.launch({
+    polling: {
+        timeout: 30, // Таймаут в секундах
+        limit: 100   // Максимум обновлений за запрос
+    }
+})
     .then(() => {
         console.log('Бот успешно запущен в режиме polling');
     })
     .catch((err) => {
-        console.error('Ошибка запуска бота:', err);
+        console.error('Ошибка при запуске бота:', err.message);
+        console.error('Полная ошибка:', err);
     });
 
+console.log('Регистрация обработчиков завершения процесса...');
 process.once('SIGINT', async () => {
     console.log('Получен сигнал SIGINT, останавливаем бота');
     bot.stop('SIGINT');
     await pool.end();
-    console.log('Бот остановлен');
+    console.log('Бот и пул остановлены');
     process.exit(0);
 });
 
@@ -1020,6 +1029,19 @@ process.once('SIGTERM', async () => {
     console.log('Получен сигнал SIGTERM, останавливаем бота');
     bot.stop('SIGTERM');
     await pool.end();
-    console.log('Бот остановлен');
+    console.log('Бот и пул остановлены');
     process.exit(0);
+});
+
+// Обработка необработанных ошибок
+process.on('uncaughtException', (err) => {
+    console.error('Необработанное исключение:', err.message);
+    console.error('Стек ошибки:', err.stack);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Необработанный промис:', reason);
+    console.error('Промис:', promise);
+    process.exit(1);
 });
