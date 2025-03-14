@@ -1,4 +1,3 @@
-// Обновлено для усиленного логирования, 14 марта 2025
 console.log('Скрипт запущен');
 const { Telegraf, Markup } = require('telegraf');
 const { Pool } = require('pg');
@@ -1094,7 +1093,7 @@ process.once('SIGTERM', async () => {
         console.error('Ошибка закрытия пула:', err.message);
     }
     console.log('Ожидаем 10 секунд перед завершением');
-    await new Promise(resolve => setTimeout(resolve, 10000)); // Увеличили до 10 секунд
+    await new Promise(resolve => setTimeout(resolve, 10000)); // Задержка 10 секунд
     console.log('Задержка завершена, завершаем процесс');
     process.exit(0);
 });
