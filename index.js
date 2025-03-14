@@ -5,9 +5,13 @@ const schedule = require('node-schedule');
 const express = require('express');
 require('dotenv').config();
 
+// Логируем запуск и ключевые переменные окружения
+console.log('Запуск бота, BOT_TOKEN:', process.env.BOT_TOKEN?.substring(0, 5) + '...');
+console.log('Запуск бота, ADMIN_ID:', process.env.ADMIN_ID);
+console.log('Запуск бота, DATABASE_URL:', process.env.DATABASE_URL ? 'Задан' : 'Не задан');
+
 // Инициализация бота
 const botToken = process.env.BOT_TOKEN || 'YOUR_BOT_TOKEN';
-console.log('Используемый BOT_TOKEN:', botToken.substring(0, 5) + '...');
 const bot = new Telegraf(botToken);
 
 // Инициализация Express-сервера
@@ -466,14 +470,14 @@ bot.action('confirm_objects', async (ctx) => {
     await saveUser(userId, users[userId]);
 
     if (state.isEditing) {
-        // Если это редактирование из личного кабинета, возвращаем в профиль
+        // Если это редактирование из личного кабинета
         delete userStates[userId];
         await deletePreviousMessage(ctx, userId);
         const message = await ctx.reply('Объекты успешно обновлены.');
         updateLastMessageId(ctx, userId, message);
         setTimeout(() => showProfile(ctx), 1000);
     } else {
-        // Если это регистрация, запрашиваем ФИО
+        // Если это регистрация
         userStates[userId] = { step: 'fullName' };
         await deletePreviousMessage(ctx, userId);
         const message = await ctx.reply('Введите ваше ФИО:');
@@ -485,7 +489,7 @@ bot.action('edit_object', async (ctx) => {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const currentObjects = users[userId].selectedObjects || [];
-    userStates[userId] = { step: 'selectObjects', selectedObjects: [...currentObjects], isEditing: true }; // Добавляем флаг
+    userStates[userId] = { step: 'selectObjects', selectedObjects: [...currentObjects], isEditing: true };
     await showObjectSelection(ctx, userId, currentObjects);
 });
 
@@ -981,18 +985,22 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     }
 });
 
-// Команда /listproducers
+// Команда /listproducers с улучшенным логированием
 bot.command('listproducers', async (ctx) => {
     console.log('Команда /listproducers получена от userId:', ctx.from.id);
+    console.log('Текущий ADMIN_ID:', process.env.ADMIN_ID);
     const userId = ctx.from.id.toString();
-    if (userId !== ADMIN_ID) {
-        console.log('Доступ запрещен для userId:', userId, 'ADMIN_ID:', ADMIN_ID);
+    console.log('Проверка доступа:', userId === process.env.ADMIN_ID);
+    if (userId !== process.env.ADMIN_ID) {
+        console.log('Доступ запрещен для userId:', userId);
         await ctx.reply('У вас нет прав для этой команды.');
         return;
     }
+    console.log('Доступ разрешен, выполняем запрос к БД');
 
     const client = await pool.connect();
     try {
+        console.log('Запрос к базе данных для производителей работ');
         const res = await client.query(
             'SELECT userId, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
             ['производитель работ', 1]
@@ -1031,18 +1039,16 @@ bot.command('listproducers', async (ctx) => {
 // Настройка вебхука и запуск сервера
 app.use(express.json());
 
-// Добавляем отладку для всех запросов
+// Отладка всех запросов
 app.use((req, res, next) => {
     console.log('Получен запрос:', req.method, req.url, req.body);
     next();
 });
 
-// Маршрут для корневого пути
 app.get('/', (req, res) => {
     res.send('Telegram bot is running');
 });
 
-// Вебхук для Telegram
 app.use(bot.webhookCallback('/telegram-webhook'));
 
 const webhookUrl = `https://${process.env.RENDER_EXTERNAL_HOSTNAME}/telegram-webhook`;
@@ -1056,7 +1062,7 @@ bot.telegram.setWebhook(webhookUrl)
     });
 
 app.listen(PORT, () => {
-    console.log(`Сервер запущен на порту ${PORT}`);
+    console.log(`Сервер запущен на порту ${PORT}, внешний домен: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
 });
 
 // Обработка завершения процесса
