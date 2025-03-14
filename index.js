@@ -1,18 +1,29 @@
 console.log('Скрипт запущен');
 const { Telegraf, Markup } = require('telegraf');
+console.log('Telegraf импортирован');
 const { Pool } = require('pg');
+console.log('pg импортирован');
 const schedule = require('node-schedule');
+console.log('node-schedule импортирован');
 const express = require('express');
+console.log('express импортирован');
 require('dotenv').config();
+console.log('dotenv настроен');
 
-// Логируем ключевые переменные окружения при запуске
+// Логируем переменные окружения
 console.log('Запуск бота, BOT_TOKEN:', process.env.BOT_TOKEN?.substring(0, 5) + '...');
 console.log('Запуск бота, ADMIN_ID:', process.env.ADMIN_ID || 'Не задан');
 console.log('Запуск бота, DATABASE_URL:', process.env.DATABASE_URL ? 'Задан' : 'Не задан');
 
-// Инициализация бота
-const botToken = process.env.BOT_TOKEN || 'YOUR_BOT_TOKEN';
+// Проверка валидности BOT_TOKEN
+if (!process.env.BOT_TOKEN) {
+    console.error('Ошибка: BOT_TOKEN не задан');
+    process.exit(1);
+}
+
+const botToken = process.env.BOT_TOKEN;
 const bot = new Telegraf(botToken);
+console.log('Бот инициализирован');
 
 // Инициализация Express-сервера
 const app = express();
@@ -37,6 +48,7 @@ pool.connect((err) => {
 async function initializeDatabase() {
     const client = await pool.connect();
     try {
+        console.log('Создание таблиц в базе данных');
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 userId TEXT PRIMARY KEY,
@@ -64,9 +76,10 @@ async function initializeDatabase() {
         `);
         console.log('Таблицы созданы или уже существуют');
     } catch (err) {
-        console.error('Ошибка при создании таблиц:', err);
+        console.error('Ошибка при создании таблиц:', err.message);
     } finally {
         client.release();
+        console.log('Клиент базы данных освобожден');
     }
 }
 
@@ -99,6 +112,7 @@ let lastMessageIds = {};
 async function loadUsers() {
     const client = await pool.connect();
     try {
+        console.log('Загрузка пользователей из базы данных');
         const res = await client.query('SELECT * FROM users');
         const users = {};
         res.rows.forEach(row => {
@@ -112,9 +126,10 @@ async function loadUsers() {
                 reports: {}
             };
         });
+        console.log('Пользователи загружены:', Object.keys(users).length);
         return users;
     } catch (err) {
-        console.error('Ошибка загрузки пользователей:', err);
+        console.error('Ошибка загрузки пользователей:', err.message);
         throw err;
     } finally {
         client.release();
@@ -124,6 +139,7 @@ async function loadUsers() {
 async function loadUserReports(userId) {
     const client = await pool.connect();
     try {
+        console.log(`Загрузка отчетов для userId: ${userId}`);
         const res = await client.query('SELECT * FROM reports WHERE userId = $1', [userId]);
         const reports = {};
         res.rows.forEach(row => {
@@ -137,9 +153,10 @@ async function loadUserReports(userId) {
                 generalMessageId: row.generalmessageid
             };
         });
+        console.log(`Отчеты загружены для ${userId}:`, Object.keys(reports).length);
         return reports;
     } catch (err) {
-        console.error('Ошибка загрузки отчетов:', err);
+        console.error('Ошибка загрузки отчетов:', err.message);
         throw err;
     } finally {
         client.release();
@@ -150,14 +167,16 @@ async function saveUser(userId, userData) {
     const { fullName, position, selectedObjects, status, isApproved, nextReportId } = userData;
     const client = await pool.connect();
     try {
+        console.log(`Сохранение пользователя ${userId}`);
         await client.query(`
             INSERT INTO users (userId, fullName, position, selectedObjects, status, isApproved, nextReportId)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (userId) DO UPDATE
             SET fullName = $2, position = $3, selectedObjects = $4, status = $5, isApproved = $6, nextReportId = $7
         `, [userId, fullName, position, JSON.stringify(selectedObjects), status, isApproved ? 1 : 0, nextReportId]);
+        console.log(`Пользователь ${userId} сохранен`);
     } catch (err) {
-        console.error('Ошибка сохранения пользователя:', err);
+        console.error('Ошибка сохранения пользователя:', err.message);
         throw err;
     } finally {
         client.release();
@@ -168,14 +187,16 @@ async function saveReport(userId, report) {
     const { reportId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId } = report;
     const client = await pool.connect();
     try {
+        console.log(`Сохранение отчета ${reportId} для userId: ${userId}`);
         await client.query(`
             INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (reportId) DO UPDATE
             SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9
         `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId]);
+        console.log(`Отчет ${reportId} сохранен`);
     } catch (err) {
-        console.error('Ошибка сохранения отчета:', err);
+        console.error('Ошибка сохранения отчета:', err.message);
         throw err;
     } finally {
         client.release();
@@ -185,6 +206,7 @@ async function saveReport(userId, report) {
 async function getReportText(objectName) {
     const client = await pool.connect();
     try {
+        console.log(`Получение текста отчета для объекта: ${objectName}`);
         const res = await client.query(
             'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp',
             [objectName]
@@ -193,9 +215,10 @@ async function getReportText(objectName) {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
             return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${OBJECTS_TRANSLIT_REVERSE[row.objectname]}\nРаботы: ${row.workdone}\nМатериалы: ${row.materials}\n--------------------------\n`;
         }).join('');
+        console.log(`Текст отчета для ${objectName} сформирован`);
         return reportText;
     } catch (err) {
-        console.error('Ошибка получения текста отчета:', err);
+        console.error('Ошибка получения текста отчета:', err.message);
         throw err;
     } finally {
         client.release();
@@ -206,6 +229,7 @@ async function deletePreviousMessage(ctx, userId) {
     if (lastMessageIds[userId]) {
         try {
             await ctx.telegram.deleteMessage(ctx.chat.id, lastMessageIds[userId]);
+            console.log(`Удалено предыдущее сообщение для ${userId}`);
         } catch (err) {
             console.log('Не удалось удалить сообщение:', err.message);
         }
@@ -216,6 +240,7 @@ async function deletePreviousMessage(ctx, userId) {
 async function deleteGroupMessage(chatId, messageId) {
     try {
         await bot.telegram.deleteMessage(chatId, messageId);
+        console.log(`Удалено сообщение ${messageId} из группы ${chatId}`);
     } catch (err) {
         console.error(`Ошибка удаления сообщения ${messageId} из группы ${chatId}:`, err.message);
     }
@@ -223,6 +248,7 @@ async function deleteGroupMessage(chatId, messageId) {
 
 async function updateLastMessageId(ctx, userId, message) {
     lastMessageIds[userId] = message.message_id;
+    console.log(`Обновлен lastMessageId для ${userId}: ${message.message_id}`);
 }
 
 async function showPositionSelection(ctx, userId) {
@@ -398,6 +424,7 @@ bot.command('getreport', async (ctx) => {
 });
 
 bot.start(async (ctx) => {
+    console.log('Обработка команды /start');
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
 
@@ -953,7 +980,7 @@ bot.action(/reject_(.+)/, async (ctx) => {
         await client.query('DELETE FROM reports WHERE userId = $1', [targetUserId]);
         await ctx.editMessageText('Заявка отклонена.');
     } catch (err) {
-        console.error('Ошибка удаления:', err);
+        console.error('Ошибка удаления:', err.message);
     } finally {
         client.release();
     }
