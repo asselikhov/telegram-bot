@@ -963,8 +963,10 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
 
 // Новая команда /listproducers
 bot.command('listproducers', async (ctx) => {
+    console.log('Команда /listproducers получена от userId:', ctx.from.id);
     const userId = ctx.from.id.toString();
     if (userId !== ADMIN_ID) {
+        console.log('Доступ запрещен для userId:', userId, 'ADMIN_ID:', ADMIN_ID);
         await ctx.reply('У вас нет прав для этой команды.');
         return;
     }
@@ -975,6 +977,7 @@ bot.command('listproducers', async (ctx) => {
             'SELECT fullName, selectedObjects FROM users WHERE position = $1 AND isApproved = $2',
             ['производитель работ', 1]
         );
+        console.log('Результат запроса:', res.rows);
         if (res.rows.length === 0) {
             await ctx.reply('Производители работ не найдены.');
             return;
