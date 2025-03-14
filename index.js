@@ -1,3 +1,4 @@
+// Обновлено для усиленного логирования, 14 марта 2025
 console.log('Скрипт запущен');
 const { Telegraf, Markup } = require('telegraf');
 const { Pool } = require('pg');
