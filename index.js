@@ -5,9 +5,9 @@ const schedule = require('node-schedule');
 const express = require('express');
 require('dotenv').config();
 
-// Логируем запуск и ключевые переменные окружения
+// Логируем ключевые переменные окружения при запуске
 console.log('Запуск бота, BOT_TOKEN:', process.env.BOT_TOKEN?.substring(0, 5) + '...');
-console.log('Запуск бота, ADMIN_ID:', process.env.ADMIN_ID);
+console.log('Запуск бота, ADMIN_ID:', process.env.ADMIN_ID || 'Не задан');
 console.log('Запуск бота, DATABASE_URL:', process.env.DATABASE_URL ? 'Задан' : 'Не задан');
 
 // Инициализация бота
@@ -470,14 +470,12 @@ bot.action('confirm_objects', async (ctx) => {
     await saveUser(userId, users[userId]);
 
     if (state.isEditing) {
-        // Если это редактирование из личного кабинета
         delete userStates[userId];
         await deletePreviousMessage(ctx, userId);
         const message = await ctx.reply('Объекты успешно обновлены.');
         updateLastMessageId(ctx, userId, message);
         setTimeout(() => showProfile(ctx), 1000);
     } else {
-        // Если это регистрация
         userStates[userId] = { step: 'fullName' };
         await deletePreviousMessage(ctx, userId);
         const message = await ctx.reply('Введите ваше ФИО:');
@@ -985,54 +983,67 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     }
 });
 
-// Команда /listproducers с улучшенным логированием
+// Команда /listproducers с усиленной отладкой
 bot.command('listproducers', async (ctx) => {
-    console.log('Команда /listproducers получена от userId:', ctx.from.id);
-    console.log('Текущий ADMIN_ID:', process.env.ADMIN_ID);
-    const userId = ctx.from.id.toString();
-    console.log('Проверка доступа:', userId === process.env.ADMIN_ID);
-    if (userId !== process.env.ADMIN_ID) {
-        console.log('Доступ запрещен для userId:', userId);
-        await ctx.reply('У вас нет прав для этой команды.');
-        return;
-    }
-    console.log('Доступ разрешен, выполняем запрос к БД');
-
-    const client = await pool.connect();
     try {
-        console.log('Запрос к базе данных для производителей работ');
-        const res = await client.query(
-            'SELECT userId, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
-            ['производитель работ', 1]
-        );
-        console.log('Результат запроса:', res.rows);
-        if (res.rows.length === 0) {
-            await ctx.reply('Производители работ не найдены.');
+        console.log('=== Начало обработки /listproducers ===');
+        console.log('Получено обновление:', JSON.stringify(ctx.update));
+        console.log('Команда /listproducers получена от userId:', ctx.from.id);
+        console.log('Текущий ADMIN_ID:', process.env.ADMIN_ID);
+
+        const userId = ctx.from.id.toString();
+        console.log('userId:', userId, 'typeof userId:', typeof userId);
+        console.log('ADMIN_ID:', process.env.ADMIN_ID, 'typeof ADMIN_ID:', typeof process.env.ADMIN_ID);
+        console.log('Проверка доступа:', userId === process.env.ADMIN_ID);
+
+        if (userId !== process.env.ADMIN_ID) {
+            console.log('Доступ запрещен для userId:', userId);
+            await ctx.reply('У вас нет прав для этой команды.');
+            console.log('Ответ "Нет прав" отправлен');
             return;
         }
+        console.log('Доступ разрешен, выполняем запрос к БД');
 
-        const producerList = res.rows.map(row => {
-            let objects = [];
-            try {
-                objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
-            } catch (parseErr) {
-                console.error(`Ошибка парсинга selectedObjects для ${row.userId}:`, parseErr.message);
+        const client = await pool.connect();
+        console.log('Соединение с БД установлено');
+        try {
+            console.log('Запрос к базе данных для производителей работ');
+            const res = await client.query(
+                'SELECT userId, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
+                ['производитель работ', 1]
+            );
+            console.log('Результат запроса:', res.rows);
+            if (res.rows.length === 0) {
+                await ctx.reply('Производители работ не найдены.');
+                console.log('Ответ "Не найдены" отправлен');
+                return;
             }
-            const objectNames = objects.length > 0
-                ? objects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj]?.replace(/[_*]/g, '\\$&') || obj).join(', ')
-                : 'Объекты не выбраны';
-            const fullNameEscaped = row.fullname ? row.fullname.replace(/[_*]/g, '\\$&') : 'Не указано';
-            return `${fullNameEscaped} (ID: ${row.userId}): ${objectNames} [${row.status || 'в работе'}]`;
-        }).join('\n');
 
-        await ctx.replyWithMarkdown(
-            `*📋 Список производителей работ:*\n━━━━━━━━━━━━━━━━━━━━\n${producerList}\n━━━━━━━━━━━━━━━━━━━━`
-        );
+            const producerList = res.rows.map(row => {
+                let objects = [];
+                try {
+                    objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
+                } catch (parseErr) {
+                    console.error(`Ошибка парсинга selectedObjects для ${row.userId}:`, parseErr.message);
+                }
+                const objectNames = objects.length > 0
+                    ? objects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj]?.replace(/[_*]/g, '\\$&') || obj).join(', ')
+                    : 'Объекты не выбраны';
+                const fullNameEscaped = row.fullname ? row.fullname.replace(/[_*]/g, '\\$&') : 'Не указано';
+                return `${fullNameEscaped} (ID: ${row.userId}): ${objectNames} [${row.status || 'в работе'}]`;
+            }).join('\n');
+
+            await ctx.replyWithMarkdown(
+                `*📋 Список производителей работ:*\n━━━━━━━━━━━━━━━━━━━━\n${producerList}\n━━━━━━━━━━━━━━━━━━━━`
+            );
+            console.log('Список производителей отправлен');
+        } finally {
+            client.release();
+            console.log('Соединение с БД освобождено');
+        }
     } catch (err) {
-        console.error('Ошибка получения списка производителей:', err.message, err.stack);
-        await ctx.reply('Произошла ошибка при загрузке списка.');
-    } finally {
-        client.release();
+        console.error('Ошибка в обработке /listproducers:', err.message, err.stack);
+        await ctx.reply('Произошла ошибка при выполнении команды.');
     }
 });
 
@@ -1077,6 +1088,8 @@ process.once('SIGTERM', async () => {
     console.log('Получен сигнал SIGTERM, останавливаем бота');
     await pool.end();
     console.log('Бот и пул остановлены');
+    // Задержка 5 секунд для завершения операций
+    await new Promise(resolve => setTimeout(resolve, 5000));
     process.exit(0);
 });
 
