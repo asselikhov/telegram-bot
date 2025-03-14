@@ -970,7 +970,7 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     }
 });
 
-// Исправленная команда /listproducers
+// Команда /listproducers
 bot.command('listproducers', async (ctx) => {
     console.log('Команда /listproducers получена от userId:', ctx.from.id);
     const userId = ctx.from.id.toString();
@@ -1019,6 +1019,19 @@ bot.command('listproducers', async (ctx) => {
 
 // Настройка вебхука и запуск сервера
 app.use(express.json());
+
+// Добавляем отладку для всех запросов
+app.use((req, res, next) => {
+    console.log('Получен запрос:', req.method, req.url, req.body);
+    next();
+});
+
+// Маршрут для корневого пути
+app.get('/', (req, res) => {
+    res.send('Telegram bot is running');
+});
+
+// Вебхук для Telegram
 app.use(bot.webhookCallback('/telegram-webhook'));
 
 const webhookUrl = `https://${process.env.RENDER_EXTERNAL_HOSTNAME}/telegram-webhook`;
