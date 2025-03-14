@@ -608,7 +608,7 @@ async function viewReport(ctx, reportId) {
 
 async function showHelp(ctx) {
     const userId = ctx.from.id.toString();
-    await deletePreviousMessage(ctx,']], userId);
+    await deletePreviousMessage(ctx, userId);
 
     const helpText = `
 *ℹ️ Помощь*  
@@ -999,7 +999,7 @@ bot.command('listproducers', async (ctx) => {
 
 bot.launch().then(() => console.log('Бот запущен в режиме polling'));
 
-process.once('SIGINT', async () =>-Warren {
+process.once('SIGINT', async () => {
     bot.stop('SIGINT');
     await pool.end();
     console.log('Бот остановлен');
