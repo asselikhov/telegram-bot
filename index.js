@@ -970,7 +970,7 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     }
 });
 
-// Команда /listproducers с отладкой
+// Исправленная команда /listproducers
 bot.command('listproducers', async (ctx) => {
     console.log('Команда /listproducers получена от userId:', ctx.from.id);
     const userId = ctx.from.id.toString();
@@ -983,7 +983,7 @@ bot.command('listproducers', async (ctx) => {
     const client = await pool.connect();
     try {
         const res = await client.query(
-            'SELECT fullName, selectedObjects FROM users WHERE position = $1 AND isApproved = $2',
+            'SELECT userId, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
             ['производитель работ', 1]
         );
         console.log('Результат запроса:', res.rows);
@@ -993,16 +993,24 @@ bot.command('listproducers', async (ctx) => {
         }
 
         const producerList = res.rows.map(row => {
-            const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
-            const objectNames = objects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj]).join(', ');
-            return `${row.fullname}: ${objectNames || 'Объекты не выбраны'}`;
+            let objects = [];
+            try {
+                objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
+            } catch (parseErr) {
+                console.error(`Ошибка парсинга selectedObjects для ${row.userId}:`, parseErr.message);
+            }
+            const objectNames = objects.length > 0
+                ? objects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj]?.replace(/[_*]/g, '\\$&') || obj).join(', ')
+                : 'Объекты не выбраны';
+            const fullNameEscaped = row.fullname ? row.fullname.replace(/[_*]/g, '\\$&') : 'Не указано';
+            return `${fullNameEscaped} (ID: ${row.userId}): ${objectNames} [${row.status || 'в работе'}]`;
         }).join('\n');
 
         await ctx.replyWithMarkdown(
             `*📋 Список производителей работ:*\n━━━━━━━━━━━━━━━━━━━━\n${producerList}\n━━━━━━━━━━━━━━━━━━━━`
         );
     } catch (err) {
-        console.error('Ошибка получения списка производителей:', err);
+        console.error('Ошибка получения списка производителей:', err.message, err.stack);
         await ctx.reply('Произошла ошибка при загрузке списка.');
     } finally {
         client.release();
