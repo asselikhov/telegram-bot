@@ -1000,9 +1000,16 @@ bot.command('listproducers', async (ctx) => {
     }
 });
 
-bot.launch().then(() => console.log('Бот запущен в режиме polling'));
+bot.launch()
+    .then(() => {
+        console.log('Бот успешно запущен в режиме polling');
+    })
+    .catch((err) => {
+        console.error('Ошибка запуска бота:', err);
+    });
 
 process.once('SIGINT', async () => {
+    console.log('Получен сигнал SIGINT, останавливаем бота');
     bot.stop('SIGINT');
     await pool.end();
     console.log('Бот остановлен');
@@ -1010,6 +1017,7 @@ process.once('SIGINT', async () => {
 });
 
 process.once('SIGTERM', async () => {
+    console.log('Получен сигнал SIGTERM, останавливаем бота');
     bot.stop('SIGTERM');
     await pool.end();
     console.log('Бот остановлен');
