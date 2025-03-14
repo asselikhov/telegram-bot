@@ -2,10 +2,19 @@ console.log('Скрипт запущен');
 const { Telegraf, Markup } = require('telegraf');
 const { Pool } = require('pg');
 const schedule = require('node-schedule');
+const express = require('express');
 require('dotenv').config();
 
-const bot = new Telegraf(process.env.BOT_TOKEN || 'YOUR_BOT_TOKEN');
+// Инициализация бота
+const botToken = process.env.BOT_TOKEN || 'YOUR_BOT_TOKEN';
+console.log('Используемый BOT_TOKEN:', botToken.substring(0, 5) + '...');
+const bot = new Telegraf(botToken);
 
+// Инициализация Express-сервера
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Константы
 const ADMIN_ID = process.env.ADMIN_ID || 'YOUR_ADMIN_ID';
 const GENERAL_GROUP_CHAT_ID = '-1002266023014';
 
@@ -1000,26 +1009,27 @@ bot.command('listproducers', async (ctx) => {
     }
 });
 
-// Запуск бота с улучшенной отладкой
-console.log('Начинаем запуск бота...');
-bot.launch({
-    polling: {
-        timeout: 30, // Таймаут в секундах
-        limit: 100   // Максимум обновлений за запрос
-    }
-})
+// Настройка вебхука и запуск сервера
+app.use(express.json());
+app.use(bot.webhookCallback('/telegram-webhook'));
+
+const webhookUrl = `https://${process.env.RENDER_EXTERNAL_HOSTNAME}/telegram-webhook`;
+console.log('Установка вебхука на:', webhookUrl);
+bot.telegram.setWebhook(webhookUrl)
     .then(() => {
-        console.log('Бот успешно запущен в режиме polling');
+        console.log('Вебхук успешно установлен');
     })
     .catch((err) => {
-        console.error('Ошибка при запуске бота:', err.message);
-        console.error('Полная ошибка:', err);
+        console.error('Ошибка установки вебхука:', err.message);
     });
 
-console.log('Регистрация обработчиков завершения процесса...');
+app.listen(PORT, () => {
+    console.log(`Сервер запущен на порту ${PORT}`);
+});
+
+// Обработка завершения процесса
 process.once('SIGINT', async () => {
     console.log('Получен сигнал SIGINT, останавливаем бота');
-    bot.stop('SIGINT');
     await pool.end();
     console.log('Бот и пул остановлены');
     process.exit(0);
@@ -1027,13 +1037,11 @@ process.once('SIGINT', async () => {
 
 process.once('SIGTERM', async () => {
     console.log('Получен сигнал SIGTERM, останавливаем бота');
-    bot.stop('SIGTERM');
     await pool.end();
     console.log('Бот и пул остановлены');
     process.exit(0);
 });
 
-// Обработка необработанных ошибок
 process.on('uncaughtException', (err) => {
     console.error('Необработанное исключение:', err.message);
     console.error('Стек ошибки:', err.stack);
