@@ -464,17 +464,28 @@ bot.action('confirm_objects', async (ctx) => {
 
     users[userId].selectedObjects = state.selectedObjects;
     await saveUser(userId, users[userId]);
-    userStates[userId] = { step: 'fullName' };
-    await deletePreviousMessage(ctx, userId);
-    const message = await ctx.reply('Введите ваше ФИО:');
-    updateLastMessageId(ctx, userId, message);
+
+    if (state.isEditing) {
+        // Если это редактирование из личного кабинета, возвращаем в профиль
+        delete userStates[userId];
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('Объекты успешно обновлены.');
+        updateLastMessageId(ctx, userId, message);
+        setTimeout(() => showProfile(ctx), 1000);
+    } else {
+        // Если это регистрация, запрашиваем ФИО
+        userStates[userId] = { step: 'fullName' };
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('Введите ваше ФИО:');
+        updateLastMessageId(ctx, userId, message);
+    }
 });
 
 bot.action('edit_object', async (ctx) => {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const currentObjects = users[userId].selectedObjects || [];
-    userStates[userId] = { step: 'selectObjects', selectedObjects: [...currentObjects] };
+    userStates[userId] = { step: 'selectObjects', selectedObjects: [...currentObjects], isEditing: true }; // Добавляем флаг
     await showObjectSelection(ctx, userId, currentObjects);
 });
 
