@@ -1,6 +1,6 @@
 console.log('Скрипт запущен');
 const { Telegraf, Markup } = require('telegraf');
-const { Pool } = require('pg'); // Новый импорт
+const { Pool } = require('pg');
 const schedule = require('node-schedule');
 require('dotenv').config();
 
@@ -12,7 +12,7 @@ const GENERAL_GROUP_CHAT_ID = '-1002266023014';
 // Подключение к PostgreSQL
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false } // Требуется для Render
+    ssl: { rejectUnauthorized: false }
 });
 
 pool.connect((err) => {
@@ -109,26 +109,28 @@ async function loadUsers() {
 }
 
 async function loadUserReports(userId) {
-    return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM reports WHERE userId = ?', [userId], (err, rows) => {
-            if (err) reject(err);
-            else {
-                const reports = {};
-                rows.forEach(row => {
-                    reports[row.reportId] = {
-                        objectName: row.objectName,
-                        date: row.date,
-                        timestamp: row.timestamp,
-                        workDone: row.workDone,
-                        materials: row.materials,
-                        groupMessageId: row.groupMessageId,
-                        generalMessageId: row.generalMessageId
-                    };
-                });
-                resolve(reports);
-            }
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT * FROM reports WHERE userId = $1', [userId]);
+        const reports = {};
+        res.rows.forEach(row => {
+            reports[row.reportid] = {
+                objectName: row.objectname,
+                date: row.date,
+                timestamp: row.timestamp,
+                workDone: row.workdone,
+                materials: row.materials,
+                groupMessageId: row.groupmessageid,
+                generalMessageId: row.generalmessageid
+            };
         });
-    });
+        return reports;
+    } catch (err) {
+        console.error('Ошибка загрузки отчетов:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
 }
 
 async function saveUser(userId, userData) {
@@ -151,36 +153,40 @@ async function saveUser(userId, userData) {
 
 async function saveReport(userId, report) {
     const { reportId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId } = report;
-    console.log(`Сохранение отчета: ${reportId}`);
-    return new Promise((resolve, reject) => {
-        db.run(`
-            INSERT OR REPLACE INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId], (err) => {
-            if (err) {
-                console.error('Ошибка сохранения отчета:', err.message);
-                reject(err);
-            } else {
-                console.log(`Отчет ${reportId} сохранен`);
-                resolve();
-            }
-        });
-    });
+    const client = await pool.connect();
+    try {
+        await client.query(`
+            INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (reportId) DO UPDATE
+            SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9
+        `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId]);
+    } catch (err) {
+        console.error('Ошибка сохранения отчета:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
 }
 
 async function getReportText(objectName) {
-    return new Promise((resolve, reject) => {
-        db.all('SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId WHERE objectName = ? ORDER BY timestamp', [objectName], (err, rows) => {
-            if (err) reject(err);
-            else {
-                const reportText = rows.map(row => {
-                    const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-                    return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullName}\nОбъект: ${OBJECTS_TRANSLIT_REVERSE[row.objectName]}\nРаботы: ${row.workDone}\nМатериалы: ${row.materials}\n--------------------------\n`;
-                }).join('');
-                resolve(reportText);
-            }
-        });
-    });
+    const client = await pool.connect();
+    try {
+        const res = await client.query(
+            'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp',
+            [objectName]
+        );
+        const reportText = res.rows.map(row => {
+            const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${OBJECTS_TRANSLIT_REVERSE[row.objectname]}\nРаботы: ${row.workdone}\nМатериалы: ${row.materials}\n--------------------------\n`;
+        }).join('');
+        return reportText;
+    } catch (err) {
+        console.error('Ошибка получения текста отчета:', err);
+        throw err;
+    } finally {
+        client.release();
+    }
 }
 
 async function deletePreviousMessage(ctx, userId) {
@@ -919,20 +925,16 @@ bot.action(/reject_(.+)/, async (ctx) => {
     const targetUserId = ctx.match[1];
     if (userId !== ADMIN_ID) return;
 
-    await new Promise((resolve, reject) => {
-        db.run('DELETE FROM users WHERE userId = ?', [targetUserId], (err) => {
-            if (err) reject(err);
-            else resolve();
-        });
-    });
-    await new Promise((resolve, reject) => {
-        db.run('DELETE FROM reports WHERE userId = ?', [targetUserId], (err) => {
-            if (err) reject(err);
-            else resolve();
-        });
-    });
-
-    await ctx.editMessageText('Заявка отклонена.');
+    const client = await pool.connect();
+    try {
+        await client.query('DELETE FROM users WHERE userId = $1', [targetUserId]);
+        await client.query('DELETE FROM reports WHERE userId = $1', [targetUserId]);
+        await ctx.editMessageText('Заявка отклонена.');
+    } catch (err) {
+        console.error('Ошибка удаления:', err);
+    } finally {
+        client.release();
+    }
 });
 
 schedule.scheduleJob('0 0 19 * * *', async () => {
