@@ -1,31 +1,22 @@
 console.log('Скрипт запущен');
 const { Telegraf, Markup } = require('telegraf');
-console.log('Telegraf импортирован');
 const { Pool } = require('pg');
-console.log('pg импортирован');
 const schedule = require('node-schedule');
-console.log('node-schedule импортирован');
 const express = require('express');
-console.log('express импортирован');
 require('dotenv').config();
-console.log('dotenv настроен');
 
 // Логируем переменные окружения
 console.log('Запуск бота, BOT_TOKEN:', process.env.BOT_TOKEN?.substring(0, 5) + '...');
 console.log('Запуск бота, ADMIN_ID:', process.env.ADMIN_ID || 'Не задан');
 console.log('Запуск бота, DATABASE_URL:', process.env.DATABASE_URL ? 'Задан' : 'Не задан');
 
-// Проверка валидности BOT_TOKEN
+// Проверка BOT_TOKEN
 if (!process.env.BOT_TOKEN) {
     console.error('Ошибка: BOT_TOKEN не задан');
     process.exit(1);
 }
 
-const botToken = process.env.BOT_TOKEN;
-const bot = new Telegraf(botToken);
-console.log('Бот инициализирован');
-
-// Инициализация Express-сервера
+const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -48,7 +39,6 @@ pool.connect((err) => {
 async function initializeDatabase() {
     const client = await pool.connect();
     try {
-        console.log('Создание таблиц в базе данных');
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 userId TEXT PRIMARY KEY,
@@ -79,7 +69,6 @@ async function initializeDatabase() {
         console.error('Ошибка при создании таблиц:', err.message);
     } finally {
         client.release();
-        console.log('Клиент базы данных освобожден');
     }
 }
 
@@ -112,7 +101,6 @@ let lastMessageIds = {};
 async function loadUsers() {
     const client = await pool.connect();
     try {
-        console.log('Загрузка пользователей из базы данных');
         const res = await client.query('SELECT * FROM users');
         const users = {};
         res.rows.forEach(row => {
@@ -126,7 +114,6 @@ async function loadUsers() {
                 reports: {}
             };
         });
-        console.log('Пользователи загружены:', Object.keys(users).length);
         return users;
     } catch (err) {
         console.error('Ошибка загрузки пользователей:', err.message);
@@ -139,7 +126,6 @@ async function loadUsers() {
 async function loadUserReports(userId) {
     const client = await pool.connect();
     try {
-        console.log(`Загрузка отчетов для userId: ${userId}`);
         const res = await client.query('SELECT * FROM reports WHERE userId = $1', [userId]);
         const reports = {};
         res.rows.forEach(row => {
@@ -153,7 +139,6 @@ async function loadUserReports(userId) {
                 generalMessageId: row.generalmessageid
             };
         });
-        console.log(`Отчеты загружены для ${userId}:`, Object.keys(reports).length);
         return reports;
     } catch (err) {
         console.error('Ошибка загрузки отчетов:', err.message);
@@ -167,14 +152,12 @@ async function saveUser(userId, userData) {
     const { fullName, position, selectedObjects, status, isApproved, nextReportId } = userData;
     const client = await pool.connect();
     try {
-        console.log(`Сохранение пользователя ${userId}`);
         await client.query(`
-            INSERT INTO users (userId, fullName, position, selectedObjects, status, isApproved, nextReportId)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (userId) DO UPDATE
-            SET fullName = $2, position = $3, selectedObjects = $4, status = $5, isApproved = $6, nextReportId = $7
-        `, [userId, fullName, position, JSON.stringify(selectedObjects), status, isApproved ? 1 : 0, nextReportId]);
-        console.log(`Пользователь ${userId} сохранен`);
+                INSERT INTO users (userId, fullName, position, selectedObjects, status, isApproved, nextReportId)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (userId) DO UPDATE
+                SET fullName = $2, position = $3, selectedObjects = $4, status = $5, isApproved = $6, nextReportId = $7
+            `, [userId, fullName, position, JSON.stringify(selectedObjects), status, isApproved ? 1 : 0, nextReportId]);
     } catch (err) {
         console.error('Ошибка сохранения пользователя:', err.message);
         throw err;
@@ -187,14 +170,12 @@ async function saveReport(userId, report) {
     const { reportId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId } = report;
     const client = await pool.connect();
     try {
-        console.log(`Сохранение отчета ${reportId} для userId: ${userId}`);
         await client.query(`
-            INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT (reportId) DO UPDATE
-            SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9
-        `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId]);
-        console.log(`Отчет ${reportId} сохранен`);
+                INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                ON CONFLICT (reportId) DO UPDATE
+                SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9
+            `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId]);
     } catch (err) {
         console.error('Ошибка сохранения отчета:', err.message);
         throw err;
@@ -206,7 +187,6 @@ async function saveReport(userId, report) {
 async function getReportText(objectName) {
     const client = await pool.connect();
     try {
-        console.log(`Получение текста отчета для объекта: ${objectName}`);
         const res = await client.query(
             'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp',
             [objectName]
@@ -215,7 +195,6 @@ async function getReportText(objectName) {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
             return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${OBJECTS_TRANSLIT_REVERSE[row.objectname]}\nРаботы: ${row.workdone}\nМатериалы: ${row.materials}\n--------------------------\n`;
         }).join('');
-        console.log(`Текст отчета для ${objectName} сформирован`);
         return reportText;
     } catch (err) {
         console.error('Ошибка получения текста отчета:', err.message);
@@ -229,7 +208,6 @@ async function deletePreviousMessage(ctx, userId) {
     if (lastMessageIds[userId]) {
         try {
             await ctx.telegram.deleteMessage(ctx.chat.id, lastMessageIds[userId]);
-            console.log(`Удалено предыдущее сообщение для ${userId}`);
         } catch (err) {
             console.log('Не удалось удалить сообщение:', err.message);
         }
@@ -240,7 +218,6 @@ async function deletePreviousMessage(ctx, userId) {
 async function deleteGroupMessage(chatId, messageId) {
     try {
         await bot.telegram.deleteMessage(chatId, messageId);
-        console.log(`Удалено сообщение ${messageId} из группы ${chatId}`);
     } catch (err) {
         console.error(`Ошибка удаления сообщения ${messageId} из группы ${chatId}:`, err.message);
     }
@@ -248,7 +225,6 @@ async function deleteGroupMessage(chatId, messageId) {
 
 async function updateLastMessageId(ctx, userId, message) {
     lastMessageIds[userId] = message.message_id;
-    console.log(`Обновлен lastMessageId для ${userId}: ${message.message_id}`);
 }
 
 async function showPositionSelection(ctx, userId) {
@@ -278,10 +254,10 @@ async function showMainMenu(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const menuText = `
-*🚀 Главное меню*  
-━━━━━━━━━━━━━━━━━━━━  
-Выберите действие ниже:  
-    `.trim();
+    *🚀 Главное меню*  
+    ━━━━━━━━━━━━━━━━━━━━  
+    Выберите действие ниже:  
+        `.trim();
 
     const buttons = [
         [Markup.button.callback('👤 Личный кабинет', 'profile')],
@@ -312,15 +288,15 @@ async function showProfile(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const profileText = `
-*👤 Личный кабинет*  
-━━━━━━━━━━━━━━━━━━━━  
-*ФИО:* ${user.fullName || 'Не указано'}  
-*Должность:* ${user.position || 'Не указана'}  
-*Объекты:* ${escapedObjects}  
-*Статус:* ${user.status || 'Не указан'}  
-*Подтвержден:* ${user.isApproved ? '✅ Да' : '❌ Нет'}  
-━━━━━━━━━━━━━━━━━━━━
-    `.trim();
+    *👤 Личный кабинет*  
+    ━━━━━━━━━━━━━━━━━━━━  
+    *ФИО:* ${user.fullName || 'Не указано'}  
+    *Должность:* ${user.position || 'Не указана'}  
+    *Объекты:* ${escapedObjects}  
+    *Статус:* ${user.status || 'Не указан'}  
+    *Подтвержден:* ${user.isApproved ? '✅ Да' : '❌ Нет'}  
+    ━━━━━━━━━━━━━━━━━━━━
+        `.trim();
 
     const buttons = [
         [Markup.button.callback('✏️ ФИО', 'edit_fullName')],
@@ -639,14 +615,14 @@ async function viewReport(ctx, reportId) {
     const time = new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     const escapedReportObject = OBJECTS_TRANSLIT_REVERSE[report.objectName].replace(/_/g, '\\_');
     const reportText = `
-*📋 Отчет за ${report.date} (${time})*  
-━━━━━━━━━━━━━━━━━━━━  
-*· ИТР:* ${users[userId].fullName}  
-*· Объект:* ${escapedReportObject}  
-*· Работы:* ${report.workDone}  
-*· Материалы:* ${report.materials}  
-━━━━━━━━━━━━━━━━━━━━
-    `.trim();
+    *📋 Отчет за ${report.date} (${time})*  
+    ━━━━━━━━━━━━━━━━━━━━  
+    *· ИТР:* ${users[userId].fullName}  
+    *· Объект:* ${escapedReportObject}  
+    *· Работы:* ${report.workDone}  
+    *· Материалы:* ${report.materials}  
+    ━━━━━━━━━━━━━━━━━━━━
+        `.trim();
 
     const message = await ctx.replyWithMarkdown(reportText, Markup.inlineKeyboard([
         [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
@@ -660,16 +636,16 @@ async function showHelp(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const helpText = `
-*ℹ️ Помощь*  
-━━━━━━━━━━━━━━━━━━━━  
-Используйте кнопки для навигации:  
-- *Личный кабинет*: Просмотр и редактирование данных.  
-- *Создать отчет*: Доступно для производителей работ.  
-- *Мои отчеты*: Просмотр и редактирование отчетов.  
-- *Выгрузить отчет*: Скачать файл через меню или /getreport в общей группе.  
-- *Админ-панель*: Только для администратора (/approve).  
-━━━━━━━━━━━━━━━━━━━━
-    `.trim();
+    *ℹ️ Помощь*  
+    ━━━━━━━━━━━━━━━━━━━━  
+    Используйте кнопки для навигации:  
+    - *Личный кабинет*: Просмотр и редактирование данных.  
+    - *Создать отчет*: Доступно для производителей работ.  
+    - *Мои отчеты*: Просмотр и редактирование отчетов.  
+    - *Выгрузить отчет*: Скачать файл через меню или /getreport в общей группе.  
+    - *Админ-панель*: Только для администратора (/approve).  
+    ━━━━━━━━━━━━━━━━━━━━
+        `.trim();
 
     const message = await ctx.replyWithMarkdown(helpText, Markup.inlineKeyboard([
         [Markup.button.callback('↩️ В главное меню', 'main_menu')]
@@ -682,13 +658,13 @@ async function showAdminPanel(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const adminText = `
-*👑 Админ-панель*  
-━━━━━━━━━━━━━━━━━━━━  
-Для подтверждения пользователя используйте:  
-*/approve <userId>*  
-Пример: /approve 123456789  
-━━━━━━━━━━━━━━━━━━━━
-    `.trim();
+    *👑 Админ-панель*  
+    ━━━━━━━━━━━━━━━━━━━━  
+    Для подтверждения пользователя используйте:  
+    */approve <userId>*  
+    Пример: /approve 123456789  
+    ━━━━━━━━━━━━━━━━━━━━
+        `.trim();
 
     const message = await ctx.replyWithMarkdown(adminText, Markup.inlineKeyboard([
         [Markup.button.callback('↩️ В главное меню', 'main_menu')]
@@ -715,67 +691,53 @@ bot.command('approve', async (ctx) => {
     bot.telegram.sendMessage(targetUserId, 'Ваш профиль подтвержден администратором.');
 });
 
-// Тестовая команда для проверки работоспособности бота
+// Тестовая команда
 bot.command('test', async (ctx) => {
     console.log('Тестовая команда получена от:', ctx.from.id);
     await ctx.reply('Бот работает!');
-    console.log('Ответ на /test отправлен');
 });
 
-// Команда /listproducers с улучшенной отладкой, доступна всем
+// Оптимизированный /listproducers
 bot.command('listproducers', async (ctx) => {
     try {
-        console.log('=== Начало обработки /listproducers ===');
-        console.log('Получено от userId:', ctx.from.id);
+        console.log('=== Начало обработки /listproducers === от userId:', ctx.from.id);
 
-        await ctx.reply('Получил команду, загружаю список...');
-        console.log('Выполняем запрос к БД');
-
-        const client = await pool.connect().catch(err => {
-            console.error('Ошибка подключения к БД:', err.message);
-            throw err;
-        });
-
+        const client = await pool.connect();
         try {
-            console.log('Запрос к базе данных');
             const res = await client.query(
                 'SELECT userId, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
                 ['производитель работ', 1]
             );
-            console.log('Результат:', res.rows);
 
             if (res.rows.length === 0) {
-                await ctx.reply('Производители работ не найдены.');
-                console.log('Ответ отправлен: Не найдены');
+                await ctx.reply('👷‍♂️ Производители работ не найдены.');
                 return;
             }
 
-            const producerList = res.rows.map(row => {
-                let objects = [];
-                try {
-                    objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
-                } catch (parseErr) {
-                    console.error(`Ошибка парсинга для ${row.userId}:`, parseErr.message);
-                }
+            const producerList = res.rows.map((row, index) => {
+                const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
                 const objectNames = objects.length > 0
-                    ? objects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj]?.replace(/[_*]/g, '\\$&') || obj).join(', ')
-                    : 'Объекты не выбраны';
-                const fullNameEscaped = row.fullname ? row.fullname.replace(/[_*]/g, '\\$&') : 'Не указано';
-                return `${fullNameEscaped} (ID: ${row.userId}): ${objectNames} [${row.status || 'в работе'}]`;
-            }).join('\n');
+                    ? objects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj] || obj).join(', ')
+                    : 'Не выбраны';
+                const fullName = row.fullname || 'Не указано';
+                const status = row.status || 'в работе';
+                return `${index + 1}. *${fullName}* (ID: ${row.userId})\n   Объекты: ${objectNames}\n   Статус: ${status}`;
+            }).join('\n\n');
 
             await ctx.replyWithMarkdown(
-                `*📋 Список производителей работ:*\n━━━━━━━━━━━━━━━━━━━━\n${producerList}\n━━━━━━━━━━━━━━━━━━━━`
+                `👷‍♂️ *Список производителей работ* 👷‍♂️\n` +
+                `═══════════════════════\n` +
+                `${producerList}\n` +
+                `═══════════════════════\n` +
+                `Всего: ${res.rows.length}`
             );
             console.log('Ответ отправлен: Список производителей');
         } finally {
             client.release();
-            console.log('Соединение с БД освобождено');
         }
     } catch (err) {
-        console.error('Ошибка в /listproducers:', err.message, err.stack);
-        await ctx.reply('Произошла ошибка: ' + err.message);
-        console.log('Ответ отправлен: Ошибка');
+        console.error('Ошибка в /listproducers:', err.message);
+        await ctx.reply('⚠️ Произошла ошибка при загрузке списка.');
     }
 });
 
@@ -949,14 +911,14 @@ bot.on('text', async (ctx) => {
 
             const escapedNewObject = OBJECTS_TRANSLIT_REVERSE[state.report.objectName].replace(/_/g, '\\_');
             const reportText = `
-📅 *Отчет за ${date}*  
-🏢 *Объект:* ${escapedNewObject}  
-━━━━━━━━━━━━━━━━━━━━━ 
-👷 *ИТР:* ${users[userId].fullName}  
-🔧 *Выполненные работы:* ${state.report.workDone}  
-📦 *Поставленные материалы:* ${state.report.materials}  
-━━━━━━━━━━━━━━━━━━━━━
-            `.trim();
+    📅 *Отчет за ${date}*  
+    🏢 *Объект:* ${escapedNewObject}  
+    ━━━━━━━━━━━━━━━━━━━━━━ 
+    👷 *ИТР:* ${users[userId].fullName}  
+    🔧 *Выполненные работы:* ${state.report.workDone}  
+    📦 *Поставленные материалы:* ${state.report.materials}  
+    ━━━━━━━━━━━━━━━━━━━━━━
+                `.trim();
 
             const groupChatId = OBJECT_GROUPS[state.report.objectName];
             const groupMessage = await bot.telegram.sendMessage(groupChatId, reportText, { parse_mode: 'Markdown' });
@@ -988,14 +950,14 @@ bot.on('text', async (ctx) => {
 
             const escapedEditObject = OBJECTS_TRANSLIT_REVERSE[state.report.objectName].replace(/_/g, '\\_');
             const updatedReportText = `
-📅 *Отчет за ${state.report.date} (обновлен)*  
-🏢 *Объект:* ${escapedEditObject}  
-━━━━━━━━━━━━━━━━━━━━━  
-👷 *ИТР:* ${users[userId].fullName}  
-🔧 *Выполненные работы:* ${state.report.workDone}  
-📦 *Поставленные материалы:* ${state.report.materials}  
-━━━━━━━━━━━━━━━━━━━━━
-            `.trim();
+    📅 *Отчет за ${state.report.date} (обновлен)*  
+    🏢 *Объект:* ${escapedEditObject}  
+    ━━━━━━━━━━━━━━━━━━━━━━  
+    👷 *ИТР:* ${users[userId].fullName}  
+    🔧 *Выполненные работы:* ${state.report.workDone}  
+    📦 *Поставленные материалы:* ${state.report.materials}  
+    ━━━━━━━━━━━━━━━━━━━━━━
+                `.trim();
 
             const updatedGroupChatId = OBJECT_GROUPS[state.report.objectName];
             users[userId].reports = await loadUserReports(userId);
@@ -1074,30 +1036,23 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     }
 });
 
-// Настройка вебхука и запуск сервера
+// Настройка вебхука и сервера
 app.use(express.json());
 
-// Отладка всех запросов
 app.use((req, res, next) => {
-    console.log('Получен запрос:', req.method, req.url, req.body);
+    console.log('Получен запрос:', req.method, req.url);
     next();
 });
 
-app.get('/', (req, res) => {
-    res.send('Telegram bot is running');
-});
+app.get('/', (req, res) => res.send('Telegram bot is running'));
 
 app.use(bot.webhookCallback('/telegram-webhook'));
 
 const webhookUrl = `https://${process.env.RENDER_EXTERNAL_HOSTNAME}/telegram-webhook`;
 console.log('Установка вебхука на:', webhookUrl);
 bot.telegram.setWebhook(webhookUrl)
-    .then(() => {
-        console.log('Вебхук успешно установлен');
-    })
-    .catch((err) => {
-        console.error('Ошибка установки вебхука:', err.message);
-    });
+    .then(() => console.log('Вебхук успешно установлен'))
+    .catch((err) => console.error('Ошибка установки вебхука:', err.message));
 
 app.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}, внешний домен: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
@@ -1107,32 +1062,22 @@ app.listen(PORT, () => {
 process.once('SIGINT', async () => {
     console.log('Получен сигнал SIGINT, останавливаем бота');
     await pool.end();
-    console.log('Бот и пул остановлены');
     process.exit(0);
 });
 
 process.once('SIGTERM', async () => {
     console.log('Получен сигнал SIGTERM, начинаем остановку');
-    try {
-        await pool.end();
-        console.log('Пул соединений с БД закрыт');
-    } catch (err) {
-        console.error('Ошибка закрытия пула:', err.message);
-    }
-    console.log('Ожидаем 10 секунд перед завершением');
-    await new Promise(resolve => setTimeout(resolve, 10000)); // Задержка 10 секунд
-    console.log('Задержка завершена, завершаем процесс');
+    await pool.end();
+    await new Promise(resolve => setTimeout(resolve, 10000));
     process.exit(0);
 });
 
 process.on('uncaughtException', (err) => {
-    console.error('Необработанное исключение:', err.message);
-    console.error('Стек ошибки:', err.stack);
+    console.error('Необработанное исключение:', err.message, err.stack);
     process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Необработанный промис:', reason);
-    console.error('Промис:', promise);
+    console.error('Необработанный промис:', reason, 'Промис:', promise);
     process.exit(1);
 });
