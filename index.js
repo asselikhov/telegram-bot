@@ -225,13 +225,13 @@ async function getReportText(objectName) {
     const client = await pool.connect();
     try {
         const res = await client.query(
-            'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp',
+            'SELECT r.*, u.fullName, u.position, u.organization FROM reports r JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp',
             [objectName]
         );
         if (res.rows.length === 0) return '';
         const reportText = res.rows.map(row => {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return `${timestamp}\n${row.objectname}\n${row.position} ${row.organization} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n\n${row.materials}\n--------------------------\n`;
+            return `${timestamp}\n${row.objectname}\n${row.position || 'Не указана'} ${row.organization || 'Не указана'} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n\n${row.materials}\n--------------------------\n`;
         }).join('');
         return reportText;
     } catch (err) {
