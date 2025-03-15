@@ -39,6 +39,7 @@ pool.connect((err) => {
 async function initializeDatabase() {
     const client = await pool.connect();
     try {
+        // Создание таблицы users, если она не существует
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 userId TEXT PRIMARY KEY,
@@ -51,6 +52,22 @@ async function initializeDatabase() {
                 nextReportId INTEGER DEFAULT 1
             );
         `);
+
+        // Проверка наличия столбца organization и добавление, если его нет
+        const columnCheck = await client.query(`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'users' AND column_name = 'organization';
+        `);
+        if (columnCheck.rows.length === 0) {
+            await client.query(`
+                ALTER TABLE users 
+                ADD COLUMN organization TEXT;
+            `);
+            console.log('Столбец organization добавлен в таблицу users');
+        }
+
+        // Создание таблицы reports
         await client.query(`
             CREATE TABLE IF NOT EXISTS reports (
                 reportId TEXT PRIMARY KEY,
@@ -67,7 +84,7 @@ async function initializeDatabase() {
         `);
         console.log('Таблицы созданы или уже существуют');
     } catch (err) {
-        console.error('Ошибка при создания таблиц:', err.message);
+        console.error('Ошибка при создании таблиц:', err.message);
     } finally {
         client.release();
     }
@@ -85,7 +102,7 @@ const OBJECTS_LIST_CYRILLIC = [
 ];
 
 // Список должностей
-const BASE_POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто'];
+const BASE_POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'другая'];
 
 function getPositionsList(userId) {
     const positions = [...BASE_POSITIONS_LIST];
@@ -96,7 +113,7 @@ function getPositionsList(userId) {
 }
 
 // Список организаций
-const ORGANIZATIONS_LIST = ['ООО "РСХ"', 'ООО "РемонтСервис"', 'ООО "Строительные Системы"'];
+const ORGANIZATIONS_LIST = ['ООО "СтройТех"', 'АО "НефтеГаз"', 'ИП Иванов', 'ООО "Прогресс"'];
 
 // Группы для объектов
 const OBJECT_GROUPS = {
