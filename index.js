@@ -204,7 +204,7 @@ async function getReportText(objectName) {
         if (res.rows.length === 0) return '';
         const reportText = res.rows.map(row => {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${row.objectname}\nРаботы: ${row.workdone}\nМатериалы: ${row.materials}\n--------------------------\n`;
+            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${row.objectname}\nРаботы:\n${row.workdone}\nМатериалы:\n${row.materials}\n--------------------------\n`;
         }).join('');
         return reportText;
     } catch (err) {
@@ -302,13 +302,9 @@ async function showProfile(ctx) {
 👤 Личный кабинет  
 ━━━━━━━━━━━━━━━━━━━━  
 👷 ФИО: ${user.fullName || 'Не указано'}  
-
 📋 Должность: ${user.position || 'Не указана'}  
-
 📍 Объекты:\n${objectsList}  
-
 ⏳ Статус: ${user.status || 'Не указан'}  
-
 ✅ Подтвержден: ${user.isApproved ? 'Да' : 'Нет'}  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
@@ -651,8 +647,8 @@ async function viewReport(ctx, reportId) {
 ━━━━━━━━━━━━━━━━━━━━  
 · ИТР: ${users[userId].fullName}  
 · Объект: ${report.objectName}  
-· Работы: ${report.workDone}  
-· Материалы: ${report.materials}  
+· Работы:\n${report.workDone}  
+· Материалы:\n${report.materials}  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
 
@@ -747,11 +743,11 @@ bot.command('listproducers', async (ctx) => {
             const producerList = res.rows.map((row, index) => {
                 const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
                 const objectNames = objects.length > 0
-                    ? filterValidObjects(objects).join(', ')
-                    : 'Не выбраны';
+                    ? filterValidObjects(objects).map(obj => `   - ${obj}`).join('\n')
+                    : '   - Не выбраны';
                 const fullName = row.fullname || 'Не указано';
                 const status = row.status || 'в работе';
-                return `${index + 1}. ${fullName} (ID: ${row.userid})\n   Объекты: ${objectNames}\n   Статус: ${status}`;
+                return `${index + 1}. ${fullName} (ID: ${row.userid})\n   Объекты:\n${objectNames}\n   Статус: ${status}`;
             }).join('\n\n');
 
             await ctx.reply(
@@ -922,7 +918,7 @@ bot.on('text', async (ctx) => {
             updateLastMessageId(ctx, userId, fullNameMsg);
             if (!users[userId].isApproved) {
                 await bot.telegram.sendMessage(ADMIN_ID,
-                    `Новая заявка:\nФИО: ${users[userId].fullName}\nДолжность: ${users[userId].position || 'Не указана'}\nОбъекты: ${users[userId].selectedObjects.join(', ')}`,
+                    `Новая заявка:\nФИО: ${users[userId].fullName}\nДолжность: ${users[userId].position || 'Не указана'}\nОбъекты:\n${users[userId].selectedObjects.join('\n')}`,
                     Markup.inlineKeyboard([
                         [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
                         [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
@@ -965,8 +961,8 @@ bot.on('text', async (ctx) => {
 🏢 Объект: ${state.report.objectName}  
 ━━━━━━━━━━━━━━━━━━━━━ 
 👷 ИТР: ${users[userId].fullName}  
-🔧 Выполненные работы: ${state.report.workDone}  
-📦 Поставленные материалы: ${state.report.materials}  
+🔧 Выполненные работы:\n${state.report.workDone}  
+📦 Поставленные материалы:\n${state.report.materials}  
 ━━━━━━━━━━━━━━━━━━━━━
             `.trim();
 
@@ -1003,8 +999,8 @@ bot.on('text', async (ctx) => {
 🏢 Объект: ${state.report.objectName}  
 ━━━━━━━━━━━━━━━━━━━━━  
 👷 ИТР: ${users[userId].fullName}  
-🔧 Выполненные работы: ${state.report.workDone}  
-📦 Поставленные материалы: ${state.report.materials}  
+🔧 Выполненные работы:\n${state.report.workDone}  
+📦 Поставленные материалы:\n${state.report.materials}  
 ━━━━━━━━━━━━━━━━━━━━━
             `.trim();
 
@@ -1024,7 +1020,7 @@ bot.on('text', async (ctx) => {
             delete userStates[userId];
 
             const updatedMsg = await ctx.reply(
-                `Отчет обновлен:\n🏢 Объект: ${state.report.objectName}\n🔧 Работы: ${state.report.workDone}\n📦 Материалы: ${state.report.materials}`,
+                `Отчет обновлен:\n🏢 Объект: ${state.report.objectName}\n🔧 Работы:\n${state.report.workDone}\n📦 Материалы:\n${state.report.materials}`,
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ К отчетам', 'view_reports')]])
             );
             updateLastMessageId(ctx, userId, updatedMsg);
@@ -1072,14 +1068,14 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
             const hasReportToday = Object.keys(user.reports).some(reportId => reportId.startsWith(today));
             if (!hasReportToday) {
                 const objects = user.selectedObjects.length > 0
-                    ? user.selectedObjects.join(', ')
+                    ? user.selectedObjects.join('\n')
                     : 'Не выбраны';
                 const groupChatId = user.selectedObjects.length > 0
                     ? OBJECT_GROUPS[user.selectedObjects[0]] || GENERAL_GROUP_CHAT_ID
                     : OBJECT_GROUPS['Кольцевой МНПП, 132км'];
                 bot.telegram.sendMessage(
                     groupChatId,
-                    `⚠️ Напоминание\n${user.fullName}, вы не предоставили отчет за ${today} по объектам: ${objects}. Пожалуйста, внесите данные.`
+                    `⚠️ Напоминание\n${user.fullName}, вы не предоставили отчет за ${today} по объектам:\n${objects}. Пожалуйста, внесите данные.`
                 ).catch(err => console.error('Ошибка уведомления:', err));
             }
         }
