@@ -719,23 +719,29 @@ async function showAdminPanel(ctx) {
             userId,
             fullName: user.fullName || 'Не указано',
             position: user.position || 'Не указана',
-            objects: user.selectedObjects.length > 0 ? user.selectedObjects.join(', ') : 'Не выбраны'
+            objects: user.selectedObjects.length > 0 ? user.selectedObjects.map(obj => `   · ${obj}`).join('\n') : '   · Не выбраны'
         }));
 
     let adminText = `
-👑 Админ-панель  
-━━━━━━━━━━━━━━━━━━━━  
+👑 АДМИН-ПАНЕЛЬ  
+➖➖➖➖➖➖➖➖➖➖➖  
 Для подтверждения вручную: /approve <userId>  
 Пример: /approve 123456789  
-━━━━━━━━━━━━━━━━━━━━  
+➖➖➖➖➖➖➖➖➖➖➖  
 `;
 
     if (pendingUsers.length === 0) {
         adminText += 'Нет неподтвержденных заявок.';
     } else {
-        adminText += 'Неподтвержденные заявки:\n';
+        adminText += 'Неподтвержденные заявки:\n\n';
         adminText += pendingUsers.map((u, index) =>
-            `${index + 1}. ${u.fullName} (ID: ${u.userId})\n   Должность: ${u.position}\n   Объекты: ${u.objects}`
+            `ЗАЯВКА #${index + 1}  
+➖➖➖➖➖➖➖➖➖➖➖  
+👷 ФИО: ${u.fullName}  
+📋 ДОЛЖНОСТЬ: ${u.position}  
+📍 ОБЪЕКТЫ:\n${u.objects}  
+🆔 ID: ${u.userId}  
+➖➖➖➖➖➖➖➖➖➖➖`
         ).join('\n\n');
     }
 
@@ -972,7 +978,13 @@ bot.on('text', async (ctx) => {
             updateLastMessageId(ctx, userId, fullNameMsg);
             if (!users[userId].isApproved) {
                 await bot.telegram.sendMessage(ADMIN_ID,
-                    `Новая заявка:\nФИО: ${users[userId].fullName}\nДолжность: ${users[userId].position || 'Не указана'}\nОбъекты:\n${users[userId].selectedObjects.join('\n')}`,
+                    `НОВАЯ ЗАЯВКА  
+➖➖➖➖➖➖➖➖➖➖➖  
+👷 ФИО: ${users[userId].fullName}  
+📋 ДОЛЖНОСТЬ: ${users[userId].position || 'Не указана'}  
+📍 ОБЪЕКТЫ:\n${users[userId].selectedObjects.length > 0 ? users[userId].selectedObjects.map(obj => `   · ${obj}`).join('\n') : '   · Не выбраны'}  
+🆔 ID: ${userId}  
+➖➖➖➖➖➖➖➖➖➖➖`,
                     Markup.inlineKeyboard([
                         [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
                         [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
@@ -1112,6 +1124,7 @@ bot.action(/reject_(.+)/, async (ctx) => {
         await client.query('DELETE FROM users WHERE userId = $1', [targetUserId]);
         await client.query('DELETE FROM reports WHERE userId = $1', [targetUserId]);
         await ctx.editMessageText('Заявка отклонена.');
+        await bot.telegram.sendMessage(targetUserId, 'Ваша заявка отклонена администратором.');
     } catch (err) {
         console.error('Ошибка удаления:', err.message);
     } finally {
