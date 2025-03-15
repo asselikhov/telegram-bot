@@ -66,7 +66,7 @@ async function initializeDatabase() {
         `);
         console.log('Таблицы созданы или уже существуют');
     } catch (err) {
-        console.error('Ошибка при создании таблиц:', err.message);
+        console.error('Ошибка при создания таблиц:', err.message);
     } finally {
         client.release();
     }
@@ -83,19 +83,24 @@ const OBJECTS_LIST_CYRILLIC = [
     'Ростовка-Никольское, 595,4-608,1км'
 ];
 
-const POSITIONS_LIST = ['производитель работ', 'геодезист', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'механик', 'бухгалтер', 'другая'];
+const POSITIONS_LIST = ['производитель работ', 'мастер', 'инженер'];
 
 // Группы для объектов (используем кириллические названия)
 const OBJECT_GROUPS = {
     'Кольцевой МНПП': '-1002394790037',
     'Ярославль-Москва': '-1002318741372',
     'Ярославль-Кириши1': '-1002153878927',
-    'Никулино-Пенза, 881,2-886,0км': '-1002597582709',
-    'Ростовка-Никольское, 595,4-608,1км': '-1002627066168'
+    'Никулино-Пенза, 881,2-886,0км': '',
+    'Ростовка-Никольское, 595,4-608,1км': ''
 };
 
 let userStates = {};
 let lastMessageIds = {};
+
+// Функция для экранирования специальных символов Markdown
+function escapeMarkdown(text) {
+    return text.replace(/([_*[\]()~`>#+\-.!])/g, '\\$1');
+}
 
 async function loadUsers() {
     const client = await pool.connect();
@@ -192,7 +197,7 @@ async function getReportText(objectName) {
         );
         const reportText = res.rows.map(row => {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${row.objectname}\nРаботы: ${row.workdone}\nМатериалы: ${row.materials}\n--------------------------\n`;
+            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${escapeMarkdown(row.fullname)}\nОбъект: ${escapeMarkdown(row.objectname)}\nРаботы: ${escapeMarkdown(row.workdone)}\nМатериалы: ${escapeMarkdown(row.materials)}\n--------------------------\n`;
         }).join('');
         return reportText;
     } catch (err) {
@@ -280,7 +285,7 @@ async function showProfile(ctx) {
     const users = await loadUsers();
     const user = users[userId] || {};
     const escapedObjects = (user.selectedObjects?.length > 0
-        ? user.selectedObjects.join(', ')
+        ? user.selectedObjects.map(obj => escapeMarkdown(obj)).join(', ')
         : 'Не выбраны');
 
     await deletePreviousMessage(ctx, userId);
@@ -288,10 +293,10 @@ async function showProfile(ctx) {
     const profileText = `
 *👤 Личный кабинет*  
 ━━━━━━━━━━━━━━━━━━━━  
-*ФИО:* ${user.fullName || 'Не указано'}  
-*Должность:* ${user.position || 'Не указана'}  
+*ФИО:* ${escapeMarkdown(user.fullName || 'Не указано')}  
+*Должность:* ${escapeMarkdown(user.position || 'Не указана')}  
 *Объекты:* ${escapedObjects}  
-*Статус:* ${user.status || 'Не указан'}  
+*Статус:* ${escapeMarkdown(user.status || 'Не указан')}  
 *Подтвержден:* ${user.isApproved ? '✅ Да' : '❌ Нет'}  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
@@ -335,7 +340,7 @@ async function downloadReportFile(ctx, objectName) {
 
     const reportText = await getReportText(objectName);
     if (!reportText) {
-        const message = await ctx.reply(`Отчет для объекта "${objectName}" не найден.`,
+        const message = await ctx.reply(`Отчет для объекта "${escapeMarkdown(objectName)}" не найден.`,
             Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'download_report')]])
         );
         updateLastMessageId(ctx, userId, message);
@@ -387,7 +392,7 @@ bot.command('getreport', async (ctx) => {
 
     const reportText = await getReportText(objectName);
     if (!reportText) {
-        await ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
+        await ctx.reply(`Отчет для объекта "${escapeMarkdown(objectName)}" не найден.`);
         return;
     }
 
@@ -508,7 +513,7 @@ bot.action(/select_position_(.+)/, async (ctx) => {
 
     users[userId].position = selectedPosition;
     await saveUser(userId, users[userId]);
-    const message = await ctx.reply(`Должность обновлена на "${selectedPosition}".`);
+    const message = await ctx.reply(`Должность обновлена на "${escapeMarkdown(selectedPosition)}".`);
     updateLastMessageId(ctx, userId, message);
     setTimeout(() => showProfile(ctx), 1000);
 });
@@ -530,7 +535,7 @@ async function showReports(ctx) {
 
     const buttons = users[userId].selectedObjects.map(obj => {
         const reportCount = Object.values(userReports).filter(r => r.objectName === obj).length;
-        return [Markup.button.callback(`${obj} (${reportCount})`, `view_reports_by_object_${obj}`)];
+        return [Markup.button.callback(`${escapeMarkdown(obj)} (${reportCount})`, `view_reports_by_object_${obj}`)];
     });
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
@@ -549,7 +554,7 @@ async function showReportsByObject(ctx, objectName) {
         .map(([reportId, report]) => ({ reportId, ...report }));
 
     if (reports.length === 0) {
-        const message = await ctx.reply(`Нет отчетов для объекта "${objectName}".`, Markup.inlineKeyboard([
+        const message = await ctx.reply(`Нет отчетов для объекта "${escapeMarkdown(objectName)}".`, Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', 'view_reports')]
         ]));
         updateLastMessageId(ctx, userId, message);
@@ -560,7 +565,7 @@ async function showReportsByObject(ctx, objectName) {
     const buttons = days.map(day => [Markup.button.callback(day, `view_reports_by_day_${objectName}_${day}`)]);
     buttons.push([Markup.button.callback('↩️ Назад', 'view_reports')]);
 
-    const message = await ctx.reply(`Выберите день для объекта "${objectName}":`, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(`Выберите день для объекта "${escapeMarkdown(objectName)}":`, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -576,7 +581,7 @@ async function showReportsByDay(ctx, objectName, day) {
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
     if (reports.length === 0) {
-        const message = await ctx.reply(`Нет отчетов за ${day} для объекта "${objectName}".`, Markup.inlineKeyboard([
+        const message = await ctx.reply(`Нет отчетов за ${escapeMarkdown(day)} для объекта "${escapeMarkdown(objectName)}".`, Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', `view_reports_by_object_${objectName}`)]
         ]));
         updateLastMessageId(ctx, userId, message);
@@ -589,7 +594,7 @@ async function showReportsByDay(ctx, objectName, day) {
     });
     buttons.push([Markup.button.callback('↩️ Назад', `view_reports_by_object_${objectName}`)]);
 
-    const message = await ctx.reply(`Отчеты за ${day} для объекта "${objectName}":`, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(`Отчеты за ${escapeMarkdown(day)} для объекта "${escapeMarkdown(objectName)}":`, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -611,12 +616,12 @@ async function viewReport(ctx, reportId) {
     const timestamp = report.timestamp || reportId.split('_')[1];
     const time = new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     const reportText = `
-*📋 Отчет за ${report.date} (${time})*  
+*📋 Отчет за ${escapeMarkdown(report.date)} (${escapeMarkdown(time)})*  
 ━━━━━━━━━━━━━━━━━━━━  
-*· ИТР:* ${users[userId].fullName}  
-*· Объект:* ${report.objectName}  
-*· Работы:* ${report.workDone}  
-*· Материалы:* ${report.materials}  
+*· ИТР:* ${escapeMarkdown(users[userId].fullName)}  
+*· Объект:* ${escapeMarkdown(report.objectName)}  
+*· Работы:* ${escapeMarkdown(report.workDone)}  
+*· Материалы:* ${escapeMarkdown(report.materials)}  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
 
@@ -683,7 +688,7 @@ bot.command('approve', async (ctx) => {
     }
     users[targetUserId].isApproved = true;
     await saveUser(targetUserId, users[targetUserId]);
-    await ctx.reply(`Пользователь ${users[targetUserId].fullName} подтвержден.`);
+    await ctx.reply(`Пользователь ${escapeMarkdown(users[targetUserId].fullName)} подтвержден.`);
     bot.telegram.sendMessage(targetUserId, 'Ваш профиль подтвержден администратором.');
 });
 
@@ -713,10 +718,10 @@ bot.command('listproducers', async (ctx) => {
             const producerList = res.rows.map((row, index) => {
                 const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
                 const objectNames = objects.length > 0
-                    ? objects.join(', ')
+                    ? objects.map(obj => escapeMarkdown(obj)).join(', ')
                     : 'Не выбраны';
-                const fullName = row.fullname || 'Не указано';
-                const status = row.status || 'в работе';
+                const fullName = escapeMarkdown(row.fullname || 'Не указано');
+                const status = escapeMarkdown(row.status || 'в работе');
                 return `${index + 1}. *${fullName}* (ID: ${row.userid})\n   Объекты: ${objectNames}\n   Статус: ${status}`;
             }).join('\n\n');
 
@@ -867,7 +872,7 @@ bot.on('text', async (ctx) => {
             updateLastMessageId(ctx, userId, fullNameMsg);
             if (!users[userId].isApproved) {
                 await bot.telegram.sendMessage(ADMIN_ID,
-                    `Новая заявка:\nФИО: ${users[userId].fullName}\nДолжность: ${users[userId].position || 'Не указана'}\nОбъекты: ${users[userId].selectedObjects.join(', ')}`,
+                    `Новая заявка:\nФИО: ${escapeMarkdown(users[userId].fullName)}\nДолжность: ${escapeMarkdown(users[userId].position || 'Не указана')}\nОбъекты: ${users[userId].selectedObjects.map(obj => escapeMarkdown(obj)).join(', ')}`,
                     Markup.inlineKeyboard([
                         [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
                         [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
@@ -906,12 +911,12 @@ bot.on('text', async (ctx) => {
             };
 
             const reportText = `
-📅 *Отчет за ${date}*  
-🏢 *Объект:* ${state.report.objectName}  
+📅 *Отчет за ${escapeMarkdown(date)}*  
+🏢 *Объект:* ${escapeMarkdown(state.report.objectName)}  
 ━━━━━━━━━━━━━━━━━━━━━ 
-👷 *ИТР:* ${users[userId].fullName}  
-🔧 *Выполненные работы:* ${state.report.workDone}  
-📦 *Поставленные материалы:* ${state.report.materials}  
+👷 *ИТР:* ${escapeMarkdown(users[userId].fullName)}  
+🔧 *Выполненные работы:* ${escapeMarkdown(state.report.workDone)}  
+📦 *Поставленные материалы:* ${escapeMarkdown(state.report.materials)}  
 ━━━━━━━━━━━━━━━━━━━━━
             `.trim();
 
@@ -928,7 +933,7 @@ bot.on('text', async (ctx) => {
             delete userStates[userId];
 
             const userReportMsg = await ctx.replyWithMarkdown(
-                `*Ваш отчет опубликован:*\n\n*🏢 Объект:* ${state.report.objectName}\n\n*🔧 Работы:*\n${state.report.workDone}\n\n*📦 Материалы:*\n${state.report.materials}`,
+                `*Ваш отчет опубликован:*\n\n*🏢 Объект:* ${escapeMarkdown(state.report.objectName)}\n\n*🔧 Работы:*\n${escapeMarkdown(state.report.workDone)}\n\n*📦 Материалы:*\n${escapeMarkdown(state.report.materials)}`,
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ В главное меню', 'main_menu')]])
             );
             updateLastMessageId(ctx, userId, userReportMsg);
@@ -944,12 +949,12 @@ bot.on('text', async (ctx) => {
             state.report.timestamp = new Date().toISOString();
 
             const updatedReportText = `
-📅 *Отчет за ${state.report.date} (обновлен)*  
-🏢 *Объект:* ${state.report.objectName}  
+📅 *Отчет за ${escapeMarkdown(state.report.date)} (обновлен)*  
+🏢 *Объект:* ${escapeMarkdown(state.report.objectName)}  
 ━━━━━━━━━━━━━━━━━━━━━  
-👷 *ИТР:* ${users[userId].fullName}  
-🔧 *Выполненные работы:* ${state.report.workDone}  
-📦 *Поставленные материалы:* ${state.report.materials}  
+👷 *ИТР:* ${escapeMarkdown(users[userId].fullName)}  
+🔧 *Выполненные работы:* ${escapeMarkdown(state.report.workDone)}  
+📦 *Поставленные материалы:* ${escapeMarkdown(state.report.materials)}  
 ━━━━━━━━━━━━━━━━━━━━━
             `.trim();
 
@@ -969,7 +974,7 @@ bot.on('text', async (ctx) => {
             delete userStates[userId];
 
             const updatedMsg = await ctx.replyWithMarkdown(
-                `*Отчет обновлен:*\n*🏢 Объект:* ${state.report.objectName}\n*🔧 Работы:* ${state.report.workDone}\n*📦 Материалы:* ${state.report.materials}`,
+                `*Отчет обновлен:*\n*🏢 Объект:* ${escapeMarkdown(state.report.objectName)}\n*🔧 Работы:* ${escapeMarkdown(state.report.workDone)}\n*📦 Материалы:* ${escapeMarkdown(state.report.materials)}`,
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ К отчетам', 'view_reports')]])
             );
             updateLastMessageId(ctx, userId, updatedMsg);
@@ -985,7 +990,7 @@ bot.action(/approve_(.+)/, async (ctx) => {
 
     users[targetUserId].isApproved = true;
     await saveUser(targetUserId, users[targetUserId]);
-    await ctx.editMessageText(`Заявка ${users[targetUserId].fullName} одобрена.`);
+    await ctx.editMessageText(`Заявка ${escapeMarkdown(users[targetUserId].fullName)} одобрена.`);
     await bot.telegram.sendMessage(targetUserId, 'Ваш профиль подтвержден администратором.');
 });
 
@@ -1017,12 +1022,12 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
             const hasReportToday = Object.keys(user.reports).some(reportId => reportId.startsWith(today));
             if (!hasReportToday) {
                 const objects = user.selectedObjects?.length > 0
-                    ? user.selectedObjects.join(', ')
-                    : 'Кольцевой МНПП';
+                    ? user.selectedObjects.map(obj => escapeMarkdown(obj)).join(', ')
+                    : escapeMarkdown('Кольцевой МНПП');
                 const groupChatId = user.selectedObjects?.length > 0 ? OBJECT_GROUPS[user.selectedObjects[0]] || GENERAL_GROUP_CHAT_ID : OBJECT_GROUPS['Кольцевой МНПП'];
                 bot.telegram.sendMessage(
                     groupChatId,
-                    `*⚠️ Напоминание*\n${user.fullName}, вы не предоставили отчет за ${today} по объектам: ${objects}. Пожалуйста, внесите данные.`,
+                    `*⚠️ Напоминание*\n${escapeMarkdown(user.fullName)}, вы не предоставили отчет за ${escapeMarkdown(today)} по объектам: ${objects}. Пожалуйста, внесите данные.`,
                     { parse_mode: 'Markdown' }
                 ).catch(err => console.error('Ошибка уведомления:', err));
             }
