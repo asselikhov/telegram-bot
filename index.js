@@ -231,7 +231,7 @@ async function getReportText(objectName) {
         if (res.rows.length === 0) return '';
         const reportText = res.rows.map(row => {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${row.objectname}\nРаботы:\n${row.workdone}\nМатериалы:\n${row.materials}\n--------------------------\n`;
+            return `Время: ${timestamp}\n${row.fullname}\n${row.objectname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n\n${row.materials}\n--------------------------\n`;
         }).join('');
         return reportText;
     } catch (err) {
@@ -487,7 +487,7 @@ bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
 
             const reportText = res.rows.map(row => {
                 const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-                return `Дата: ${row.date}\nВремя: ${timestamp}\nДолжность: ${row.position}\nОбъект: ${row.objectname}\nВыполненные работы:\n${row.workdone}\nЗавезенные материалы:\n${row.materials}\n--------------------------\n`;
+                return `${timestamp}\n${row.position}\n${row.objectname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n\n${row.workdone}\n\nПОСТАВЛЕННЫЕ материалы:\n\n${row.materials}\n--------------------------\n`;
             }).join('');
 
             await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой результата
