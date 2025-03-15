@@ -153,11 +153,11 @@ async function saveUser(userId, userData) {
     const client = await pool.connect();
     try {
         await client.query(`
-                INSERT INTO users (userId, fullName, position, selectedObjects, status, isApproved, nextReportId)
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                ON CONFLICT (userId) DO UPDATE
-                SET fullName = $2, position = $3, selectedObjects = $4, status = $5, isApproved = $6, nextReportId = $7
-            `, [userId, fullName, position, JSON.stringify(selectedObjects), status, isApproved ? 1 : 0, nextReportId]);
+            INSERT INTO users (userId, fullName, position, selectedObjects, status, isApproved, nextReportId)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (userId) DO UPDATE
+            SET fullName = $2, position = $3, selectedObjects = $4, status = $5, isApproved = $6, nextReportId = $7
+        `, [userId, fullName, position, JSON.stringify(selectedObjects), status, isApproved ? 1 : 0, nextReportId]);
     } catch (err) {
         console.error('Ошибка сохранения пользователя:', err.message);
         throw err;
@@ -171,11 +171,11 @@ async function saveReport(userId, report) {
     const client = await pool.connect();
     try {
         await client.query(`
-                INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                ON CONFLICT (reportId) DO UPDATE
-                SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9
-            `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId]);
+            INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (reportId) DO UPDATE
+            SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9
+        `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId]);
     } catch (err) {
         console.error('Ошибка сохранения отчета:', err.message);
         throw err;
@@ -254,10 +254,10 @@ async function showMainMenu(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const menuText = `
-    *🚀 Главное меню*  
-    ━━━━━━━━━━━━━━━━━━━━  
-    Выберите действие ниже:  
-        `.trim();
+*🚀 Главное меню*  
+━━━━━━━━━━━━━━━━━━━━  
+Выберите действие ниже:  
+    `.trim();
 
     const buttons = [
         [Markup.button.callback('👤 Личный кабинет', 'profile')],
@@ -288,15 +288,15 @@ async function showProfile(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const profileText = `
-    *👤 Личный кабинет*  
-    ━━━━━━━━━━━━━━━━━━━━  
-    *ФИО:* ${user.fullName || 'Не указано'}  
-    *Должность:* ${user.position || 'Не указана'}  
-    *Объекты:* ${escapedObjects}  
-    *Статус:* ${user.status || 'Не указан'}  
-    *Подтвержден:* ${user.isApproved ? '✅ Да' : '❌ Нет'}  
-    ━━━━━━━━━━━━━━━━━━━━
-        `.trim();
+*👤 Личный кабинет*  
+━━━━━━━━━━━━━━━━━━━━  
+*ФИО:* ${user.fullName || 'Не указано'}  
+*Должность:* ${user.position || 'Не указана'}  
+*Объекты:* ${escapedObjects}  
+*Статус:* ${user.status || 'Не указан'}  
+*Подтвержден:* ${user.isApproved ? '✅ Да' : '❌ Нет'}  
+━━━━━━━━━━━━━━━━━━━━
+    `.trim();
 
     const buttons = [
         [Markup.button.callback('✏️ ФИО', 'edit_fullName')],
@@ -615,14 +615,14 @@ async function viewReport(ctx, reportId) {
     const time = new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     const escapedReportObject = OBJECTS_TRANSLIT_REVERSE[report.objectName].replace(/_/g, '\\_');
     const reportText = `
-    *📋 Отчет за ${report.date} (${time})*  
-    ━━━━━━━━━━━━━━━━━━━━  
-    *· ИТР:* ${users[userId].fullName}  
-    *· Объект:* ${escapedReportObject}  
-    *· Работы:* ${report.workDone}  
-    *· Материалы:* ${report.materials}  
-    ━━━━━━━━━━━━━━━━━━━━
-        `.trim();
+*📋 Отчет за ${report.date} (${time})*  
+━━━━━━━━━━━━━━━━━━━━  
+*· ИТР:* ${users[userId].fullName}  
+*· Объект:* ${escapedReportObject}  
+*· Работы:* ${report.workDone}  
+*· Материалы:* ${report.materials}  
+━━━━━━━━━━━━━━━━━━━━
+    `.trim();
 
     const message = await ctx.replyWithMarkdown(reportText, Markup.inlineKeyboard([
         [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
@@ -636,16 +636,16 @@ async function showHelp(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const helpText = `
-    *ℹ️ Помощь*  
-    ━━━━━━━━━━━━━━━━━━━━  
-    Используйте кнопки для навигации:  
-    - *Личный кабинет*: Просмотр и редактирование данных.  
-    - *Создать отчет*: Доступно для производителей работ.  
-    - *Мои отчеты*: Просмотр и редактирование отчетов.  
-    - *Выгрузить отчет*: Скачать файл через меню или /getreport в общей группе.  
-    - *Админ-панель*: Только для администратора (/approve).  
-    ━━━━━━━━━━━━━━━━━━━━
-        `.trim();
+*ℹ️ Помощь*  
+━━━━━━━━━━━━━━━━━━━━  
+Используйте кнопки для навигации:  
+- *Личный кабинет*: Просмотр и редактирование данных.  
+- *Создать отчет*: Доступно для производителей работ.  
+- *Мои отчеты*: Просмотр и редактирование отчетов.  
+- *Выгрузить отчет*: Скачать файл через меню или /getreport в общей группе.  
+- *Админ-панель*: Только для администратора (/approve).  
+━━━━━━━━━━━━━━━━━━━━
+    `.trim();
 
     const message = await ctx.replyWithMarkdown(helpText, Markup.inlineKeyboard([
         [Markup.button.callback('↩️ В главное меню', 'main_menu')]
@@ -658,13 +658,13 @@ async function showAdminPanel(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const adminText = `
-    *👑 Админ-панель*  
-    ━━━━━━━━━━━━━━━━━━━━  
-    Для подтверждения пользователя используйте:  
-    */approve <userId>*  
-    Пример: /approve 123456789  
-    ━━━━━━━━━━━━━━━━━━━━
-        `.trim();
+*👑 Админ-панель*  
+━━━━━━━━━━━━━━━━━━━━  
+Для подтверждения пользователя используйте:  
+*/approve <userId>*  
+Пример: /approve 123456789  
+━━━━━━━━━━━━━━━━━━━━
+    `.trim();
 
     const message = await ctx.replyWithMarkdown(adminText, Markup.inlineKeyboard([
         [Markup.button.callback('↩️ В главное меню', 'main_menu')]
@@ -697,7 +697,7 @@ bot.command('test', async (ctx) => {
     await ctx.reply('Бот работает!');
 });
 
-// Оптимизированный /listproducers
+// Исправленный /listproducers
 bot.command('listproducers', async (ctx) => {
     try {
         console.log('=== Начало обработки /listproducers === от userId:', ctx.from.id);
@@ -705,7 +705,7 @@ bot.command('listproducers', async (ctx) => {
         const client = await pool.connect();
         try {
             const res = await client.query(
-                'SELECT userId, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
+                'SELECT userid, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
                 ['производитель работ', 1]
             );
 
@@ -721,7 +721,7 @@ bot.command('listproducers', async (ctx) => {
                     : 'Не выбраны';
                 const fullName = row.fullname || 'Не указано';
                 const status = row.status || 'в работе';
-                return `${index + 1}. *${fullName}* (ID: ${row.userId})\n   Объекты: ${objectNames}\n   Статус: ${status}`;
+                return `${index + 1}. *${fullName}* (ID: ${row.userid})\n   Объекты: ${objectNames}\n   Статус: ${status}`;
             }).join('\n\n');
 
             await ctx.replyWithMarkdown(
@@ -911,14 +911,14 @@ bot.on('text', async (ctx) => {
 
             const escapedNewObject = OBJECTS_TRANSLIT_REVERSE[state.report.objectName].replace(/_/g, '\\_');
             const reportText = `
-    📅 *Отчет за ${date}*  
-    🏢 *Объект:* ${escapedNewObject}  
-    ━━━━━━━━━━━━━━━━━━━━━━ 
-    👷 *ИТР:* ${users[userId].fullName}  
-    🔧 *Выполненные работы:* ${state.report.workDone}  
-    📦 *Поставленные материалы:* ${state.report.materials}  
-    ━━━━━━━━━━━━━━━━━━━━━━
-                `.trim();
+📅 *Отчет за ${date}*  
+🏢 *Объект:* ${escapedNewObject}  
+━━━━━━━━━━━━━━━━━━━━━ 
+👷 *ИТР:* ${users[userId].fullName}  
+🔧 *Выполненные работы:* ${state.report.workDone}  
+📦 *Поставленные материалы:* ${state.report.materials}  
+━━━━━━━━━━━━━━━━━━━━━
+            `.trim();
 
             const groupChatId = OBJECT_GROUPS[state.report.objectName];
             const groupMessage = await bot.telegram.sendMessage(groupChatId, reportText, { parse_mode: 'Markdown' });
@@ -950,14 +950,14 @@ bot.on('text', async (ctx) => {
 
             const escapedEditObject = OBJECTS_TRANSLIT_REVERSE[state.report.objectName].replace(/_/g, '\\_');
             const updatedReportText = `
-    📅 *Отчет за ${state.report.date} (обновлен)*  
-    🏢 *Объект:* ${escapedEditObject}  
-    ━━━━━━━━━━━━━━━━━━━━━━  
-    👷 *ИТР:* ${users[userId].fullName}  
-    🔧 *Выполненные работы:* ${state.report.workDone}  
-    📦 *Поставленные материалы:* ${state.report.materials}  
-    ━━━━━━━━━━━━━━━━━━━━━━
-                `.trim();
+📅 *Отчет за ${state.report.date} (обновлен)*  
+🏢 *Объект:* ${escapedEditObject}  
+━━━━━━━━━━━━━━━━━━━━━  
+👷 *ИТР:* ${users[userId].fullName}  
+🔧 *Выполненные работы:* ${state.report.workDone}  
+📦 *Поставленные материалы:* ${state.report.materials}  
+━━━━━━━━━━━━━━━━━━━━━
+            `.trim();
 
             const updatedGroupChatId = OBJECT_GROUPS[state.report.objectName];
             users[userId].reports = await loadUserReports(userId);
