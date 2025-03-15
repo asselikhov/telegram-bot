@@ -21,7 +21,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Константы
-const ADMIN_ID = process.env.ADMIN_ID || 'YOUR_ADMIN_ID';
+let ADMIN_IDS = new Set([process.env.ADMIN_ID || 'YOUR_ADMIN_ID']); // Множество администраторов
 const GENERAL_GROUP_CHAT_ID = '-1002266023014';
 
 // Подключение к PostgreSQL
@@ -47,7 +47,8 @@ async function initializeDatabase() {
                 selectedObjects TEXT,
                 status TEXT DEFAULT 'в работе',
                 isApproved INTEGER DEFAULT 0,
-                nextReportId INTEGER DEFAULT 1
+                nextReportId INTEGER DEFAULT 1,
+                isAdmin INTEGER DEFAULT 0
             );
         `);
         await client.query(`
@@ -83,7 +84,9 @@ const OBJECTS_LIST_CYRILLIC = [
     'Ростовка-Никольское, 595-608км'
 ];
 
+// Список должностей без "Админ"
 const POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'другая'];
+const ADMIN_POSITION = 'Админ'; // Отдельная должность для администраторов
 
 // Группы для объектов
 const OBJECT_GROUPS = {
@@ -106,6 +109,11 @@ function filterValidObjects(objects) {
     return [...new Set(objects)].filter(obj => OBJECTS_LIST_CYRILLIC.includes(obj));
 }
 
+function validateFullName(fullName) {
+    const words = fullName.trim().split(/\s+/);
+    return words.length >= 2 && /^[А-Яа-яЁё\s]+$/.test(fullName);
+}
+
 async function loadUsers() {
     const client = await pool.connect();
     try {
@@ -115,13 +123,15 @@ async function loadUsers() {
             const selectedObjects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
             users[row.userid] = {
                 fullName: row.fullname || '',
-                position: row.position || '',
+                position: row.isadmin ? ADMIN_POSITION : (row.position || ''),
                 selectedObjects: filterValidObjects(selectedObjects),
                 status: row.status || 'в работе',
                 isApproved: Boolean(row.isapproved),
                 nextReportId: row.nextreportid || 1,
+                isAdmin: Boolean(row.isadmin),
                 reports: {}
             };
+            if (row.isadmin) ADMIN_IDS.add(row.userid);
         });
         return users;
     } catch (err) {
@@ -158,16 +168,17 @@ async function loadUserReports(userId) {
 }
 
 async function saveUser(userId, userData) {
-    const { fullName, position, selectedObjects, status, isApproved, nextReportId } = userData;
+    const { fullName, position, selectedObjects, status, isApproved, nextReportId, isAdmin } = userData;
     const filteredObjects = filterValidObjects(selectedObjects);
+    const effectivePosition = isAdmin ? ADMIN_POSITION : position;
     const client = await pool.connect();
     try {
         await client.query(`
-            INSERT INTO users (userId, fullName, position, selectedObjects, status, isApproved, nextReportId)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO users (userId, fullName, position, selectedObjects, status, isApproved, nextReportId, isAdmin)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (userId) DO UPDATE
-            SET fullName = $2, position = $3, selectedObjects = $4, status = $5, isApproved = $6, nextReportId = $7
-        `, [userId, fullName, position, JSON.stringify(filteredObjects), status, isApproved ? 1 : 0, nextReportId]);
+            SET fullName = $2, position = $3, selectedObjects = $4, status = $5, isApproved = $6, nextReportId = $7, isAdmin = $8
+        `, [userId, fullName, effectivePosition, JSON.stringify(filteredObjects), status, isApproved ? 1 : 0, nextReportId, isAdmin ? 1 : 0]);
     } catch (err) {
         console.error('Ошибка сохранения пользователя:', err.message);
         throw err;
@@ -238,21 +249,29 @@ async function updateLastMessageId(ctx, userId, message) {
     lastMessageIds[userId] = message.message_id;
 }
 
-async function showPositionSelection(ctx, userId) {
+async function showPositionSelection(ctx, userId, isRegistration = false) {
     await deletePreviousMessage(ctx, userId);
     const buttons = POSITIONS_LIST.map(pos => [Markup.button.callback(pos, `select_initial_position_${pos}`)]);
-    const message = await ctx.reply('Выберите вашу должность:', Markup.inlineKeyboard(buttons));
+    const messageText = isRegistration ? '📝 Шаг 1/3: Выберите вашу должность:' : 'Выберите вашу должность:';
+    const message = await ctx.reply(messageText, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
-async function showObjectSelection(ctx, userId, selected = []) {
+async function showObjectSelection(ctx, userId, selected = [], isRegistration = false) {
     await deletePreviousMessage(ctx, userId);
     const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) => {
         const isSelected = selected.includes(obj);
         return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${obj}`, `toggle_object_${index}`)];
     });
     buttons.push([Markup.button.callback('Готово', 'confirm_objects')]);
-    const message = await ctx.reply('Выберите объекты (можно несколько):', Markup.inlineKeyboard(buttons));
+    const messageText = isRegistration ? '📝 Шаг 2/3: Выберите объекты (можно несколько):' : 'Выберите объекты (можно несколько):';
+    const message = await ctx.reply(messageText, Markup.inlineKeyboard(buttons));
+    updateLastMessageId(ctx, userId, message);
+}
+
+async function showFullNamePrompt(ctx, userId) {
+    await deletePreviousMessage(ctx, userId);
+    const message = await ctx.reply('📝 Шаг 3/3: Введите ваше ФИО (например, Иванов Иван Иванович):');
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -279,7 +298,7 @@ async function showMainMenu(ctx) {
     if (user.isApproved) {
         buttons.splice(1, 0, [Markup.button.callback('📤 Выгрузить отчет', 'download_report')]);
     }
-    if (userId === ADMIN_ID) {
+    if (ADMIN_IDS.has(userId)) {
         buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);
     }
 
@@ -302,25 +321,30 @@ async function showProfile(ctx) {
 👤 ЛИЧНЫЙ КАБИНЕТ  
 ➖➖➖➖➖➖➖➖➖➖➖  
 👷 ФИО: ${user.fullName || 'Не указано'}  
-
 📋 ДОЛЖНОСТЬ: ${user.position || 'Не указана'}  
-
 📍 ОБЪЕКТЫ:\n${objectsList}  
-
 ⏳ СТАТУС: ${user.status || 'Не указан'}  
-
 ✅ ПОДТВЕРЖДЕН: ${user.isApproved ? 'Да' : 'Нет'}  
+👑 АДМИНИСТРАТОР: ${user.isAdmin ? 'Да' : 'Нет'}  
 ➖➖➖➖➖➖➖➖➖➖➖
 `.trim();
 
     const buttons = [
-        [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
-        [Markup.button.callback('🏢 Изменить должность', 'edit_position')],
+        [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')]
+    ];
+    if (!user.isAdmin) {
+        buttons.push([Markup.button.callback('🏢 Изменить должность', 'edit_position')]);
+    }
+    buttons.push(
         [Markup.button.callback('🏠 Изменить объекты', 'edit_object')],
         [Markup.button.callback('📅 Изменить статус', 'edit_status')],
         [Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')],
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
-    ];
+    );
+
+    if (!user.isApproved && user.fullName && user.position && validObjects.length > 0) {
+        buttons.push([Markup.button.callback('📤 Отправить заявку на рассмотрение', 'submit_application')]);
+    }
 
     const message = await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
@@ -444,15 +468,29 @@ bot.start(async (ctx) => {
             status: 'в работе',
             isApproved: false,
             nextReportId: 1,
+            isAdmin: false,
             reports: {}
         };
-        userStates[userId] = { step: 'selectPosition' };
+        userStates[userId] = { step: 'selectPosition', registration: true };
         await saveUser(userId, users[userId]);
-        await showPositionSelection(ctx, userId);
+        await showPositionSelection(ctx, userId, true);
     } else if (!users[userId].isApproved) {
         await deletePreviousMessage(ctx, userId);
-        const message = await ctx.reply('Ваша заявка на рассмотрении.');
-        updateLastMessageId(ctx, userId, message);
+        const missingFields = [];
+        if (!users[userId].fullName) missingFields.push('ФИО');
+        if (!users[userId].position) missingFields.push('должность');
+        if (users[userId].selectedObjects.length === 0) missingFields.push('объекты');
+
+        if (missingFields.length > 0) {
+            const message = await ctx.reply(
+                `Пожалуйста, заполните недостающие данные: ${missingFields.join(', ')}.`,
+                Markup.inlineKeyboard([[Markup.button.callback('Заполнить профиль', 'profile')]])
+            );
+            updateLastMessageId(ctx, userId, message);
+        } else {
+            const message = await ctx.reply('Ваша заявка на рассмотрении.');
+            updateLastMessageId(ctx, userId, message);
+        }
     } else {
         showMainMenu(ctx);
     }
@@ -465,9 +503,9 @@ bot.action(/select_initial_position_(.+)/, async (ctx) => {
 
     users[userId].position = selectedPosition;
     await saveUser(userId, users[userId]);
-    userStates[userId] = { step: 'selectObjects', selectedObjects: [] };
+    userStates[userId] = { step: 'selectObjects', selectedObjects: [], registration: true };
     await deletePreviousMessage(ctx, userId);
-    await showObjectSelection(ctx, userId);
+    await showObjectSelection(ctx, userId, [], true);
 });
 
 bot.action(/toggle_object_(\d+)/, async (ctx) => {
@@ -483,7 +521,7 @@ bot.action(/toggle_object_(\d+)/, async (ctx) => {
     if (index === -1) selectedObjects.push(objectName);
     else selectedObjects.splice(index, 1);
 
-    await showObjectSelection(ctx, userId, selectedObjects);
+    await showObjectSelection(ctx, userId, selectedObjects, state.registration);
 });
 
 bot.action('confirm_objects', async (ctx) => {
@@ -497,7 +535,21 @@ bot.action('confirm_objects', async (ctx) => {
         await deletePreviousMessage(ctx, userId);
         const message = await ctx.reply('Выберите хотя бы один объект.');
         updateLastMessageId(ctx, userId, message);
-        setTimeout(() => showObjectSelection(ctx, userId, state.selectedObjects), 1000);
+        setTimeout(() => showObjectSelection(ctx, userId, state.selectedObjects, state.registration), 1000);
+        return;
+    }
+
+    if (state.selectedObjects.length > 3 && !state.confirmed) {
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply(
+            `Вы выбрали ${state.selectedObjects.length} объектов. Это больше 3. Подтвердите выбор:`,
+            Markup.inlineKeyboard([
+                [Markup.button.callback('✅ Подтвердить', 'confirm_objects')],
+                [Markup.button.callback('✏️ Изменить', 'edit_objects')]
+            ])
+        );
+        state.confirmed = false;
+        updateLastMessageId(ctx, userId, message);
         return;
     }
 
@@ -510,12 +562,21 @@ bot.action('confirm_objects', async (ctx) => {
         const message = await ctx.reply('Объекты успешно обновлены.');
         updateLastMessageId(ctx, userId, message);
         setTimeout(() => showProfile(ctx), 1000);
+    } else if (state.registration) {
+        userStates[userId] = { step: 'fullName', registration: true };
+        await showFullNamePrompt(ctx, userId);
     } else {
-        userStates[userId] = { step: 'fullName' };
         await deletePreviousMessage(ctx, userId);
-        const message = await ctx.reply('Введите ваше ФИО:');
+        const message = await ctx.reply('Объекты успешно выбраны.');
         updateLastMessageId(ctx, userId, message);
+        setTimeout(() => showProfile(ctx), 1000);
     }
+});
+
+bot.action('edit_objects', async (ctx) => {
+    const userId = ctx.from.id.toString();
+    const state = userStates[userId];
+    await showObjectSelection(ctx, userId, state.selectedObjects, state.registration);
 });
 
 bot.action('edit_object', async (ctx) => {
@@ -650,12 +711,9 @@ async function viewReport(ctx, reportId) {
 📋 ОТЧЕТ ЗА ${report.date} (${time})  
 ➖➖➖➖➖➖➖➖➖➖➖  
 ✦ ИТР: ${users[userId].fullName}  
-
 ✦ ОБЪЕКТ: ${report.objectName}  
-
 ✦ РАБОТЫ:  
    ${report.workDone}  
-
 ✦ МАТЕРИАЛЫ:  
    ${report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
@@ -692,32 +750,131 @@ async function showHelp(ctx) {
 
 async function showAdminPanel(ctx) {
     const userId = ctx.from.id.toString();
+    if (!ADMIN_IDS.has(userId)) return;
+
     await deletePreviousMessage(ctx, userId);
 
     const adminText = `
 👑 Админ-панель  
 ━━━━━━━━━━━━━━━━━━━━  
-Для подтверждения пользователя используйте:  
-/approve <userId>  
-Пример: /approve 123456789  
+Выберите действие:  
+- /approve <userId> - Подтвердить пользователя  
+- /addadmin <userId> - Назначить администратора  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
 
-    const message = await ctx.reply(adminText, Markup.inlineKeyboard([
+    const buttons = [
+        [Markup.button.callback('📋 Показать заявки', 'show_pending')],
+        [Markup.button.callback('👑 Список администраторов', 'list_admins')],
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
+    ];
+
+    const message = await ctx.reply(adminText, Markup.inlineKeyboard(buttons));
+    updateLastMessageId(ctx, userId, message);
+}
+
+async function showPendingApplications(ctx) {
+    const userId = ctx.from.id.toString();
+    if (!ADMIN_IDS.has(userId)) return;
+
+    await deletePreviousMessage(ctx, userId);
+
+    const users = await loadUsers();
+    const pendingUsers = Object.entries(users)
+        .filter(([_, user]) => !user.isApproved && user.fullName && user.position && user.selectedObjects.length > 0)
+        .map(([userId, user], index) => ({
+            userId,
+            fullName: user.fullName,
+            position: user.position,
+            objects: user.selectedObjects.join(', ')
+        }));
+
+    if (pendingUsers.length === 0) {
+        const message = await ctx.reply('Нет заявок на рассмотрение.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'admin_panel')]
+        ]));
+        updateLastMessageId(ctx, userId, message);
+        return;
+    }
+
+    const buttons = pendingUsers.map((user, index) => [
+        Markup.button.callback(
+            `${index + 1}. ${user.fullName} (${user.position})`,
+            `view_application_${user.userId}`
+        )
+    ]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
+
+    const message = await ctx.reply(
+        `📋 Заявки на рассмотрение (${pendingUsers.length}):`,
+        Markup.inlineKeyboard(buttons)
+    );
+    updateLastMessageId(ctx, userId, message);
+}
+
+async function viewApplication(ctx, targetUserId) {
+    const userId = ctx.from.id.toString();
+    if (!ADMIN_IDS.has(userId)) return;
+
+    await deletePreviousMessage(ctx, userId);
+
+    const users = await loadUsers();
+    const targetUser = users[targetUserId];
+    if (!targetUser || targetUser.isApproved) {
+        const message = await ctx.reply('Заявка не найдена или уже обработана.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'show_pending')]
+        ]));
+        updateLastMessageId(ctx, userId, message);
+        return;
+    }
+
+    const applicationText = `
+📋 Заявка на рассмотрение  
+➖➖➖➖➖➖➖➖➖➖➖  
+👷 ФИО: ${targetUser.fullName}  
+📋 Должность: ${targetUser.position}  
+📍 Объекты: ${targetUser.selectedObjects.join(', ')}  
+➖➖➖➖➖➖➖➖➖➖➖
+    `.trim();
+
+    const message = await ctx.reply(applicationText, Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Одобрить', `approve_${targetUserId}`)],
+        [Markup.button.callback('❌ Отклонить', `reject_${targetUserId}`)],
+        [Markup.button.callback('↩️ Назад', 'show_pending')]
     ]));
+    updateLastMessageId(ctx, userId, message);
+}
+
+async function listAdmins(ctx) {
+    const userId = ctx.from.id.toString();
+    if (!ADMIN_IDS.has(userId)) return;
+
+    await deletePreviousMessage(ctx, userId);
+
+    const users = await loadUsers();
+    const adminList = Array.from(ADMIN_IDS).map(adminId => {
+        const user = users[adminId] || { fullName: 'Неизвестно' };
+        return `${user.fullName} (ID: ${adminId})`;
+    }).join('\n');
+
+    const message = await ctx.reply(
+        `👑 Список администраторов (${ADMIN_IDS.size}):\n${adminList}`,
+        Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'admin_panel')]
+        ])
+    );
     updateLastMessageId(ctx, userId, message);
 }
 
 bot.command('approve', async (ctx) => {
     const userId = ctx.from.id.toString();
-    const users = await loadUsers();
-
-    if (userId !== ADMIN_ID) {
+    if (!ADMIN_IDS.has(userId)) {
         await ctx.reply('У вас нет прав для этой команды.');
         return;
     }
     const targetUserId = ctx.message.text.split(' ')[1];
+    const users = await loadUsers();
+
     if (!targetUserId || !users[targetUserId]) {
         await ctx.reply('Пользователь не найден. Укажите корректный ID.');
         return;
@@ -726,6 +883,32 @@ bot.command('approve', async (ctx) => {
     await saveUser(targetUserId, users[targetUserId]);
     await ctx.reply(`Пользователь ${users[targetUserId].fullName} подтвержден.`);
     bot.telegram.sendMessage(targetUserId, 'Ваш профиль подтвержден администратором.');
+});
+
+bot.command('addadmin', async (ctx) => {
+    const userId = ctx.from.id.toString();
+    if (!ADMIN_IDS.has(userId)) {
+        await ctx.reply('У вас нет прав для этой команды.');
+        return;
+    }
+    const targetUserId = ctx.message.text.split(' ')[1];
+    const users = await loadUsers();
+
+    if (!targetUserId || !users[targetUserId]) {
+        await ctx.reply('Пользователь не найден. Укажите корректный ID.');
+        return;
+    }
+    if (ADMIN_IDS.has(targetUserId)) {
+        await ctx.reply('Этот пользователь уже администратор.');
+        return;
+    }
+
+    users[targetUserId].isAdmin = true;
+    users[targetUserId].position = ADMIN_POSITION;
+    ADMIN_IDS.add(targetUserId);
+    await saveUser(targetUserId, users[targetUserId]);
+    await ctx.reply(`Пользователь ${users[targetUserId].fullName} назначен администратором с должностью "Админ".`);
+    bot.telegram.sendMessage(targetUserId, 'Вы назначены администратором бота с должностью "Админ".');
 });
 
 bot.command('test', async (ctx) => {
@@ -920,19 +1103,37 @@ bot.on('text', async (ctx) => {
 
     switch (state.step) {
         case 'fullName':
-            users[userId].fullName = ctx.message.text.trim();
+            const fullName = ctx.message.text.trim();
+            if (!validateFullName(fullName)) {
+                const message = await ctx.reply('ФИО должно содержать минимум 2 слова и только кириллицу (например, Иванов Иван). Попробуйте снова:');
+                updateLastMessageId(ctx, userId, message);
+                return;
+            }
+            users[userId].fullName = fullName;
             await saveUser(userId, users[userId]);
             delete userStates[userId];
             const fullNameMsg = await ctx.reply('ФИО обновлено.');
             updateLastMessageId(ctx, userId, fullNameMsg);
-            if (!users[userId].isApproved) {
-                await bot.telegram.sendMessage(ADMIN_ID,
-                    `Новая заявка:\nФИО: ${users[userId].fullName}\nДолжность: ${users[userId].position || 'Не указана'}\nОбъекты:\n${users[userId].selectedObjects.join('\n')}`,
-                    Markup.inlineKeyboard([
-                        [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
-                        [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
-                    ])
+
+            if (state.registration && !users[userId].isApproved) {
+                await deletePreviousMessage(ctx, userId);
+                const message = await ctx.reply(
+                    'Регистрация завершена! Теперь заполните все данные и отправьте заявку на рассмотрение.',
+                    Markup.inlineKeyboard([[Markup.button.callback('Перейти в профиль', 'profile')]])
                 );
+                updateLastMessageId(ctx, userId, message);
+            } else if (!users[userId].isApproved && users[userId].fullName && users[userId].position && users[userId].selectedObjects.length > 0) {
+                // Отправка уведомления всем администраторам
+                for (const adminId of ADMIN_IDS) {
+                    await bot.telegram.sendMessage(
+                        adminId,
+                        `Новая заявка:\nФИО: ${users[userId].fullName}\nДолжность: ${users[userId].position}\nОбъекты:\n${users[userId].selectedObjects.join('\n')}`,
+                        Markup.inlineKeyboard([
+                            [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
+                            [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
+                        ])
+                    ).catch(err => console.error(`Ошибка отправки уведомления админу ${adminId}:`, err.message));
+                }
                 const userMsg = await ctx.reply('Ваша заявка отправлена на рассмотрение.');
                 updateLastMessageId(ctx, userId, userMsg);
             } else {
@@ -970,10 +1171,8 @@ bot.on('text', async (ctx) => {
 🏢 ОБЪЕКТ: ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
 👷 ИТР: ${users[userId].fullName}  
-
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
    ${state.report.workDone}  
-
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
    ${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
@@ -1000,8 +1199,8 @@ bot.on('text', async (ctx) => {
         case 'editWorkDone':
             state.report.workDone = ctx.message.text.trim();
             userStates[userId].step = 'editMaterials';
-            const editWorkMsg = await ctx.reply('Введите новую информацию о поставленных материалах (или "доставки не было"):');
-            updateLastMessageId(ctx, userId, editWorkMsg);
+            const editWorkDoneMsg = await ctx.reply('Введите новую информацию о поставленных материалах (или "доставки не было"):');
+            updateLastMessageId(ctx, userId, editWorkDoneMsg);
             break;
         case 'editMaterials':
             state.report.materials = ctx.message.text.trim();
@@ -1012,10 +1211,8 @@ bot.on('text', async (ctx) => {
 🏢 ОБЪЕКТ: ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖  
 👷 ИТР: ${users[userId].fullName}  
-
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
    ${state.report.workDone}  
-
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
    ${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
@@ -1045,12 +1242,38 @@ bot.on('text', async (ctx) => {
     }
 });
 
+bot.action('submit_application', async (ctx) => {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    await deletePreviousMessage(ctx, userId);
+
+    if (users[userId].fullName && users[userId].position && users[userId].selectedObjects.length > 0) {
+        // Отправка уведомления всем администраторам
+        for (const adminId of ADMIN_IDS) {
+            await bot.telegram.sendMessage(
+                adminId,
+                `Новая заявка:\nФИО: ${users[userId].fullName}\nДолжность: ${users[userId].position}\nОбъекты:\n${users[userId].selectedObjects.join('\n')}`,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
+                    [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
+                ])
+            ).catch(err => console.error(`Ошибка отправки уведомления админу ${adminId}:`, err.message));
+        }
+        const message = await ctx.reply('Ваша заявка отправлена на рассмотрение.');
+        updateLastMessageId(ctx, userId, message);
+    } else {
+        const message = await ctx.reply('Ошибка: заполните все поля перед отправкой.');
+        updateLastMessageId(ctx, userId, message);
+        setTimeout(() => showProfile(ctx), 1000);
+    }
+});
+
 bot.action(/approve_(.+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
     const targetUserId = ctx.match[1];
-    const users = await loadUsers();
-    if (userId !== ADMIN_ID) return;
+    if (!ADMIN_IDS.has(userId)) return;
 
+    const users = await loadUsers();
     users[targetUserId].isApproved = true;
     await saveUser(targetUserId, users[targetUserId]);
     await ctx.editMessageText(`Заявка ${users[targetUserId].fullName} одобрена.`);
@@ -1060,7 +1283,7 @@ bot.action(/approve_(.+)/, async (ctx) => {
 bot.action(/reject_(.+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
     const targetUserId = ctx.match[1];
-    if (userId !== ADMIN_ID) return;
+    if (!ADMIN_IDS.has(userId)) return;
 
     const client = await pool.connect();
     try {
@@ -1073,6 +1296,10 @@ bot.action(/reject_(.+)/, async (ctx) => {
         client.release();
     }
 });
+
+bot.action('show_pending', showPendingApplications);
+bot.action(/view_application_(.+)/, async (ctx) => viewApplication(ctx, ctx.match[1]));
+bot.action('list_admins', listAdmins);
 
 schedule.scheduleJob('0 0 19 * * *', async () => {
     console.log('Проверка отчетов в 19:00 МСК');
