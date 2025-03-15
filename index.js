@@ -1029,8 +1029,11 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
             const hasReportToday = Object.keys(user.reports).some(reportId => reportId.startsWith(today));
             if (!hasReportToday) {
                 const objects = user.selectedObjects.length > 0
-                    ? user.selectedObjects.map(obj => escapeMarkdown(obj)).join(', ');
-                const groupChatId = user.selectedObjects.length > 0 ? OBJECT_GROUPS[user.selectedObjects[0]] || GENERAL_GROUP_CHAT_ID : OBJECT_GROUPS['Кольцевой МНПП, 132км'];
+                    ? user.selectedObjects.map(obj => escapeMarkdown(obj)).join(', ')
+                    : 'Не выбраны';
+                const groupChatId = user.selectedObjects.length > 0
+                    ? OBJECT_GROUPS[user.selectedObjects[0]] || GENERAL_GROUP_CHAT_ID
+                    : OBJECT_GROUPS['Кольцевой МНПП, 132км'];
                 bot.telegram.sendMessage(
                     groupChatId,
                     `*⚠️ Напоминание*\n${escapeMarkdown(user.fullName)}, вы не предоставили отчет за ${escapeMarkdown(today)} по объектам: ${objects}. Пожалуйста, внесите данные.`,
