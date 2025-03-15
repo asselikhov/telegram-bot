@@ -784,9 +784,9 @@ async function viewReport(ctx, reportId) {
 📅 ОТЧЕТ ЗА ${report.date} (${time})
 🏢 ${report.objectName}
 ➖➖➖➖➖➖➖➖➖➖➖  
-📋 ${user[userId].position}  
+📋 ${users[userId].position}  
 
-🏢 ${user[userId].organization}
+🏢 ${users[userId].organization}
 
 👷 ${users[userId].fullName}   
 
@@ -1135,9 +1135,9 @@ bot.on('text', async (ctx) => {
 📅 ОТЧЕТ ЗА ${date}  
 🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
-📋 ${user[userId].position}  
+📋 ${users[userId].position}  
 
-🏢 ${user[userId].organization}
+🏢 ${users[userId].organization}
 
 👷 ${users[userId].fullName}  
 
@@ -1181,9 +1181,9 @@ bot.on('text', async (ctx) => {
 📅 ОТЧЕТ ЗА ${state.report.date} (ОБНОВЛЕН)  
 🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖
-📋 ${user[userId].position}  
+📋 ${users[userId].position}  
 
-🏢 ${user[userId].organization}
+🏢 ${users[userId].organization}
   
 👷 ${users[userId].fullName}  
 
