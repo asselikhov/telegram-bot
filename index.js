@@ -74,25 +74,24 @@ async function initializeDatabase() {
 
 initializeDatabase();
 
-const OBJECTS_LIST_CYRILLIC = ['Кольцевой МНПП', 'Ярославль-Москва', 'Ярославль-Кириши1'];
-const OBJECTS_LIST_LATIN = ['Kolcevoy_MNPP', 'Yaroslavl_Moskva', 'Yaroslavl_Kirishi1'];
-const OBJECTS_TRANSLIT = {
-    'Кольцевой МНПП': 'Kolcevoy_MNPP',
-    'Ярославль-Москва': 'Yaroslavl_Moskva',
-    'Ярославль-Кириши1': 'Yaroslavl_Kirishi1'
-};
-const OBJECTS_TRANSLIT_REVERSE = {
-    'Kolcevoy_MNPP': 'Кольцевой МНПП',
-    'Yaroslavl_Moskva': 'Ярославль-Москва',
-    'Yaroslavl_Kirishi1': 'Ярославль-Кириши1'
-};
+// Список объектов только на кириллице
+const OBJECTS_LIST_CYRILLIC = [
+    'Кольцевой МНПП',
+    'Ярославль-Москва',
+    'Ярославль-Кириши1',
+    'Никулино-Пенза, 881,2-886,0км',
+    'Ростовка-Никольское, 595,4-608,1км'
+];
 
-const POSITIONS_LIST = ['производитель работ', 'мастер', 'инженер'];
+const POSITIONS_LIST = ['производитель работ', 'геодезист', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'механик', 'бухгалтер', 'другая'];
 
+// Группы для объектов (используем кириллические названия)
 const OBJECT_GROUPS = {
-    'Kolcevoy_MNPP': '-1002394790037',
-    'Yaroslavl_Moskva': '-1002318741372',
-    'Yaroslavl_Kirishi1': '-1002153878927'
+    'Кольцевой МНПП': '-1002394790037',
+    'Ярославль-Москва': '-1002318741372',
+    'Ярославль-Кириши1': '-1002153878927',
+    'Никулино-Пенза, 881,2-886,0км': '-1002597582709',
+    'Ростовка-Никольское, 595,4-608,1км': '-1002627066168'
 };
 
 let userStates = {};
@@ -193,7 +192,7 @@ async function getReportText(objectName) {
         );
         const reportText = res.rows.map(row => {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${OBJECTS_TRANSLIT_REVERSE[row.objectname]}\nРаботы: ${row.workdone}\nМатериалы: ${row.materials}\n--------------------------\n`;
+            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${row.objectname}\nРаботы: ${row.workdone}\nМатериалы: ${row.materials}\n--------------------------\n`;
         }).join('');
         return reportText;
     } catch (err) {
@@ -237,8 +236,7 @@ async function showPositionSelection(ctx, userId) {
 async function showObjectSelection(ctx, userId, selected = []) {
     await deletePreviousMessage(ctx, userId);
     const buttons = OBJECTS_LIST_CYRILLIC.map(obj => {
-        const latinObj = OBJECTS_TRANSLIT[obj];
-        const isSelected = selected.includes(latinObj);
+        const isSelected = selected.includes(obj);
         return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${obj}`, `toggle_object_${obj}`)];
     });
     buttons.push([Markup.button.callback('Готово', 'confirm_objects')]);
@@ -282,7 +280,7 @@ async function showProfile(ctx) {
     const users = await loadUsers();
     const user = users[userId] || {};
     const escapedObjects = (user.selectedObjects?.length > 0
-        ? user.selectedObjects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj].replace(/_/g, '\\_')).join(', ')
+        ? user.selectedObjects.join(', ')
         : 'Не выбраны');
 
     await deletePreviousMessage(ctx, userId);
@@ -322,8 +320,8 @@ async function showDownloadReport(ctx) {
         return;
     }
 
-    const buttons = OBJECTS_LIST_LATIN.map(obj =>
-        [Markup.button.callback(OBJECTS_TRANSLIT_REVERSE[obj], `download_report_file_${obj}`)]
+    const buttons = OBJECTS_LIST_CYRILLIC.map(obj =>
+        [Markup.button.callback(obj, `download_report_file_${obj}`)]
     );
     buttons.push([Markup.button.callback('↩️ В главное меню', 'main_menu')]);
 
@@ -337,7 +335,7 @@ async function downloadReportFile(ctx, objectName) {
 
     const reportText = await getReportText(objectName);
     if (!reportText) {
-        const message = await ctx.reply(`Отчет для объекта "${OBJECTS_TRANSLIT_REVERSE[objectName]}" не найден.`,
+        const message = await ctx.reply(`Отчет для объекта "${objectName}" не найден.`,
             Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'download_report')]])
         );
         updateLastMessageId(ctx, userId, message);
@@ -377,19 +375,19 @@ bot.command('getreport', async (ctx) => {
 
     const args = ctx.message.text.split(' ').slice(1);
     if (args.length === 0) {
-        await ctx.reply('Укажите объект, например: /getreport Kolcevoy_MNPP\nДоступные объекты: ' + OBJECTS_LIST_LATIN.join(', '));
+        await ctx.reply('Укажите объект, например: /getreport Кольцевой МНПП\nДоступные объекты: ' + OBJECTS_LIST_CYRILLIC.join(', '));
         return;
     }
 
     const objectName = args[0];
-    if (!OBJECTS_LIST_LATIN.includes(objectName)) {
-        await ctx.reply('Неверное название объекта. Доступные объекты: ' + OBJECTS_LIST_LATIN.join(', '));
+    if (!OBJECTS_LIST_CYRILLIC.includes(objectName)) {
+        await ctx.reply('Неверное название объекта. Доступные объекты: ' + OBJECTS_LIST_CYRILLIC.join(', '));
         return;
     }
 
     const reportText = await getReportText(objectName);
     if (!reportText) {
-        await ctx.reply(`Отчет для объекта "${OBJECTS_TRANSLIT_REVERSE[objectName]}" не найден.`);
+        await ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
         return;
     }
 
@@ -440,15 +438,14 @@ bot.action(/select_initial_position_(.+)/, async (ctx) => {
 
 bot.action(/toggle_object_(.+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
-    const objectCyrillic = ctx.match[1];
-    const objectLatin = OBJECTS_TRANSLIT[objectCyrillic];
+    const objectName = ctx.match[1];
     const state = userStates[userId];
 
     if (!state || state.step !== 'selectObjects') return;
 
     const selectedObjects = state.selectedObjects;
-    const index = selectedObjects.indexOf(objectLatin);
-    if (index === -1) selectedObjects.push(objectLatin);
+    const index = selectedObjects.indexOf(objectName);
+    if (index === -1) selectedObjects.push(objectName);
     else selectedObjects.splice(index, 1);
 
     await showObjectSelection(ctx, userId, selectedObjects);
@@ -533,7 +530,7 @@ async function showReports(ctx) {
 
     const buttons = users[userId].selectedObjects.map(obj => {
         const reportCount = Object.values(userReports).filter(r => r.objectName === obj).length;
-        return [Markup.button.callback(`${OBJECTS_TRANSLIT_REVERSE[obj]} (${reportCount})`, `view_reports_by_object_${obj}`)];
+        return [Markup.button.callback(`${obj} (${reportCount})`, `view_reports_by_object_${obj}`)];
     });
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
@@ -552,7 +549,7 @@ async function showReportsByObject(ctx, objectName) {
         .map(([reportId, report]) => ({ reportId, ...report }));
 
     if (reports.length === 0) {
-        const message = await ctx.reply(`Нет отчетов для объекта "${OBJECTS_TRANSLIT_REVERSE[objectName]}".`, Markup.inlineKeyboard([
+        const message = await ctx.reply(`Нет отчетов для объекта "${objectName}".`, Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', 'view_reports')]
         ]));
         updateLastMessageId(ctx, userId, message);
@@ -563,7 +560,7 @@ async function showReportsByObject(ctx, objectName) {
     const buttons = days.map(day => [Markup.button.callback(day, `view_reports_by_day_${objectName}_${day}`)]);
     buttons.push([Markup.button.callback('↩️ Назад', 'view_reports')]);
 
-    const message = await ctx.reply(`Выберите день для объекта "${OBJECTS_TRANSLIT_REVERSE[objectName]}":`, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(`Выберите день для объекта "${objectName}":`, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -579,7 +576,7 @@ async function showReportsByDay(ctx, objectName, day) {
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
     if (reports.length === 0) {
-        const message = await ctx.reply(`Нет отчетов за ${day} для объекта "${OBJECTS_TRANSLIT_REVERSE[objectName]}".`, Markup.inlineKeyboard([
+        const message = await ctx.reply(`Нет отчетов за ${day} для объекта "${objectName}".`, Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', `view_reports_by_object_${objectName}`)]
         ]));
         updateLastMessageId(ctx, userId, message);
@@ -592,7 +589,7 @@ async function showReportsByDay(ctx, objectName, day) {
     });
     buttons.push([Markup.button.callback('↩️ Назад', `view_reports_by_object_${objectName}`)]);
 
-    const message = await ctx.reply(`Отчеты за ${day} для объекта "${OBJECTS_TRANSLIT_REVERSE[objectName]}":`, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(`Отчеты за ${day} для объекта "${objectName}":`, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -613,12 +610,11 @@ async function viewReport(ctx, reportId) {
 
     const timestamp = report.timestamp || reportId.split('_')[1];
     const time = new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    const escapedReportObject = OBJECTS_TRANSLIT_REVERSE[report.objectName].replace(/_/g, '\\_');
     const reportText = `
 *📋 Отчет за ${report.date} (${time})*  
 ━━━━━━━━━━━━━━━━━━━━  
 *· ИТР:* ${users[userId].fullName}  
-*· Объект:* ${escapedReportObject}  
+*· Объект:* ${report.objectName}  
 *· Работы:* ${report.workDone}  
 *· Материалы:* ${report.materials}  
 ━━━━━━━━━━━━━━━━━━━━
@@ -717,7 +713,7 @@ bot.command('listproducers', async (ctx) => {
             const producerList = res.rows.map((row, index) => {
                 const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
                 const objectNames = objects.length > 0
-                    ? objects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj] || obj).join(', ')
+                    ? objects.join(', ')
                     : 'Не выбраны';
                 const fullName = row.fullname || 'Не указано';
                 const status = row.status || 'в работе';
@@ -803,7 +799,7 @@ bot.action('create_report', async (ctx) => {
         return;
     }
     userStates[userId] = { step: 'selectObject', report: {} };
-    const buttons = users[userId].selectedObjects.map(obj => [Markup.button.callback(OBJECTS_TRANSLIT_REVERSE[obj], `select_object_${obj}`)]);
+    const buttons = users[userId].selectedObjects.map(obj => [Markup.button.callback(obj, `select_object_${obj}`)]);
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 });
@@ -835,7 +831,7 @@ bot.action(/edit_report_(.+)/, async (ctx) => {
     }
 
     userStates[userId] = { step: 'editObject', reportId: reportId, report: { ...users[userId].reports[reportId] } };
-    const buttons = users[userId].selectedObjects.map(obj => [Markup.button.callback(OBJECTS_TRANSLIT_REVERSE[obj], `edit_object_${obj}`)]);
+    const buttons = users[userId].selectedObjects.map(obj => [Markup.button.callback(obj, `edit_object_${obj}`)]);
     const message = await ctx.reply('Выберите новый объект из списка:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 });
@@ -871,7 +867,7 @@ bot.on('text', async (ctx) => {
             updateLastMessageId(ctx, userId, fullNameMsg);
             if (!users[userId].isApproved) {
                 await bot.telegram.sendMessage(ADMIN_ID,
-                    `Новая заявка:\nФИО: ${users[userId].fullName}\nДолжность: ${users[userId].position || 'Не указана'}\nОбъекты: ${users[userId].selectedObjects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj]).join(', ')}`,
+                    `Новая заявка:\nФИО: ${users[userId].fullName}\nДолжность: ${users[userId].position || 'Не указана'}\nОбъекты: ${users[userId].selectedObjects.join(', ')}`,
                     Markup.inlineKeyboard([
                         [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
                         [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
@@ -909,10 +905,9 @@ bot.on('text', async (ctx) => {
                 generalMessageId: null
             };
 
-            const escapedNewObject = OBJECTS_TRANSLIT_REVERSE[state.report.objectName].replace(/_/g, '\\_');
             const reportText = `
 📅 *Отчет за ${date}*  
-🏢 *Объект:* ${escapedNewObject}  
+🏢 *Объект:* ${state.report.objectName}  
 ━━━━━━━━━━━━━━━━━━━━━ 
 👷 *ИТР:* ${users[userId].fullName}  
 🔧 *Выполненные работы:* ${state.report.workDone}  
@@ -920,7 +915,7 @@ bot.on('text', async (ctx) => {
 ━━━━━━━━━━━━━━━━━━━━━
             `.trim();
 
-            const groupChatId = OBJECT_GROUPS[state.report.objectName];
+            const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
             const groupMessage = await bot.telegram.sendMessage(groupChatId, reportText, { parse_mode: 'Markdown' });
             const generalMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText, { parse_mode: 'Markdown' });
 
@@ -933,7 +928,7 @@ bot.on('text', async (ctx) => {
             delete userStates[userId];
 
             const userReportMsg = await ctx.replyWithMarkdown(
-                `*Ваш отчет опубликован:*\n\n*🏢 Объект:* ${escapedNewObject}\n\n*🔧 Работы:*\n${state.report.workDone}\n\n*📦 Материалы:*\n${state.report.materials}`,
+                `*Ваш отчет опубликован:*\n\n*🏢 Объект:* ${state.report.objectName}\n\n*🔧 Работы:*\n${state.report.workDone}\n\n*📦 Материалы:*\n${state.report.materials}`,
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ В главное меню', 'main_menu')]])
             );
             updateLastMessageId(ctx, userId, userReportMsg);
@@ -948,10 +943,9 @@ bot.on('text', async (ctx) => {
             state.report.materials = ctx.message.text;
             state.report.timestamp = new Date().toISOString();
 
-            const escapedEditObject = OBJECTS_TRANSLIT_REVERSE[state.report.objectName].replace(/_/g, '\\_');
             const updatedReportText = `
 📅 *Отчет за ${state.report.date} (обновлен)*  
-🏢 *Объект:* ${escapedEditObject}  
+🏢 *Объект:* ${state.report.objectName}  
 ━━━━━━━━━━━━━━━━━━━━━  
 👷 *ИТР:* ${users[userId].fullName}  
 🔧 *Выполненные работы:* ${state.report.workDone}  
@@ -959,7 +953,7 @@ bot.on('text', async (ctx) => {
 ━━━━━━━━━━━━━━━━━━━━━
             `.trim();
 
-            const updatedGroupChatId = OBJECT_GROUPS[state.report.objectName];
+            const updatedGroupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
             users[userId].reports = await loadUserReports(userId);
             const oldReport = users[userId].reports[state.reportId];
             if (oldReport.groupMessageId) await deleteGroupMessage(updatedGroupChatId, oldReport.groupMessageId);
@@ -975,7 +969,7 @@ bot.on('text', async (ctx) => {
             delete userStates[userId];
 
             const updatedMsg = await ctx.replyWithMarkdown(
-                `*Отчет обновлен:*\n*🏢 Объект:* ${escapedEditObject}\n*🔧 Работы:* ${state.report.workDone}\n*📦 Материалы:* ${state.report.materials}`,
+                `*Отчет обновлен:*\n*🏢 Объект:* ${state.report.objectName}\n*🔧 Работы:* ${state.report.workDone}\n*📦 Материалы:* ${state.report.materials}`,
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ К отчетам', 'view_reports')]])
             );
             updateLastMessageId(ctx, userId, updatedMsg);
@@ -1022,13 +1016,13 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
             user.reports = await loadUserReports(userId);
             const hasReportToday = Object.keys(user.reports).some(reportId => reportId.startsWith(today));
             if (!hasReportToday) {
-                const escapedObjects = user.selectedObjects?.length > 0
-                    ? user.selectedObjects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj].replace(/_/g, '\\_')).join(', ')
-                    : OBJECTS_TRANSLIT_REVERSE['Kolcevoy_MNPP'];
-                const groupChatId = user.selectedObjects?.length > 0 ? OBJECT_GROUPS[user.selectedObjects[0]] : OBJECT_GROUPS['Kolcevoy_MNPP'];
+                const objects = user.selectedObjects?.length > 0
+                    ? user.selectedObjects.join(', ')
+                    : 'Кольцевой МНПП';
+                const groupChatId = user.selectedObjects?.length > 0 ? OBJECT_GROUPS[user.selectedObjects[0]] || GENERAL_GROUP_CHAT_ID : OBJECT_GROUPS['Кольцевой МНПП'];
                 bot.telegram.sendMessage(
                     groupChatId,
-                    `*⚠️ Напоминание*\n${user.fullName}, вы не предоставили отчет за ${today} по объектам: ${escapedObjects}. Пожалуйста, внесите данные.`,
+                    `*⚠️ Напоминание*\n${user.fullName}, вы не предоставили отчет за ${today} по объектам: ${objects}. Пожалуйста, внесите данные.`,
                     { parse_mode: 'Markdown' }
                 ).catch(err => console.error('Ошибка уведомления:', err));
             }
