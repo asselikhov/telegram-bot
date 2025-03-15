@@ -1174,7 +1174,7 @@ ${state.report.materials}
             delete userStates[userId];
 
             const userReportMsg = await ctx.reply(
-                `Ваш отчет опубликован:\n\n🏢 Объект: ${state.report.objectName}\n\n🔧 Работы:\n${state.report.workDone}\n\n📦 Материалы:\n${state.report.materials}`,
+                `✅ Ваш отчет опубликован:\n\n🏢 ${state.report.objectName}\n\n🔧 Выполненные работы:\n\n${state.report.workDone}\n\n📦 Поставленные материалы:\n\n${state.report.materials}`,
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]])
             );
             updateLastMessageId(ctx, userId, userReportMsg);
@@ -1242,7 +1242,7 @@ bot.action(/approve_(.+)/, async (ctx) => {
     users[targetUserId].isApproved = true;
     await saveUser(targetUserId, users[targetUserId]);
     await ctx.editMessageText(`Заявка ${users[targetUserId].fullName} одобрена.`);
-    await bot.telegram.sendMessage(targetUserId, 'Ваш профиль подтвержден администратором.');
+    await bot.telegram.sendMessage(targetUserId, '✅ Ваш профиль подтвержден администратором.');
 });
 
 bot.action(/reject_(.+)/, async (ctx) => {
@@ -1255,7 +1255,7 @@ bot.action(/reject_(.+)/, async (ctx) => {
         await client.query('DELETE FROM users WHERE userId = $1', [targetUserId]);
         await client.query('DELETE FROM reports WHERE userId = $1', [targetUserId]);
         await ctx.editMessageText('Заявка отклонена.');
-        await bot.telegram.sendMessage(targetUserId, 'Ваша заявка отклонена администратором.');
+        await bot.telegram.sendMessage(targetUserId, '❌ Ваша заявка отклонена администратором.');
     } catch (err) {
         console.error('Ошибка удаления:', err.message);
     } finally {
