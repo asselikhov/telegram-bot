@@ -97,6 +97,7 @@ const OBJECT_GROUPS = {
 let userStates = {};
 let lastMessageIds = {};
 
+// Минимальное экранирование только для специальных символов Markdown
 function escapeMarkdown(text) {
     return text.replace(/([_*[\]()~`>#+\-.!])/g, '\\$1');
 }
@@ -203,7 +204,7 @@ async function getReportText(objectName) {
         if (res.rows.length === 0) return '';
         const reportText = res.rows.map(row => {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${escapeMarkdown(row.fullname)}\nОбъект: ${escapeMarkdown(row.objectname)}\nРаботы: ${escapeMarkdown(row.workdone)}\nМатериалы: ${escapeMarkdown(row.materials)}\n--------------------------\n`;
+            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${row.objectname}\nРаботы: ${row.workdone}\nМатериалы: ${row.materials}\n--------------------------\n`;
         }).join('');
         return reportText;
     } catch (err) {
@@ -263,7 +264,7 @@ async function showMainMenu(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const menuText = `
-*🚀 Главное меню*  
+🚀 Главное меню  
 ━━━━━━━━━━━━━━━━━━━━  
 Выберите действие ниже:  
     `.trim();
@@ -282,7 +283,7 @@ async function showMainMenu(ctx) {
         buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);
     }
 
-    const message = await ctx.replyWithMarkdown(menuText, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -298,17 +299,17 @@ async function showProfile(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const profileText = `
-👤 *Личный кабинет*  
+👤 Личный кабинет  
 ━━━━━━━━━━━━━━━━━━━━  
-👷 *ФИО:* ${user.fullName || 'Не указано'}  
+👷 ФИО: ${user.fullName || 'Не указано'}  
 
-📋 *Должность:* ${user.position || 'Не указана'}  
+📋 Должность: ${user.position || 'Не указана'}  
 
-📍 *Объекты:*\n${objectsList}  
+📍 Объекты:\n${objectsList}  
 
-⏳ *Статус:* ${user.status || 'Не указан'}  
+⏳ Статус: ${user.status || 'Не указан'}  
 
-✅ *Подтвержден:* ${user.isApproved ? 'Да' : 'Нет'}  
+✅ Подтвержден: ${user.isApproved ? 'Да' : 'Нет'}  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
 
@@ -321,7 +322,7 @@ async function showProfile(ctx) {
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ];
 
-    const message = await ctx.replyWithMarkdown(profileText, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -336,8 +337,8 @@ async function showDownloadReport(ctx) {
         return;
     }
 
-    const buttons = OBJECTS_LIST_CYRILLIC.map(obj =>
-        [Markup.button.callback(obj, `download_report_file_${OBJECTS_LIST_CYRILLIC.indexOf(obj)}`)]
+    const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
+        [Markup.button.callback(obj, `download_report_file_${index}`)]
     );
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
@@ -361,7 +362,7 @@ async function downloadReportFile(ctx, objectIndex) {
     try {
         const reportText = await getReportText(objectName);
         if (!reportText) {
-            const message = await ctx.reply(`Отчет для объекта "${escapeMarkdown(objectName)}" не найден.`,
+            const message = await ctx.reply(`Отчет для объекта "${objectName}" не найден.`,
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'download_report')]])
             );
             updateLastMessageId(ctx, userId, message);
@@ -420,7 +421,7 @@ bot.command('getreport', async (ctx) => {
 
     const reportText = await getReportText(objectName);
     if (!reportText) {
-        await ctx.reply(`Отчет для объекта "${escapeMarkdown(objectName)}" не найден.`);
+        await ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
         return;
     }
 
@@ -542,7 +543,7 @@ bot.action(/select_position_(.+)/, async (ctx) => {
 
     users[userId].position = selectedPosition;
     await saveUser(userId, users[userId]);
-    const message = await ctx.reply(`Должность обновлена на "${escapeMarkdown(selectedPosition)}".`);
+    const message = await ctx.reply(`Должность обновлена на "${selectedPosition}".`);
     updateLastMessageId(ctx, userId, message);
     setTimeout(() => showProfile(ctx), 1000);
 });
@@ -565,7 +566,7 @@ async function showReports(ctx) {
 
     const buttons = users[userId].selectedObjects.map((obj, index) => {
         const reportCount = Object.values(userReports).filter(r => r.objectName === obj).length;
-        return [Markup.button.callback(`${escapeMarkdown(obj)} (${reportCount})`, `view_reports_by_object_${OBJECTS_LIST_CYRILLIC.indexOf(obj)}`)];
+        return [Markup.button.callback(`${obj} (${reportCount})`, `view_reports_by_object_${index}`)];
     });
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
@@ -584,7 +585,7 @@ async function showReportsByObject(ctx, objectName) {
         .map(([reportId, report]) => ({ reportId, ...report }));
 
     if (reports.length === 0) {
-        const message = await ctx.reply(`Нет отчетов для объекта "${escapeMarkdown(objectName)}".`, Markup.inlineKeyboard([
+        const message = await ctx.reply(`Нет отчетов для объекта "${objectName}".`, Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', 'view_reports')]
         ]));
         updateLastMessageId(ctx, userId, message);
@@ -595,7 +596,7 @@ async function showReportsByObject(ctx, objectName) {
     const buttons = days.map(day => [Markup.button.callback(day, `view_reports_by_day_${OBJECTS_LIST_CYRILLIC.indexOf(objectName)}_${day}`)]);
     buttons.push([Markup.button.callback('↩️ Назад', 'view_reports')]);
 
-    const message = await ctx.reply(`Выберите день для объекта "${escapeMarkdown(objectName)}":`, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(`Выберите день для объекта "${objectName}":`, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -611,7 +612,7 @@ async function showReportsByDay(ctx, objectName, day) {
         .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
 
     if (reports.length === 0) {
-        const message = await ctx.reply(`Нет отчетов за ${escapeMarkdown(day)} для объекта "${escapeMarkdown(objectName)}".`, Markup.inlineKeyboard([
+        const message = await ctx.reply(`Нет отчетов за ${day} для объекта "${objectName}".`, Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', `view_reports_by_object_${OBJECTS_LIST_CYRILLIC.indexOf(objectName)}`)]
         ]));
         updateLastMessageId(ctx, userId, message);
@@ -624,7 +625,7 @@ async function showReportsByDay(ctx, objectName, day) {
     });
     buttons.push([Markup.button.callback('↩️ Назад', `view_reports_by_object_${OBJECTS_LIST_CYRILLIC.indexOf(objectName)}`)]);
 
-    const message = await ctx.reply(`Отчеты за ${escapeMarkdown(day)} для объекта "${escapeMarkdown(objectName)}":`, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(`Отчеты за ${day} для объекта "${objectName}":`, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -646,16 +647,16 @@ async function viewReport(ctx, reportId) {
     const timestamp = report.timestamp || reportId.split('_')[1];
     const time = new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     const reportText = `
-*📋 Отчет за ${escapeMarkdown(report.date)} (${escapeMarkdown(time)})*  
+📋 Отчет за ${report.date} (${time})  
 ━━━━━━━━━━━━━━━━━━━━  
-*· ИТР:* ${escapeMarkdown(users[userId].fullName)}  
-*· Объект:* ${escapeMarkdown(report.objectName)}  
-*· Работы:* ${escapeMarkdown(report.workDone)}  
-*· Материалы:* ${escapeMarkdown(report.materials)}  
+· ИТР: ${users[userId].fullName}  
+· Объект: ${report.objectName}  
+· Работы: ${report.workDone}  
+· Материалы: ${report.materials}  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
 
-    const message = await ctx.replyWithMarkdown(reportText, Markup.inlineKeyboard([
+    const message = await ctx.reply(reportText, Markup.inlineKeyboard([
         [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
         [Markup.button.callback('↩️ Назад', `view_reports_by_day_${OBJECTS_LIST_CYRILLIC.indexOf(report.objectName)}_${report.date}`)]
     ]));
@@ -667,18 +668,18 @@ async function showHelp(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const helpText = `
-*ℹ️ Помощь*  
+ℹ️ Помощь  
 ━━━━━━━━━━━━━━━━━━━━  
 Используйте кнопки для навигации:  
-- *Личный кабинет*: Просмотр и редактирование данных.  
-- *Создать отчет*: Доступно для производителей работ.  
-- *Мои отчеты*: Просмотр и редактирование отчетов.  
-- *Выгрузить отчет*: Скачать файл через меню или /getreport в общей группе.  
-- *Админ-панель*: Только для администратора (/approve).  
+- Личный кабинет: Просмотр и редактирование данных.  
+- Создать отчет: Доступно для производителей работ.  
+- Мои отчеты: Просмотр и редактирование отчетов.  
+- Выгрузить отчет: Скачать файл через меню или /getreport в общей группе.  
+- Админ-панель: Только для администратора (/approve).  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
 
-    const message = await ctx.replyWithMarkdown(helpText, Markup.inlineKeyboard([
+    const message = await ctx.reply(helpText, Markup.inlineKeyboard([
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ]));
     updateLastMessageId(ctx, userId, message);
@@ -689,15 +690,15 @@ async function showAdminPanel(ctx) {
     await deletePreviousMessage(ctx, userId);
 
     const adminText = `
-*👑 Админ-панель*  
+👑 Админ-панель  
 ━━━━━━━━━━━━━━━━━━━━  
 Для подтверждения пользователя используйте:  
-*/approve <userId>*  
+/approve <userId>  
 Пример: /approve 123456789  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
 
-    const message = await ctx.replyWithMarkdown(adminText, Markup.inlineKeyboard([
+    const message = await ctx.reply(adminText, Markup.inlineKeyboard([
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ]));
     updateLastMessageId(ctx, userId, message);
@@ -718,7 +719,7 @@ bot.command('approve', async (ctx) => {
     }
     users[targetUserId].isApproved = true;
     await saveUser(targetUserId, users[targetUserId]);
-    await ctx.reply(`Пользователь ${escapeMarkdown(users[targetUserId].fullName)} подтвержден.`);
+    await ctx.reply(`Пользователь ${users[targetUserId].fullName} подтвержден.`);
     bot.telegram.sendMessage(targetUserId, 'Ваш профиль подтвержден администратором.');
 });
 
@@ -746,15 +747,15 @@ bot.command('listproducers', async (ctx) => {
             const producerList = res.rows.map((row, index) => {
                 const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
                 const objectNames = objects.length > 0
-                    ? filterValidObjects(objects).map(obj => escapeMarkdown(obj)).join(', ')
+                    ? filterValidObjects(objects).join(', ')
                     : 'Не выбраны';
-                const fullName = escapeMarkdown(row.fullname || 'Не указано');
-                const status = escapeMarkdown(row.status || 'в работе');
-                return `${index + 1}. *${fullName}* (ID: ${row.userid})\n   Объекты: ${objectNames}\n   Статус: ${status}`;
+                const fullName = row.fullname || 'Не указано';
+                const status = row.status || 'в работе';
+                return `${index + 1}. ${fullName} (ID: ${row.userid})\n   Объекты: ${objectNames}\n   Статус: ${status}`;
             }).join('\n\n');
 
-            await ctx.replyWithMarkdown(
-                `👷‍♂️ *Список производителей работ* 👷‍♂️\n` +
+            await ctx.reply(
+                `👷‍♂️ Список производителей работ 👷‍♂️\n` +
                 `═══════════════════════\n` +
                 `${producerList}\n` +
                 `═══════════════════════\n` +
@@ -849,7 +850,7 @@ bot.action('create_report', async (ctx) => {
         return;
     }
     userStates[userId] = { step: 'selectObject', report: {} };
-    const buttons = users[userId].selectedObjects.map(obj => [Markup.button.callback(obj, `select_object_${OBJECTS_LIST_CYRILLIC.indexOf(obj)}`)]);
+    const buttons = users[userId].selectedObjects.map((obj, index) => [Markup.button.callback(obj, `select_object_${index}`)]);
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 });
@@ -883,7 +884,7 @@ bot.action(/edit_report_(.+)/, async (ctx) => {
     }
 
     userStates[userId] = { step: 'editObject', reportId: reportId, report: { ...users[userId].reports[reportId] } };
-    const buttons = users[userId].selectedObjects.map(obj => [Markup.button.callback(obj, `edit_object_${OBJECTS_LIST_CYRILLIC.indexOf(obj)}`)]);
+    const buttons = users[userId].selectedObjects.map((obj, index) => [Markup.button.callback(obj, `edit_object_${index}`)]);
     const message = await ctx.reply('Выберите новый объект из списка:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 });
@@ -921,7 +922,7 @@ bot.on('text', async (ctx) => {
             updateLastMessageId(ctx, userId, fullNameMsg);
             if (!users[userId].isApproved) {
                 await bot.telegram.sendMessage(ADMIN_ID,
-                    `Новая заявка:\nФИО: ${escapeMarkdown(users[userId].fullName)}\nДолжность: ${escapeMarkdown(users[userId].position || 'Не указана')}\nОбъекты: ${users[userId].selectedObjects.map(obj => escapeMarkdown(obj)).join(', ')}`,
+                    `Новая заявка:\nФИО: ${users[userId].fullName}\nДолжность: ${users[userId].position || 'Не указана'}\nОбъекты: ${users[userId].selectedObjects.join(', ')}`,
                     Markup.inlineKeyboard([
                         [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
                         [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
@@ -960,18 +961,18 @@ bot.on('text', async (ctx) => {
             };
 
             const reportText = `
-📅 *Отчет за ${escapeMarkdown(date)}*  
-🏢 *Объект:* ${escapeMarkdown(state.report.objectName)}  
+📅 Отчет за ${date}  
+🏢 Объект: ${state.report.objectName}  
 ━━━━━━━━━━━━━━━━━━━━━ 
-👷 *ИТР:* ${escapeMarkdown(users[userId].fullName)}  
-🔧 *Выполненные работы:* ${escapeMarkdown(state.report.workDone)}  
-📦 *Поставленные материалы:* ${escapeMarkdown(state.report.materials)}  
+👷 ИТР: ${users[userId].fullName}  
+🔧 Выполненные работы: ${state.report.workDone}  
+📦 Поставленные материалы: ${state.report.materials}  
 ━━━━━━━━━━━━━━━━━━━━━
             `.trim();
 
             const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
-            const groupMessage = await bot.telegram.sendMessage(groupChatId, reportText, { parse_mode: 'Markdown' });
-            const generalMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText, { parse_mode: 'Markdown' });
+            const groupMessage = await bot.telegram.sendMessage(groupChatId, reportText);
+            const generalMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText);
 
             report.groupMessageId = groupMessage.message_id;
             report.generalMessageId = generalMessage.message_id;
@@ -981,8 +982,8 @@ bot.on('text', async (ctx) => {
 
             delete userStates[userId];
 
-            const userReportMsg = await ctx.replyWithMarkdown(
-                `*Ваш отчет опубликован:*\n\n*🏢 Объект:* ${escapeMarkdown(state.report.objectName)}\n\n*🔧 Работы:*\n${escapeMarkdown(state.report.workDone)}\n\n*📦 Материалы:*\n${escapeMarkdown(state.report.materials)}`,
+            const userReportMsg = await ctx.reply(
+                `Ваш отчет опубликован:\n\n🏢 Объект: ${state.report.objectName}\n\n🔧 Работы:\n${state.report.workDone}\n\n📦 Материалы:\n${state.report.materials}`,
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]])
             );
             updateLastMessageId(ctx, userId, userReportMsg);
@@ -998,12 +999,12 @@ bot.on('text', async (ctx) => {
             state.report.timestamp = new Date().toISOString();
 
             const updatedReportText = `
-📅 *Отчет за ${escapeMarkdown(state.report.date)} (обновлен)*  
-🏢 *Объект:* ${escapeMarkdown(state.report.objectName)}  
+📅 Отчет за ${state.report.date} (обновлен)  
+🏢 Объект: ${state.report.objectName}  
 ━━━━━━━━━━━━━━━━━━━━━  
-👷 *ИТР:* ${escapeMarkdown(users[userId].fullName)}  
-🔧 *Выполненные работы:* ${escapeMarkdown(state.report.workDone)}  
-📦 *Поставленные материалы:* ${escapeMarkdown(state.report.materials)}  
+👷 ИТР: ${users[userId].fullName}  
+🔧 Выполненные работы: ${state.report.workDone}  
+📦 Поставленные материалы: ${state.report.materials}  
 ━━━━━━━━━━━━━━━━━━━━━
             `.trim();
 
@@ -1013,8 +1014,8 @@ bot.on('text', async (ctx) => {
             if (oldReport.groupMessageId) await deleteGroupMessage(updatedGroupChatId, oldReport.groupMessageId);
             if (oldReport.generalMessageId) await deleteGroupMessage(GENERAL_GROUP_CHAT_ID, oldReport.generalMessageId);
 
-            const newGroupMessage = await bot.telegram.sendMessage(updatedGroupChatId, updatedReportText, { parse_mode: 'Markdown' });
-            const newGeneralMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, updatedReportText, { parse_mode: 'Markdown' });
+            const newGroupMessage = await bot.telegram.sendMessage(updatedGroupChatId, updatedReportText);
+            const newGeneralMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, updatedReportText);
 
             state.report.groupMessageId = newGroupMessage.message_id;
             state.report.generalMessageId = newGeneralMessage.message_id;
@@ -1022,8 +1023,8 @@ bot.on('text', async (ctx) => {
 
             delete userStates[userId];
 
-            const updatedMsg = await ctx.replyWithMarkdown(
-                `*Отчет обновлен:*\n*🏢 Объект:* ${escapeMarkdown(state.report.objectName)}\n*🔧 Работы:* ${escapeMarkdown(state.report.workDone)}\n*📦 Материалы:* ${escapeMarkdown(state.report.materials)}`,
+            const updatedMsg = await ctx.reply(
+                `Отчет обновлен:\n🏢 Объект: ${state.report.objectName}\n🔧 Работы: ${state.report.workDone}\n📦 Материалы: ${state.report.materials}`,
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ К отчетам', 'view_reports')]])
             );
             updateLastMessageId(ctx, userId, updatedMsg);
@@ -1039,7 +1040,7 @@ bot.action(/approve_(.+)/, async (ctx) => {
 
     users[targetUserId].isApproved = true;
     await saveUser(targetUserId, users[targetUserId]);
-    await ctx.editMessageText(`Заявка ${escapeMarkdown(users[targetUserId].fullName)} одобрена.`);
+    await ctx.editMessageText(`Заявка ${users[targetUserId].fullName} одобрена.`);
     await bot.telegram.sendMessage(targetUserId, 'Ваш профиль подтвержден администратором.');
 });
 
@@ -1071,15 +1072,14 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
             const hasReportToday = Object.keys(user.reports).some(reportId => reportId.startsWith(today));
             if (!hasReportToday) {
                 const objects = user.selectedObjects.length > 0
-                    ? user.selectedObjects.map(obj => escapeMarkdown(obj)).join(', ')
+                    ? user.selectedObjects.join(', ')
                     : 'Не выбраны';
                 const groupChatId = user.selectedObjects.length > 0
                     ? OBJECT_GROUPS[user.selectedObjects[0]] || GENERAL_GROUP_CHAT_ID
                     : OBJECT_GROUPS['Кольцевой МНПП, 132км'];
                 bot.telegram.sendMessage(
                     groupChatId,
-                    `*⚠️ Напоминание*\n${escapeMarkdown(user.fullName)}, вы не предоставили отчет за ${escapeMarkdown(today)} по объектам: ${objects}. Пожалуйста, внесите данные.`,
-                    { parse_mode: 'Markdown' }
+                    `⚠️ Напоминание\n${user.fullName}, вы не предоставили отчет за ${today} по объектам: ${objects}. Пожалуйста, внесите данные.`
                 ).catch(err => console.error('Ошибка уведомления:', err));
             }
         }
