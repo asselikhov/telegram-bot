@@ -44,6 +44,7 @@ async function initializeDatabase() {
                 userId TEXT PRIMARY KEY,
                 fullName TEXT,
                 position TEXT,
+                organization TEXT,
                 selectedObjects TEXT,
                 status TEXT DEFAULT 'в работе',
                 isApproved INTEGER DEFAULT 0,
@@ -94,6 +95,9 @@ function getPositionsList(userId) {
     return positions;
 }
 
+// Список организаций
+const ORGANIZATIONS_LIST = ['ООО "СтройТех"', 'АО "НефтеГаз"', 'ИП Иванов', 'ООО "Прогресс"'];
+
 // Группы для объектов
 const OBJECT_GROUPS = {
     'Кольцевой МНПП, 132км': '-1002394790037',
@@ -125,6 +129,7 @@ async function loadUsers() {
             users[row.userid] = {
                 fullName: row.fullname || '',
                 position: row.position || '',
+                organization: row.organization || '',
                 selectedObjects: filterValidObjects(selectedObjects),
                 status: row.status || 'в работе',
                 isApproved: Boolean(row.isapproved),
@@ -167,16 +172,16 @@ async function loadUserReports(userId) {
 }
 
 async function saveUser(userId, userData) {
-    const { fullName, position, selectedObjects, status, isApproved, nextReportId } = userData;
+    const { fullName, position, organization, selectedObjects, status, isApproved, nextReportId } = userData;
     const filteredObjects = filterValidObjects(selectedObjects);
     const client = await pool.connect();
     try {
         await client.query(`
-            INSERT INTO users (userId, fullName, position, selectedObjects, status, isApproved, nextReportId)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO users (userId, fullName, position, organization, selectedObjects, status, isApproved, nextReportId)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (userId) DO UPDATE
-            SET fullName = $2, position = $3, selectedObjects = $4, status = $5, isApproved = $6, nextReportId = $7
-        `, [userId, fullName, position, JSON.stringify(filteredObjects), status, isApproved ? 1 : 0, nextReportId]);
+            SET fullName = $2, position = $3, organization = $4, selectedObjects = $5, status = $6, isApproved = $7, nextReportId = $8
+        `, [userId, fullName, position, organization, JSON.stringify(filteredObjects), status, isApproved ? 1 : 0, nextReportId]);
     } catch (err) {
         console.error('Ошибка сохранения пользователя:', err.message);
         throw err;
@@ -251,7 +256,16 @@ async function showPositionSelection(ctx, userId) {
     await deletePreviousMessage(ctx, userId);
     const positions = getPositionsList(userId);
     const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_initial_position_${index}`)]);
-    const message = await ctx.reply('Выберите вашу должность:', Markup.inlineKeyboard(buttons));
+    buttons.push([Markup.button.callback('Ввести свою должность', 'custom_position')]);
+    const message = await ctx.reply('Выберите вашу должность или введите свою:', Markup.inlineKeyboard(buttons));
+    updateLastMessageId(ctx, userId, message);
+}
+
+async function showOrganizationSelection(ctx, userId) {
+    await deletePreviousMessage(ctx, userId);
+    const buttons = ORGANIZATIONS_LIST.map((org, index) => [Markup.button.callback(org, `select_organization_${index}`)]);
+    buttons.push([Markup.button.callback('Ввести свою организацию', 'custom_organization')]);
+    const message = await ctx.reply('Выберите вашу организацию или введите свою:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -311,21 +325,22 @@ async function showProfile(ctx) {
     const profileText = `
 👤 ЛИЧНЫЙ КАБИНЕТ  
 ➖➖➖➖➖➖➖➖➖➖➖  
-👷 ФИО: ${user.fullName || 'Не указано'}  
-
 📋 ДОЛЖНОСТЬ: ${user.position || 'Не указана'}  
+
+🏢 ОРГАНИЗАЦИЯ: ${user.organization || 'Не указана'}  
+
+👷 ФИО: ${user.fullName || 'Не указано'}  
 
 📍 ОБЪЕКТЫ:\n${objectsList}  
 
 ⏳ СТАТУС: ${user.status || 'Не указан'}  
-
-✅ ПОДТВЕРЖДЕН: ${user.isApproved ? 'Да' : 'Нет'}  
 ➖➖➖➖➖➖➖➖➖➖➖
 `.trim();
 
     const buttons = [
         [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
         [Markup.button.callback('🏢 Изменить должность', 'edit_position')],
+        [Markup.button.callback('🏭 Изменить организацию', 'edit_organization')],
         [Markup.button.callback('🏠 Изменить объекты', 'edit_object')],
         [Markup.button.callback('📅 Изменить статус', 'edit_status')],
         [Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')],
@@ -450,6 +465,7 @@ bot.start(async (ctx) => {
         users[userId] = {
             fullName: '',
             position: '',
+            organization: '',
             selectedObjects: [],
             status: 'в работе',
             isApproved: false,
@@ -478,9 +494,39 @@ bot.action(/select_initial_position_(\d+)/, async (ctx) => {
 
     users[userId].position = selectedPosition;
     await saveUser(userId, users[userId]);
-    userStates[userId] = { step: 'selectObjects', selectedObjects: [] };
+    userStates[userId] = { step: 'selectOrganization' };
+    await showOrganizationSelection(ctx, userId);
+});
+
+bot.action('custom_position', async (ctx) => {
+    const userId = ctx.from.id.toString();
     await deletePreviousMessage(ctx, userId);
-    await showObjectSelection(ctx, userId);
+    userStates[userId] = { step: 'customPositionInput' };
+    const message = await ctx.reply('Введите название вашей должности:');
+    updateLastMessageId(ctx, userId, message);
+});
+
+bot.action(/select_organization_(\d+)/, async (ctx) => {
+    const userId = ctx.from.id.toString();
+    const orgIndex = parseInt(ctx.match[1], 10);
+    const selectedOrganization = ORGANIZATIONS_LIST[orgIndex];
+    if (!selectedOrganization) return;
+    const users = await loadUsers();
+
+    users[userId].organization = selectedOrganization;
+    await saveUser(userId, users[userId]);
+    userStates[userId] = { step: 'fullName' };
+    await deletePreviousMessage(ctx, userId);
+    const message = await ctx.reply('Введите ваше ФИО:');
+    updateLastMessageId(ctx, userId, message);
+});
+
+bot.action('custom_organization', async (ctx) => {
+    const userId = ctx.from.id.toString();
+    await deletePreviousMessage(ctx, userId);
+    userStates[userId] = { step: 'customOrganizationInput' };
+    const message = await ctx.reply('Введите название вашей организации:');
+    updateLastMessageId(ctx, userId, message);
 });
 
 bot.action(/toggle_object_(\d+)/, async (ctx) => {
@@ -524,10 +570,7 @@ bot.action('confirm_objects', async (ctx) => {
         updateLastMessageId(ctx, userId, message);
         setTimeout(() => showProfile(ctx), 1000);
     } else {
-        userStates[userId] = { step: 'fullName' };
-        await deletePreviousMessage(ctx, userId);
-        const message = await ctx.reply('Введите ваше ФИО:');
-        updateLastMessageId(ctx, userId, message);
+        await showProfile(ctx);
     }
 });
 
@@ -544,8 +587,9 @@ bot.action('edit_position', async (ctx) => {
     await deletePreviousMessage(ctx, userId);
     const positions = getPositionsList(userId);
     const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_position_${index}`)]);
+    buttons.push([Markup.button.callback('Ввести свою должность', 'custom_position_edit')]);
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
-    const message = await ctx.reply('Выберите новую должность из списка:', Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply('Выберите новую должность или введите свою:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 });
 
@@ -563,6 +607,47 @@ bot.action(/select_position_(\d+)/, async (ctx) => {
     const message = await ctx.reply(`Должность обновлена на "${selectedPosition}".`);
     updateLastMessageId(ctx, userId, message);
     setTimeout(() => showProfile(ctx), 1000);
+});
+
+bot.action('custom_position_edit', async (ctx) => {
+    const userId = ctx.from.id.toString();
+    await deletePreviousMessage(ctx, userId);
+    userStates[userId] = { step: 'customPositionEditInput' };
+    const message = await ctx.reply('Введите новое название должности:');
+    updateLastMessageId(ctx, userId, message);
+});
+
+bot.action('edit_organization', async (ctx) => {
+    const userId = ctx.from.id.toString();
+    await deletePreviousMessage(ctx, userId);
+    const buttons = ORGANIZATIONS_LIST.map((org, index) => [Markup.button.callback(org, `select_org_edit_${index}`)]);
+    buttons.push([Markup.button.callback('Ввести свою организацию', 'custom_org_edit')]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
+    const message = await ctx.reply('Выберите новую организацию или введите свою:', Markup.inlineKeyboard(buttons));
+    updateLastMessageId(ctx, userId, message);
+});
+
+bot.action(/select_org_edit_(\d+)/, async (ctx) => {
+    const userId = ctx.from.id.toString();
+    const orgIndex = parseInt(ctx.match[1], 10);
+    const selectedOrganization = ORGANIZATIONS_LIST[orgIndex];
+    if (!selectedOrganization) return;
+    const users = await loadUsers();
+    await deletePreviousMessage(ctx, userId);
+
+    users[userId].organization = selectedOrganization;
+    await saveUser(userId, users[userId]);
+    const message = await ctx.reply(`Организация обновлена на "${selectedOrganization}".`);
+    updateLastMessageId(ctx, userId, message);
+    setTimeout(() => showProfile(ctx), 1000);
+});
+
+bot.action('custom_org_edit', async (ctx) => {
+    const userId = ctx.from.id.toString();
+    await deletePreviousMessage(ctx, userId);
+    userStates[userId] = { step: 'customOrgEditInput' };
+    const message = await ctx.reply('Введите новое название организации:');
+    updateLastMessageId(ctx, userId, message);
 });
 
 async function showReports(ctx) {
@@ -719,6 +804,7 @@ async function showAdminPanel(ctx) {
             userId,
             fullName: user.fullName || 'Не указано',
             position: user.position || 'Не указана',
+            organization: user.organization || 'Не указана',
             objects: user.selectedObjects.length > 0 ? user.selectedObjects.map(obj => `   · ${obj}`).join('\n') : '   · Не выбраны'
         }));
 
@@ -737,8 +823,9 @@ async function showAdminPanel(ctx) {
         adminText += pendingUsers.map((u, index) =>
             `ЗАЯВКА #${index + 1}  
 ➖➖➖➖➖➖➖➖➖➖➖  
-👷 ФИО: ${u.fullName}  
 📋 ДОЛЖНОСТЬ: ${u.position}  
+🏢 ОРГАНИЗАЦИЯ: ${u.organization}  
+👷 ФИО: ${u.fullName}  
 📍 ОБЪЕКТЫ:\n${u.objects}  
 🆔 ID: ${u.userId}  
 ➖➖➖➖➖➖➖➖➖➖➖`
@@ -791,7 +878,7 @@ bot.command('listproducers', async (ctx) => {
         const client = await pool.connect();
         try {
             const res = await client.query(
-                'SELECT userId, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
+                'SELECT userId, fullName, organization, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
                 ['производитель работ', 1]
             );
 
@@ -806,8 +893,9 @@ bot.command('listproducers', async (ctx) => {
                     ? filterValidObjects(objects).map(obj => `   - ${obj}`).join('\n')
                     : '   - Не выбраны';
                 const fullName = row.fullname || 'Не указано';
+                const organization = row.organization || 'Не указано';
                 const status = row.status || 'в работе';
-                return `${index + 1}. ${fullName} (ID: ${row.userid})\n   Объекты:\n${objectNames}\n   Статус: ${status}`;
+                return `${index + 1}. ${fullName} (ID: ${row.userid})\n   Организация: ${organization}\n   Объекты:\n${objectNames}\n   Статус: ${status}`;
             }).join('\n\n');
 
             await ctx.reply(
@@ -970,18 +1058,32 @@ bot.on('text', async (ctx) => {
     await deletePreviousMessage(ctx, userId);
 
     switch (state.step) {
+        case 'customPositionInput':
+            users[userId].position = ctx.message.text.trim();
+            await saveUser(userId, users[userId]);
+            userStates[userId] = { step: 'selectOrganization' };
+            await showOrganizationSelection(ctx, userId);
+            break;
+        case 'customOrganizationInput':
+            users[userId].organization = ctx.message.text.trim();
+            await saveUser(userId, users[userId]);
+            userStates[userId] = { step: 'fullName' };
+            const fullNamePrompt = await ctx.reply('Введите ваше ФИО:');
+            updateLastMessageId(ctx, userId, fullNamePrompt);
+            break;
         case 'fullName':
             users[userId].fullName = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
             delete userStates[userId];
-            const fullNameMsg = await ctx.reply('ФИО обновлено.');
+            const fullNameMsg = await ctx.reply('ФИО обновлено. Ваша заявка отправлена на рассмотрение.');
             updateLastMessageId(ctx, userId, fullNameMsg);
             if (!users[userId].isApproved) {
                 await bot.telegram.sendMessage(ADMIN_ID,
                     `НОВАЯ ЗАЯВКА  
 ➖➖➖➖➖➖➖➖➖➖➖  
-👷 ФИО: ${users[userId].fullName}  
 📋 ДОЛЖНОСТЬ: ${users[userId].position || 'Не указана'}  
+🏢 ОРГАНИЗАЦИЯ: ${users[userId].organization || 'Не указана'}  
+👷 ФИО: ${users[userId].fullName}  
 📍 ОБЪЕКТЫ:\n${users[userId].selectedObjects.length > 0 ? users[userId].selectedObjects.map(obj => `   · ${obj}`).join('\n') : '   · Не выбраны'}  
 🆔 ID: ${userId}  
 ➖➖➖➖➖➖➖➖➖➖➖`,
@@ -990,11 +1092,25 @@ bot.on('text', async (ctx) => {
                         [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
                     ])
                 );
-                const userMsg = await ctx.reply('Ваша заявка отправлена на рассмотрение.');
-                updateLastMessageId(ctx, userId, userMsg);
             } else {
                 setTimeout(() => showProfile(ctx), 1000);
             }
+            break;
+        case 'customPositionEditInput':
+            users[userId].position = ctx.message.text.trim();
+            await saveUser(userId, users[userId]);
+            delete userStates[userId];
+            const positionEditMsg = await ctx.reply('Должность обновлена.');
+            updateLastMessageId(ctx, userId, positionEditMsg);
+            setTimeout(() => showProfile(ctx), 1000);
+            break;
+        case 'customOrgEditInput':
+            users[userId].organization = ctx.message.text.trim();
+            await saveUser(userId, users[userId]);
+            delete userStates[userId];
+            const orgEditMsg = await ctx.reply('Организация обновлена.');
+            updateLastMessageId(ctx, userId, orgEditMsg);
+            setTimeout(() => showProfile(ctx), 1000);
             break;
         case 'workDone':
             state.report.workDone = ctx.message.text.trim();
