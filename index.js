@@ -83,7 +83,16 @@ const OBJECTS_LIST_CYRILLIC = [
     'Ростовка-Никольское, 595-608км'
 ];
 
-const POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'другая'];
+// Список должностей
+const BASE_POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'другая'];
+
+function getPositionsList(userId) {
+    const positions = [...BASE_POSITIONS_LIST];
+    if (userId === ADMIN_ID) {
+        positions.push('админ');
+    }
+    return positions;
+}
 
 // Группы для объектов
 const OBJECT_GROUPS = {
@@ -240,7 +249,8 @@ async function updateLastMessageId(ctx, userId, message) {
 
 async function showPositionSelection(ctx, userId) {
     await deletePreviousMessage(ctx, userId);
-    const buttons = POSITIONS_LIST.map(pos => [Markup.button.callback(pos, `select_initial_position_${pos}`)]);
+    const positions = getPositionsList(userId);
+    const buttons = positions.map(pos => [Markup.button.callback(pos, `select_initial_position_${pos}`)]);
     const message = await ctx.reply('Выберите вашу должность:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
@@ -529,7 +539,8 @@ bot.action('edit_object', async (ctx) => {
 bot.action('edit_position', async (ctx) => {
     const userId = ctx.from.id.toString();
     await deletePreviousMessage(ctx, userId);
-    const buttons = POSITIONS_LIST.map(pos => [Markup.button.callback(pos, `select_position_${pos}`)]);
+    const positions = getPositionsList(userId);
+    const buttons = positions.map(pos => [Markup.button.callback(pos, `select_position_${pos}`)]);
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
     const message = await ctx.reply('Выберите новую должность из списка:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
@@ -692,20 +703,48 @@ async function showHelp(ctx) {
 
 async function showAdminPanel(ctx) {
     const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
     await deletePreviousMessage(ctx, userId);
 
-    const adminText = `
+    const users = await loadUsers();
+    const pendingUsers = Object.entries(users)
+        .filter(([_, user]) => !user.isApproved)
+        .map(([userId, user]) => ({
+            userId,
+            fullName: user.fullName || 'Не указано',
+            position: user.position || 'Не указана',
+            objects: user.selectedObjects.length > 0 ? user.selectedObjects.join(', ') : 'Не выбраны'
+        }));
+
+    let adminText = `
 👑 Админ-панель  
 ━━━━━━━━━━━━━━━━━━━━  
-Для подтверждения пользователя используйте:  
-/approve <userId>  
+Для подтверждения вручную: /approve <userId>  
 Пример: /approve 123456789  
-━━━━━━━━━━━━━━━━━━━━
-    `.trim();
+━━━━━━━━━━━━━━━━━━━━  
+`;
 
-    const message = await ctx.reply(adminText, Markup.inlineKeyboard([
-        [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
-    ]));
+    if (pendingUsers.length === 0) {
+        adminText += 'Нет неподтвержденных заявок.';
+    } else {
+        adminText += 'Неподтвержденные заявки:\n';
+        adminText += pendingUsers.map((u, index) =>
+            `${index + 1}. ${u.fullName} (ID: ${u.userId})\n   Должность: ${u.position}\n   Объекты: ${u.objects}`
+        ).join('\n\n');
+    }
+
+    const buttons = [];
+    if (pendingUsers.length > 0) {
+        buttons.push(
+            ...pendingUsers.map(u => [
+                Markup.button.callback(`✅ ${u.fullName}`, `approve_${u.userId}`),
+                Markup.button.callback(`❌ ${u.fullName}`, `reject_${u.userId}`)
+            ])
+        );
+    }
+    buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
+
+    const message = await ctx.reply(adminText, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
