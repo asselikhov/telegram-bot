@@ -337,7 +337,7 @@ async function showDownloadReport(ctx) {
     }
 
     const buttons = OBJECTS_LIST_CYRILLIC.map(obj =>
-        [Markup.button.callback(obj, `download_report_file_${obj}`)]
+        [Markup.button.callback(obj, `download_report_file_${OBJECTS_LIST_CYRILLIC.indexOf(obj)}`)]
     );
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
@@ -345,9 +345,18 @@ async function showDownloadReport(ctx) {
     updateLastMessageId(ctx, userId, message);
 }
 
-async function downloadReportFile(ctx, objectName) {
+async function downloadReportFile(ctx, objectIndex) {
     const userId = ctx.from.id.toString();
+    const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
     await deletePreviousMessage(ctx, userId);
+
+    if (!objectName) {
+        const message = await ctx.reply('Ошибка: объект не найден.',
+            Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'download_report')]])
+        );
+        updateLastMessageId(ctx, userId, message);
+        return;
+    }
 
     try {
         const reportText = await getReportText(objectName);
@@ -554,9 +563,9 @@ async function showReports(ctx) {
         return;
     }
 
-    const buttons = users[userId].selectedObjects.map(obj => {
+    const buttons = users[userId].selectedObjects.map((obj, index) => {
         const reportCount = Object.values(userReports).filter(r => r.objectName === obj).length;
-        return [Markup.button.callback(`${escapeMarkdown(obj)} (${reportCount})`, `view_reports_by_object_${obj}`)];
+        return [Markup.button.callback(`${escapeMarkdown(obj)} (${reportCount})`, `view_reports_by_object_${OBJECTS_LIST_CYRILLIC.indexOf(obj)}`)];
     });
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
@@ -583,7 +592,7 @@ async function showReportsByObject(ctx, objectName) {
     }
 
     const days = [...new Set(reports.map(r => r.date))].sort().reverse();
-    const buttons = days.map(day => [Markup.button.callback(day, `view_reports_by_day_${objectName}_${day}`)]);
+    const buttons = days.map(day => [Markup.button.callback(day, `view_reports_by_day_${OBJECTS_LIST_CYRILLIC.indexOf(objectName)}_${day}`)]);
     buttons.push([Markup.button.callback('↩️ Назад', 'view_reports')]);
 
     const message = await ctx.reply(`Выберите день для объекта "${escapeMarkdown(objectName)}":`, Markup.inlineKeyboard(buttons));
@@ -603,7 +612,7 @@ async function showReportsByDay(ctx, objectName, day) {
 
     if (reports.length === 0) {
         const message = await ctx.reply(`Нет отчетов за ${escapeMarkdown(day)} для объекта "${escapeMarkdown(objectName)}".`, Markup.inlineKeyboard([
-            [Markup.button.callback('↩️ Назад', `view_reports_by_object_${objectName}`)]
+            [Markup.button.callback('↩️ Назад', `view_reports_by_object_${OBJECTS_LIST_CYRILLIC.indexOf(objectName)}`)]
         ]));
         updateLastMessageId(ctx, userId, message);
         return;
@@ -613,7 +622,7 @@ async function showReportsByDay(ctx, objectName, day) {
         const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
         return [Markup.button.callback(`${time}`, `view_report_${report.reportId}`)];
     });
-    buttons.push([Markup.button.callback('↩️ Назад', `view_reports_by_object_${objectName}`)]);
+    buttons.push([Markup.button.callback('↩️ Назад', `view_reports_by_object_${OBJECTS_LIST_CYRILLIC.indexOf(objectName)}`)]);
 
     const message = await ctx.reply(`Отчеты за ${escapeMarkdown(day)} для объекта "${escapeMarkdown(objectName)}":`, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
@@ -648,7 +657,7 @@ async function viewReport(ctx, reportId) {
 
     const message = await ctx.replyWithMarkdown(reportText, Markup.inlineKeyboard([
         [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
-        [Markup.button.callback('↩️ Назад', `view_reports_by_day_${report.objectName}_${report.date}`)]
+        [Markup.button.callback('↩️ Назад', `view_reports_by_day_${OBJECTS_LIST_CYRILLIC.indexOf(report.objectName)}_${report.date}`)]
     ]));
     updateLastMessageId(ctx, userId, message);
 }
@@ -766,11 +775,28 @@ bot.action('profile', showProfile);
 bot.action('help', showHelp);
 bot.action('admin_panel', showAdminPanel);
 bot.action('view_reports', showReports);
-bot.action(/view_reports_by_object_(.+)/, async (ctx) => showReportsByObject(ctx, ctx.match[1]));
-bot.action(/view_reports_by_day_(.+)_(.+)/, async (ctx) => showReportsByDay(ctx, ctx.match[1], ctx.match[2]));
+bot.action(/view_reports_by_object_(\d+)/, async (ctx) => {
+    const objectIndex = parseInt(ctx.match[1], 10);
+    const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
+    if (!objectName) {
+        await ctx.reply('Ошибка: объект не найден.');
+        return;
+    }
+    await showReportsByObject(ctx, objectName);
+});
+bot.action(/view_reports_by_day_(\d+)_(.+)/, async (ctx) => {
+    const objectIndex = parseInt(ctx.match[1], 10);
+    const day = ctx.match[2];
+    const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
+    if (!objectName) {
+        await ctx.reply('Ошибка: объект не найден.');
+        return;
+    }
+    await showReportsByDay(ctx, objectName, day);
+});
 bot.action(/view_report_(.+)/, async (ctx) => viewReport(ctx, ctx.match[1]));
 bot.action('download_report', showDownloadReport);
-bot.action(/download_report_file_(.+)/, async (ctx) => downloadReportFile(ctx, ctx.match[1]));
+bot.action(/download_report_file_(\d+)/, async (ctx) => downloadReportFile(ctx, parseInt(ctx.match[1], 10)));
 
 bot.action('edit_fullName', async (ctx) => {
     const userId = ctx.from.id.toString();
@@ -823,15 +849,16 @@ bot.action('create_report', async (ctx) => {
         return;
     }
     userStates[userId] = { step: 'selectObject', report: {} };
-    const buttons = users[userId].selectedObjects.map(obj => [Markup.button.callback(obj, `select_object_${obj}`)]);
+    const buttons = users[userId].selectedObjects.map(obj => [Markup.button.callback(obj, `select_object_${OBJECTS_LIST_CYRILLIC.indexOf(obj)}`)]);
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 });
 
-bot.action(/select_object_(.+)/, async (ctx) => {
+bot.action(/select_object_(\d+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
-    const selectedObject = ctx.match[1];
-    if (!OBJECTS_LIST_CYRILLIC.includes(selectedObject)) return;
+    const objectIndex = parseInt(ctx.match[1], 10);
+    const selectedObject = OBJECTS_LIST_CYRILLIC[objectIndex];
+    if (!selectedObject) return;
     await deletePreviousMessage(ctx, userId);
 
     userStates[userId].report.objectName = selectedObject;
@@ -856,15 +883,16 @@ bot.action(/edit_report_(.+)/, async (ctx) => {
     }
 
     userStates[userId] = { step: 'editObject', reportId: reportId, report: { ...users[userId].reports[reportId] } };
-    const buttons = users[userId].selectedObjects.map(obj => [Markup.button.callback(obj, `edit_object_${obj}`)]);
+    const buttons = users[userId].selectedObjects.map(obj => [Markup.button.callback(obj, `edit_object_${OBJECTS_LIST_CYRILLIC.indexOf(obj)}`)]);
     const message = await ctx.reply('Выберите новый объект из списка:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 });
 
-bot.action(/edit_object_(.+)/, async (ctx) => {
+bot.action(/edit_object_(\d+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
-    const selectedObject = ctx.match[1];
-    if (!OBJECTS_LIST_CYRILLIC.includes(selectedObject)) return;
+    const objectIndex = parseInt(ctx.match[1], 10);
+    const selectedObject = OBJECTS_LIST_CYRILLIC[objectIndex];
+    if (!selectedObject) return;
     await deletePreviousMessage(ctx, userId);
 
     userStates[userId].report.objectName = selectedObject;
