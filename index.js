@@ -345,7 +345,7 @@ async function showProfile(ctx) {
 
 👷 ${user.fullName || 'Не указано'}  
 
-${objectsList}  
+· ${objectsList}  
 
 ${statusEmoji} ${user.status || 'Не указан'}  
 ➖➖➖➖➖➖➖➖➖➖➖
@@ -591,15 +591,15 @@ bot.action('confirm_objects', async (ctx) => {
         await bot.telegram.sendMessage(ADMIN_ID,
             `НОВАЯ ЗАЯВКА  
 ➖➖➖➖➖➖➖➖➖➖➖  
-📋 ДОЛЖНОСТЬ: ${users[userId].position || 'Не указана'}  
+📋 ${users[userId].position || 'Не указана'}  
 
-🏢 ОРГАНИЗАЦИЯ: ${users[userId].organization || 'Не указана'}
+🏢 ${users[userId].organization || 'Не указана'}
   
-👷 ФИО: ${users[userId].fullName}
+👷 ${users[userId].fullName}
   
-📍 ОБЪЕКТЫ:\n${users[userId].selectedObjects.map(obj => `   · ${obj}`).join('\n')}
+${users[userId].selectedObjects.map(obj => `   · ${obj}`).join('\n')}
   
-🆔 ID: ${userId}  
+🆔 ${userId}  
 ➖➖➖➖➖➖➖➖➖➖➖`,
             Markup.inlineKeyboard([
                 [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
