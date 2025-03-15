@@ -329,7 +329,7 @@ async function showProfile(ctx) {
     const user = users[userId] || {};
     const validObjects = filterValidObjects(user.selectedObjects);
     const objectsList = validObjects.length > 0
-        ? validObjects.map(obj => `· ${obj}`).join('\n') // Добавлен символ · перед каждым объектом
+        ? validObjects.map(obj => `· ${obj}`).join('\n')
         : 'Не выбраны';
 
     const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
@@ -894,9 +894,35 @@ bot.command('test', async (ctx) => {
     await ctx.reply('Бот работает!');
 });
 
+// Новая команда listproducers с выбором объекта
 bot.command('listproducers', async (ctx) => {
     try {
         console.log('=== Начало обработки /listproducers === от userId:', ctx.from.id);
+
+        const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
+            [Markup.button.callback(obj, `show_producers_${index}`)]
+        );
+
+        await ctx.reply(
+            '👷‍♂️ Выберите объект для просмотра производителей работ:',
+            Markup.inlineKeyboard(buttons)
+        );
+    } catch (err) {
+        console.error('Ошибка в /listproducers:', err.message);
+        await ctx.reply('⚠️ Произошла ошибка при загрузке.');
+    }
+});
+
+// Обработка выбора объекта и показ производителей
+bot.action(/show_producers_(\d+)/, async (ctx) => {
+    try {
+        const objectIndex = parseInt(ctx.match[1], 10);
+        const selectedObject = OBJECTS_LIST_CYRILLIC[objectIndex];
+
+        if (!selectedObject) {
+            await ctx.reply('⚠️ Объект не найден');
+            return;
+        }
 
         const client = await pool.connect();
         try {
@@ -905,36 +931,65 @@ bot.command('listproducers', async (ctx) => {
                 ['Производитель работ', 1]
             );
 
-            if (res.rows.length === 0) {
-                await ctx.reply('👷‍♂️ Производители работ не найдены.');
+            // Фильтруем производителей по выбранному объекту
+            const filteredProducers = res.rows.filter(row => {
+                const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
+                return objects.includes(selectedObject);
+            });
+
+            if (filteredProducers.length === 0) {
+                await ctx.reply(
+                    `👷‍♂️ Производители работ на объекте "${selectedObject}" не найдены.\n` +
+                    `➖➖➖➖➖➖➖➖➖➖➖`,
+                    Markup.inlineKeyboard([
+                        [Markup.button.callback('🔙 Выбрать другой объект', 'back_to_list')]
+                    ])
+                );
                 return;
             }
 
-            const producerList = res.rows.map((row, index) => {
-                const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
-                const objectNames = objects.length > 0
-                    ? filterValidObjects(objects).map(obj => `   · ${obj}`).join('\n')
-                    : '   · Не выбраны';
+            const producerList = filteredProducers.map((row, index) => {
                 const fullName = row.fullname || 'Не указано';
                 const organization = row.organization || 'Не указано';
                 const status = row.status === 'В работе' ? '🟢 В работе' : '🔴 В отпуске';
-                return `${index + 1}. ${fullName}\n\n   ${organization}\n\n${objectNames}\n\n   ${status}`;
+                return `${index + 1}. ${fullName}\n\n   ${organization}\n\n   ${status}`;
             }).join('\n\n');
 
             await ctx.reply(
-                `👷‍♂️ СПИСОК ПРОИЗВОДИТЕЛЕЙ РАБОТ 👷‍♂️\n` +
+                `👷‍♂️ ПРОИЗВОДИТЕЛИ РАБОТ\n` +
+                `🏢 ${selectedObject}\n` +
                 `➖➖➖➖➖➖➖➖➖➖➖\n` +
                 `${producerList}\n` +
                 `➖➖➖➖➖➖➖➖➖➖➖\n` +
-                `Всего: ${res.rows.length}`
+                `Всего: ${filteredProducers.length}`,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback('🔙 Выбрать другой объект', 'back_to_list')]
+                ])
             );
-            console.log('Ответ отправлен: Список производителей');
+            console.log(`Ответ отправлен: Список производителей для ${selectedObject}`);
         } finally {
             client.release();
         }
     } catch (err) {
-        console.error('Ошибка в /listproducers:', err.message);
+        console.error('Ошибка в show_producers:', err.message);
         await ctx.reply('⚠️ Произошла ошибка при загрузке списка.');
+    }
+});
+
+// Возврат к списку объектов
+bot.action('back_to_list', async (ctx) => {
+    try {
+        const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
+            [Markup.button.callback(obj, `show_producers_${index}`)]
+        );
+
+        await ctx.editMessageText(
+            '👷‍♂️ Выберите объект для просмотра производителей работ:',
+            Markup.inlineKeyboard(buttons)
+        );
+    } catch (err) {
+        console.error('Ошибка в back_to_list:', err.message);
+        await ctx.reply('⚠️ Произошла ошибка.');
     }
 });
 
