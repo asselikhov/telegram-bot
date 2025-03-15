@@ -250,7 +250,7 @@ async function updateLastMessageId(ctx, userId, message) {
 async function showPositionSelection(ctx, userId) {
     await deletePreviousMessage(ctx, userId);
     const positions = getPositionsList(userId);
-    const buttons = positions.map(pos => [Markup.button.callback(pos, `select_initial_position_${pos}`)]);
+    const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_initial_position_${index}`)]);
     const message = await ctx.reply('Выберите вашу должность:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
@@ -468,9 +468,12 @@ bot.start(async (ctx) => {
     }
 });
 
-bot.action(/select_initial_position_(.+)/, async (ctx) => {
+bot.action(/select_initial_position_(\d+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
-    const selectedPosition = ctx.match[1];
+    const positionIndex = parseInt(ctx.match[1], 10);
+    const positions = getPositionsList(userId);
+    const selectedPosition = positions[positionIndex];
+    if (!selectedPosition) return;
     const users = await loadUsers();
 
     users[userId].position = selectedPosition;
@@ -540,15 +543,18 @@ bot.action('edit_position', async (ctx) => {
     const userId = ctx.from.id.toString();
     await deletePreviousMessage(ctx, userId);
     const positions = getPositionsList(userId);
-    const buttons = positions.map(pos => [Markup.button.callback(pos, `select_position_${pos}`)]);
+    const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_position_${index}`)]);
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
     const message = await ctx.reply('Выберите новую должность из списка:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 });
 
-bot.action(/select_position_(.+)/, async (ctx) => {
+bot.action(/select_position_(\d+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
-    const selectedPosition = ctx.match[1];
+    const positionIndex = parseInt(ctx.match[1], 10);
+    const positions = getPositionsList(userId);
+    const selectedPosition = positions[positionIndex];
+    if (!selectedPosition) return;
     const users = await loadUsers();
     await deletePreviousMessage(ctx, userId);
 
