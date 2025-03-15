@@ -85,11 +85,11 @@ const OBJECTS_LIST_CYRILLIC = [
 
 const POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'другая'];
 
-// Группы для объектов (используем кириллические названия)
+// Группы для объектов
 const OBJECT_GROUPS = {
-    'Кольцевой МНПП': '-1002394790037',
-    'Ярославль-Москва': '-1002318741372',
-    'Ярославль-Кириши1': '-1002153878927',
+    'Кольцевой МНПП, 132км': '-1002394790037',
+    'Ярославль-Москва, 201-204км': '-1002318741372',
+    'Ярославль-Кириши1, 115-132км': '-1002153878927',
     'Никулино-Пенза, 881-886км': '-1002597582709',
     'Ростовка-Никольское, 595-608км': '-1002627066168'
 };
@@ -97,9 +97,14 @@ const OBJECT_GROUPS = {
 let userStates = {};
 let lastMessageIds = {};
 
-// Функция для экранирования специальных символов Markdown
+// Функция для экранирования специальных символов Markdown (оставляем для отчетов, но не для ФИО)
 function escapeMarkdown(text) {
     return text.replace(/([_*[\]()~`>#+\-.!])/g, '\\$1');
+}
+
+// Функция для фильтрации объектов
+function filterValidObjects(objects) {
+    return [...new Set(objects)].filter(obj => OBJECTS_LIST_CYRILLIC.includes(obj));
 }
 
 async function loadUsers() {
@@ -108,10 +113,11 @@ async function loadUsers() {
         const res = await client.query('SELECT * FROM users');
         const users = {};
         res.rows.forEach(row => {
+            const selectedObjects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
             users[row.userid] = {
                 fullName: row.fullname || '',
                 position: row.position || '',
-                selectedObjects: row.selectedobjects ? JSON.parse(row.selectedobjects) : [],
+                selectedObjects: filterValidObjects(selectedObjects),
                 status: row.status || 'в работе',
                 isApproved: Boolean(row.isapproved),
                 nextReportId: row.nextreportid || 1,
@@ -154,6 +160,7 @@ async function loadUserReports(userId) {
 
 async function saveUser(userId, userData) {
     const { fullName, position, selectedObjects, status, isApproved, nextReportId } = userData;
+    const filteredObjects = filterValidObjects(selectedObjects);
     const client = await pool.connect();
     try {
         await client.query(`
@@ -161,7 +168,7 @@ async function saveUser(userId, userData) {
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (userId) DO UPDATE
             SET fullName = $2, position = $3, selectedObjects = $4, status = $5, isApproved = $6, nextReportId = $7
-        `, [userId, fullName, position, JSON.stringify(selectedObjects), status, isApproved ? 1 : 0, nextReportId]);
+        `, [userId, fullName, position, JSON.stringify(filteredObjects), status, isApproved ? 1 : 0, nextReportId]);
     } catch (err) {
         console.error('Ошибка сохранения пользователя:', err.message);
         throw err;
@@ -284,20 +291,21 @@ async function showProfile(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const user = users[userId] || {};
-    const escapedObjects = user.selectedObjects.length > 0
-        ? user.selectedObjects.map(obj => escapeMarkdown(obj)).join(', ')
-        : 'Не выбраны';
+    const validObjects = filterValidObjects(user.selectedObjects);
+    const objectsList = validObjects.length > 0
+        ? validObjects.map(obj => `🏢 ${obj}`).join('\n')
+        : '🏢 Не выбраны';
 
     await deletePreviousMessage(ctx, userId);
 
     const profileText = `
-*👤 Личный кабинет*  
+👤 *Личный кабинет*  
 ━━━━━━━━━━━━━━━━━━━━  
-*ФИО:* ${escapeMarkdown(user.fullName || 'Не указано')}  
-*Должность:* ${escapeMarkdown(user.position || 'Не указана')}  
-*Объекты:* ${escapedObjects}  
-*Статус:* ${escapeMarkdown(user.status || 'Не указан')}  
-*Подтвержден:* ${user.isApproved ? '✅ Да' : '❌ Нет'}  
+👷 *ФИО:* ${user.fullName || 'Не указано'}  
+📋 *Должность:* ${user.position || 'Не указана'}  
+📍 *Объекты:*\n${objectsList}  
+⏳ *Статус:* ${user.status || 'Не указан'}  
+✅ *Подтвержден:* ${user.isApproved ? 'Да' : 'Нет'}  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
 
@@ -380,11 +388,11 @@ bot.command('getreport', async (ctx) => {
 
     const args = ctx.message.text.split(' ').slice(1);
     if (args.length === 0) {
-        await ctx.reply('Укажите объект, например: /getreport Кольцевой МНПП\nДоступные объекты: ' + OBJECTS_LIST_CYRILLIC.join(', '));
+        await ctx.reply('Укажите объект, например: /getreport Кольцевой МНПП, 132км\nДоступные объекты: ' + OBJECTS_LIST_CYRILLIC.join(', '));
         return;
     }
 
-    const objectName = args[0];
+    const objectName = args.join(' ');
     if (!OBJECTS_LIST_CYRILLIC.includes(objectName)) {
         await ctx.reply('Неверное название объекта. Доступные объекты: ' + OBJECTS_LIST_CYRILLIC.join(', '));
         return;
@@ -472,7 +480,7 @@ bot.action('confirm_objects', async (ctx) => {
         return;
     }
 
-    users[userId].selectedObjects = state.selectedObjects;
+    users[userId].selectedObjects = filterValidObjects(state.selectedObjects);
     await saveUser(userId, users[userId]);
 
     if (state.isEditing) {
@@ -719,8 +727,7 @@ bot.command('listproducers', async (ctx) => {
             const producerList = res.rows.map((row, index) => {
                 const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
                 const objectNames = objects.length > 0
-                    ? objects.map(obj => escapeMarkdown(obj)).join(', ')
-                    : 'Не выбраны';
+                    ? filterValidObjects(objects).map(obj => escapeMarkdown(obj)).join(', ');
                 const fullName = escapeMarkdown(row.fullname || 'Не указано');
                 const status = escapeMarkdown(row.status || 'в работе');
                 return `${index + 1}. *${fullName}* (ID: ${row.userid})\n   Объекты: ${objectNames}\n   Статус: ${status}`;
@@ -813,6 +820,7 @@ bot.action('create_report', async (ctx) => {
 bot.action(/select_object_(.+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
     const selectedObject = ctx.match[1];
+    if (!OBJECTS_LIST_CYRILLIC.includes(selectedObject)) return;
     await deletePreviousMessage(ctx, userId);
 
     userStates[userId].report.objectName = selectedObject;
@@ -845,6 +853,7 @@ bot.action(/edit_report_(.+)/, async (ctx) => {
 bot.action(/edit_object_(.+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
     const selectedObject = ctx.match[1];
+    if (!OBJECTS_LIST_CYRILLIC.includes(selectedObject)) return;
     await deletePreviousMessage(ctx, userId);
 
     userStates[userId].report.objectName = selectedObject;
@@ -1022,10 +1031,9 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
             user.reports = await loadUserReports(userId);
             const hasReportToday = Object.keys(user.reports).some(reportId => reportId.startsWith(today));
             if (!hasReportToday) {
-                const objects = user.selectedObjects?.length > 0
-                    ? user.selectedObjects.map(obj => escapeMarkdown(obj)).join(', ')
-                    : escapeMarkdown('Кольцевой МНПП');
-                const groupChatId = user.selectedObjects?.length > 0 ? OBJECT_GROUPS[user.selectedObjects[0]] || GENERAL_GROUP_CHAT_ID : OBJECT_GROUPS['Кольцевой МНПП'];
+                const objects = user.selectedObjects.length > 0
+                    ? user.selectedObjects.map(obj => escapeMarkdown(obj)).join(', ');
+                const groupChatId = user.selectedObjects.length > 0 ? OBJECT_GROUPS[user.selectedObjects[0]] || GENERAL_GROUP_CHAT_ID : OBJECT_GROUPS['Кольцевой МНПП, 132км'];
                 bot.telegram.sendMessage(
                     groupChatId,
                     `*⚠️ Напоминание*\n${escapeMarkdown(user.fullName)}, вы не предоставили отчет за ${escapeMarkdown(today)} по объектам: ${objects}. Пожалуйста, внесите данные.`,
