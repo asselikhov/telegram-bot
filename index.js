@@ -310,7 +310,7 @@ async function showMainMenu(ctx) {
         [Markup.button.callback('👤 Личный кабинет', 'profile')],
         [Markup.button.callback('ℹ️ Помощь', 'help')]
     ];
-    if (user.isApproved && user.position === 'производитель работ') {
+    if (user.isApproved && user.position === 'Производитель работ') {
         buttons.splice(1, 0, [Markup.button.callback('📝 Создать отчет', 'create_report')]);
     }
     if (user.isApproved) {
@@ -895,7 +895,7 @@ bot.command('listproducers', async (ctx) => {
         try {
             const res = await client.query(
                 'SELECT userId, fullName, organization, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
-                ['производитель работ', 1]
+                ['Производитель работ', 1]
             );
 
             if (res.rows.length === 0) {
@@ -1004,7 +1004,7 @@ bot.action('create_report', async (ctx) => {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     await deletePreviousMessage(ctx, userId);
-    if (users[userId].position !== 'производитель работ' || !users[userId].isApproved) {
+    if (users[userId].position !== 'Производитель работ' || !users[userId].isApproved) {
         const message = await ctx.reply('У вас нет прав для создания отчетов.');
         updateLastMessageId(ctx, userId, message);
         return;
@@ -1270,7 +1270,7 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     const users = await loadUsers();
     for (const userId in users) {
         const user = users[userId];
-        if (user.position === 'производитель работ' && user.isApproved && user.status !== 'В отпуске') {
+        if (user.position === 'Производитель работ' && user.isApproved && user.status !== 'В отпуске') {
             user.reports = await loadUserReports(userId);
             const hasReportToday = Object.keys(user.reports).some(reportId => reportId.startsWith(today));
             if (!hasReportToday) {
