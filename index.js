@@ -1267,9 +1267,15 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     console.log('Проверка отчетов в 19:00 МСК');
     const today = new Date().toISOString().split('T')[0];
     const users = await loadUsers();
+    const targetPositions = ['Производитель работ', 'Инженер по комплектации'];
+
     for (const userId in users) {
         const user = users[userId];
-        if (user.position === 'Производитель работ' && user.isApproved && user.status !== 'В отпуске') {
+        if (
+            targetPositions.includes(user.position) &&
+            user.isApproved &&
+            user.status === 'В работе'
+        ) {
             user.reports = await loadUserReports(userId);
             const hasReportToday = Object.keys(user.reports).some(reportId => reportId.startsWith(today));
             if (!hasReportToday) {
