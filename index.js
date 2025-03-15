@@ -592,9 +592,13 @@ bot.action('confirm_objects', async (ctx) => {
             `НОВАЯ ЗАЯВКА  
 ➖➖➖➖➖➖➖➖➖➖➖  
 📋 ДОЛЖНОСТЬ: ${users[userId].position || 'Не указана'}  
-🏢 ОРГАНИЗАЦИЯ: ${users[userId].organization || 'Не указана'}  
-👷 ФИО: ${users[userId].fullName}  
-📍 ОБЪЕКТЫ:\n${users[userId].selectedObjects.map(obj => `   · ${obj}`).join('\n')}  
+
+🏢 ОРГАНИЗАЦИЯ: ${users[userId].organization || 'Не указана'}
+  
+👷 ФИО: ${users[userId].fullName}
+  
+📍 ОБЪЕКТЫ:\n${users[userId].selectedObjects.map(obj => `   · ${obj}`).join('\n')}
+  
 🆔 ID: ${userId}  
 ➖➖➖➖➖➖➖➖➖➖➖`,
             Markup.inlineKeyboard([
@@ -791,10 +795,12 @@ async function viewReport(ctx, reportId) {
 👷 ${users[userId].fullName}   
 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
-   ${report.workDone}  
+
+${report.workDone}  
 
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-   ${report.materials}  
+
+${report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
 `.trim();
 
@@ -837,9 +843,13 @@ async function showAdminPanel(ctx) {
             `ЗАЯВКА #${index + 1}  
 ➖➖➖➖➖➖➖➖➖➖➖  
 📋 ДОЛЖНОСТЬ: ${u.position}  
+
 🏢 ОРГАНИЗАЦИЯ: ${u.organization}  
+
 👷 ФИО: ${u.fullName}  
+
 📍 ОБЪЕКТЫ:\n${u.objects}  
+
 🆔 ID: ${u.userId}  
 ➖➖➖➖➖➖➖➖➖➖➖`
         ).join('\n\n');
@@ -1142,10 +1152,12 @@ bot.on('text', async (ctx) => {
 👷 ${users[userId].fullName}  
 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
-   ${state.report.workDone}  
+
+${state.report.workDone}  
 
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-   ${state.report.materials}  
+
+${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
             `.trim();
 
@@ -1187,11 +1199,13 @@ bot.on('text', async (ctx) => {
   
 👷 ${users[userId].fullName}  
 
-🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
-   ${state.report.workDone}  
+🔧 ВЫПОЛНЕННЫЕ РАБОТЫ: 
+ 
+${state.report.workDone}  
 
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-   ${state.report.materials}  
+
+${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
             `.trim();
 
