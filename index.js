@@ -586,7 +586,25 @@ bot.action('confirm_objects', async (ctx) => {
         updateLastMessageId(ctx, userId, message);
         setTimeout(() => showProfile(ctx), 1000);
     } else {
-        await showProfile(ctx);
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('Ваша заявка отправлена на рассмотрение.');
+        updateLastMessageId(ctx, userId, message);
+
+        await bot.telegram.sendMessage(ADMIN_ID,
+            `НОВАЯ ЗАЯВКА  
+➖➖➖➖➖➖➖➖➖➖➖  
+📋 ДОЛЖНОСТЬ: ${users[userId].position || 'Не указана'}  
+🏢 ОРГАНИЗАЦИЯ: ${users[userId].organization || 'Не указана'}  
+👷 ФИО: ${users[userId].fullName}  
+📍 ОБЪЕКТЫ:\n${users[userId].selectedObjects.map(obj => `   · ${obj}`).join('\n')}  
+🆔 ID: ${userId}  
+➖➖➖➖➖➖➖➖➖➖➖`,
+            Markup.inlineKeyboard([
+                [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
+                [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
+            ])
+        );
+        delete userStates[userId];
     }
 });
 
@@ -1090,27 +1108,8 @@ bot.on('text', async (ctx) => {
         case 'fullName':
             users[userId].fullName = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
-            delete userStates[userId];
-            const fullNameMsg = await ctx.reply('ФИО обновлено. Ваша заявка отправлена на рассмотрение.');
-            updateLastMessageId(ctx, userId, fullNameMsg);
-            if (!users[userId].isApproved) {
-                await bot.telegram.sendMessage(ADMIN_ID,
-                    `НОВАЯ ЗАЯВКА  
-➖➖➖➖➖➖➖➖➖➖➖  
-📋 ДОЛЖНОСТЬ: ${users[userId].position || 'Не указана'}  
-🏢 ОРГАНИЗАЦИЯ: ${users[userId].organization || 'Не указана'}  
-👷 ФИО: ${users[userId].fullName}  
-📍 ОБЪЕКТЫ:\n${users[userId].selectedObjects.length > 0 ? users[userId].selectedObjects.map(obj => `   · ${obj}`).join('\n') : '   · Не выбраны'}  
-🆔 ID: ${userId}  
-➖➖➖➖➖➖➖➖➖➖➖`,
-                    Markup.inlineKeyboard([
-                        [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
-                        [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
-                    ])
-                );
-            } else {
-                setTimeout(() => showProfile(ctx), 1000);
-            }
+            userStates[userId] = { step: 'selectObjects', selectedObjects: [] };
+            await showObjectSelection(ctx, userId, []);
             break;
         case 'customPositionEditInput':
             users[userId].position = ctx.message.text.trim();
