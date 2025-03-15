@@ -307,8 +307,7 @@ async function showMainMenu(ctx) {
     `.trim();
 
     const buttons = [
-        [Markup.button.callback('👤 Личный кабинет', 'profile')],
-        [Markup.button.callback('ℹ️ Помощь', 'help')]
+        [Markup.button.callback('👤 Личный кабинет', 'profile')]
     ];
     if (user.isApproved && user.position === 'Производитель работ') {
         buttons.splice(1, 0, [Markup.button.callback('📝 Создать отчет', 'create_report')]);
@@ -333,7 +332,6 @@ async function showProfile(ctx) {
         ? validObjects.map(obj => `${obj}`).join('\n')
         : 'Не выбраны';
 
-    // Определяем эмодзи для статуса
     const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
 
     await deletePreviousMessage(ctx, userId);
@@ -783,16 +781,15 @@ async function viewReport(ctx, reportId) {
     const timestamp = report.timestamp || reportId.split('_')[1];
     const time = new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     const reportText = `
-📋 ОТЧЕТ ЗА ${report.date} (${time})  
+📅 ОТЧЕТ ЗА ${report.date} (${time})
+🏢 ${report.objectName}
 ➖➖➖➖➖➖➖➖➖➖➖  
-✦ ИТР: ${users[userId].fullName}  
+👷 ${users[userId].fullName}   
 
-✦ ОБЪЕКТ: ${report.objectName}  
-
-✦ РАБОТЫ:  
+🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
    ${report.workDone}  
 
-✦ МАТЕРИАЛЫ:  
+📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
    ${report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
 `.trim();
@@ -800,28 +797,6 @@ async function viewReport(ctx, reportId) {
     const message = await ctx.reply(reportText, Markup.inlineKeyboard([
         [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
         [Markup.button.callback('↩️ Назад', `view_reports_by_day_${OBJECTS_LIST_CYRILLIC.indexOf(report.objectName)}_${report.date}`)]
-    ]));
-    updateLastMessageId(ctx, userId, message);
-}
-
-async function showHelp(ctx) {
-    const userId = ctx.from.id.toString();
-    await deletePreviousMessage(ctx, userId);
-
-    const helpText = `
-ℹ️ Помощь  
-━━━━━━━━━━━━━━━━━━━━  
-Используйте кнопки для навигации:  
-- Личный кабинет: Просмотр и редактирование данных.  
-- Создать отчет: Доступно для производителей работ.  
-- Мои отчеты: Просмотр и редактирование отчетов.  
-- Выгрузить отчет: Скачать файл через меню или /getreport в общей группе.  
-- Админ-панель: Только для администратора (/approve).  
-━━━━━━━━━━━━━━━━━━━━
-    `.trim();
-
-    const message = await ctx.reply(helpText, Markup.inlineKeyboard([
-        [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ]));
     updateLastMessageId(ctx, userId, message);
 }
@@ -951,7 +926,6 @@ bot.command('listproducers', async (ctx) => {
 
 bot.action('main_menu', showMainMenu);
 bot.action('profile', showProfile);
-bot.action('help', showHelp);
 bot.action('admin_panel', showAdminPanel);
 bot.action('view_reports', showReports);
 bot.action(/view_reports_by_object_(\d+)/, async (ctx) => {
@@ -1155,9 +1129,9 @@ bot.on('text', async (ctx) => {
 
             const reportText = `
 📅 ОТЧЕТ ЗА ${date}  
-🏢 ОБЪЕКТ: ${state.report.objectName}  
+🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ИТР: ${users[userId].fullName}  
+👷 ${users[userId].fullName}  
 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
    ${state.report.workDone}  
@@ -1197,9 +1171,9 @@ bot.on('text', async (ctx) => {
 
             const updatedReportText = `
 📅 ОТЧЕТ ЗА ${state.report.date} (ОБНОВЛЕН)  
-🏢 ОБЪЕКТ: ${state.report.objectName}  
+🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖  
-👷 ИТР: ${users[userId].fullName}  
+👷 ${users[userId].fullName}  
 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
    ${state.report.workDone}  
@@ -1301,7 +1275,7 @@ app.use((req, res, next) => {
     next();
 });
 
-app.get('/', (req, res) => res.send(' Telegram bot is running'));
+app.get('/', (req, res) => res.send('Telegram bot is running'));
 
 app.use(bot.webhookCallback('/telegram-webhook'));
 
