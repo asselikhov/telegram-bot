@@ -715,6 +715,70 @@ bot.command('approve', async (ctx) => {
     bot.telegram.sendMessage(targetUserId, 'Ваш профиль подтвержден администратором.');
 });
 
+// Тестовая команда для проверки работоспособности бота
+bot.command('test', async (ctx) => {
+    console.log('Тестовая команда получена от:', ctx.from.id);
+    await ctx.reply('Бот работает!');
+    console.log('Ответ на /test отправлен');
+});
+
+// Команда /listproducers с улучшенной отладкой, доступна всем
+bot.command('listproducers', async (ctx) => {
+    try {
+        console.log('=== Начало обработки /listproducers ===');
+        console.log('Получено от userId:', ctx.from.id);
+
+        await ctx.reply('Получил команду, загружаю список...');
+        console.log('Выполняем запрос к БД');
+
+        const client = await pool.connect().catch(err => {
+            console.error('Ошибка подключения к БД:', err.message);
+            throw err;
+        });
+
+        try {
+            console.log('Запрос к базе данных');
+            const res = await client.query(
+                'SELECT userId, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
+                ['производитель работ', 1]
+            );
+            console.log('Результат:', res.rows);
+
+            if (res.rows.length === 0) {
+                await ctx.reply('Производители работ не найдены.');
+                console.log('Ответ отправлен: Не найдены');
+                return;
+            }
+
+            const producerList = res.rows.map(row => {
+                let objects = [];
+                try {
+                    objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
+                } catch (parseErr) {
+                    console.error(`Ошибка парсинга для ${row.userId}:`, parseErr.message);
+                }
+                const objectNames = objects.length > 0
+                    ? objects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj]?.replace(/[_*]/g, '\\$&') || obj).join(', ')
+                    : 'Объекты не выбраны';
+                const fullNameEscaped = row.fullname ? row.fullname.replace(/[_*]/g, '\\$&') : 'Не указано';
+                return `${fullNameEscaped} (ID: ${row.userId}): ${objectNames} [${row.status || 'в работе'}]`;
+            }).join('\n');
+
+            await ctx.replyWithMarkdown(
+                `*📋 Список производителей работ:*\n━━━━━━━━━━━━━━━━━━━━\n${producerList}\n━━━━━━━━━━━━━━━━━━━━`
+            );
+            console.log('Ответ отправлен: Список производителей');
+        } finally {
+            client.release();
+            console.log('Соединение с БД освобождено');
+        }
+    } catch (err) {
+        console.error('Ошибка в /listproducers:', err.message, err.stack);
+        await ctx.reply('Произошла ошибка: ' + err.message);
+        console.log('Ответ отправлен: Ошибка');
+    }
+});
+
 bot.action('main_menu', showMainMenu);
 bot.action('profile', showProfile);
 bot.action('help', showHelp);
@@ -1007,62 +1071,6 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
                 ).catch(err => console.error('Ошибка уведомления:', err));
             }
         }
-    }
-});
-
-// Команда /listproducers теперь доступна всем пользователям
-bot.command('listproducers', async (ctx) => {
-    try {
-        console.log('=== Начало обработки /listproducers ===');
-        console.log('Получено обновление:', JSON.stringify(ctx.update));
-        console.log('Команда /listproducers получена от userId:', ctx.from.id);
-
-        console.log('Выполняем запрос к БД');
-        const client = await pool.connect().catch(err => {
-            console.error('Ошибка подключения к БД:', err.message);
-            throw err;
-        });
-
-        try {
-            console.log('Запрос к базе данных для производителей работ');
-            const res = await client.query(
-                'SELECT userId, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
-                ['производитель работ', 1]
-            );
-            console.log('Результат запроса:', res.rows);
-
-            if (res.rows.length === 0) {
-                await ctx.reply('Производители работ не найдены.');
-                console.log('Ответ отправлен: Не найдены');
-                return;
-            }
-
-            const producerList = res.rows.map(row => {
-                let objects = [];
-                try {
-                    objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
-                } catch (parseErr) {
-                    console.error(`Ошибка парсинга selectedObjects для ${row.userId}:`, parseErr.message);
-                }
-                const objectNames = objects.length > 0
-                    ? objects.map(obj => OBJECTS_TRANSLIT_REVERSE[obj]?.replace(/[_*]/g, '\\$&') || obj).join(', ')
-                    : 'Объекты не выбраны';
-                const fullNameEscaped = row.fullname ? row.fullname.replace(/[_*]/g, '\\$&') : 'Не указано';
-                return `${fullNameEscaped} (ID: ${row.userId}): ${objectNames} [${row.status || 'в работе'}]`;
-            }).join('\n');
-
-            await ctx.replyWithMarkdown(
-                `*📋 Список производителей работ:*\n━━━━━━━━━━━━━━━━━━━━\n${producerList}\n━━━━━━━━━━━━━━━━━━━━`
-            );
-            console.log('Ответ отправлен: Список производителей');
-        } finally {
-            client.release();
-            console.log('Соединение с БД освобождено');
-        }
-    } catch (err) {
-        console.error('Ошибка в /listproducers:', err.message, err.stack);
-        await ctx.reply('Произошла ошибка при выполнении команды.');
-        console.log('Ответ отправлен: Ошибка');
     }
 });
 
