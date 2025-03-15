@@ -39,7 +39,6 @@ pool.connect((err) => {
 async function initializeDatabase() {
     const client = await pool.connect();
     try {
-        // Создание таблицы users, если она не существует
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 userId TEXT PRIMARY KEY,
@@ -53,7 +52,6 @@ async function initializeDatabase() {
             );
         `);
 
-        // Проверка наличия столбца organization и добавление, если его нет
         const columnCheck = await client.query(`
             SELECT column_name 
             FROM information_schema.columns 
@@ -67,7 +65,6 @@ async function initializeDatabase() {
             console.log('Столбец organization добавлен в таблицу users');
         }
 
-        // Создание таблицы reports
         await client.query(`
             CREATE TABLE IF NOT EXISTS reports (
                 reportId TEXT PRIMARY KEY,
@@ -102,7 +99,7 @@ const OBJECTS_LIST_CYRILLIC = [
 ];
 
 // Список должностей
-const BASE_POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'другая'];
+const BASE_POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто'];
 
 function getPositionsList(userId) {
     const positions = [...BASE_POSITIONS_LIST];
@@ -113,7 +110,7 @@ function getPositionsList(userId) {
 }
 
 // Список организаций
-const ORGANIZATIONS_LIST = ['ООО "СтройТех"', 'АО "НефтеГаз"', 'ИП Иванов', 'ООО "Прогресс"'];
+const ORGANIZATIONS_LIST = ['ООО "Регионакльный Строительный Холдинг"', 'ООО "Строительные Системы"', 'ООО "РемонтСервис"'];
 
 // Группы для объектов
 const OBJECT_GROUPS = {
@@ -127,7 +124,6 @@ const OBJECT_GROUPS = {
 let userStates = {};
 let lastMessageIds = {};
 
-// Минимальное экранирование только для специальных символов Markdown
 function escapeMarkdown(text) {
     return text.replace(/([_*[\]()~`>#+\-.!])/g, '\\$1');
 }
@@ -334,23 +330,23 @@ async function showProfile(ctx) {
     const user = users[userId] || {};
     const validObjects = filterValidObjects(user.selectedObjects);
     const objectsList = validObjects.length > 0
-        ? validObjects.map(obj => `   · ${obj}`).join('\n')
-        : '   · Не выбраны';
+        ? validObjects.map(obj => `${obj}`).join('\n')
+        : 'Не выбраны';
 
     await deletePreviousMessage(ctx, userId);
 
     const profileText = `
 👤 ЛИЧНЫЙ КАБИНЕТ  
 ➖➖➖➖➖➖➖➖➖➖➖  
-📋 ДОЛЖНОСТЬ: ${user.position || 'Не указана'}  
+📋 ${user.position || 'Не указана'}  
 
-🏢 ОРГАНИЗАЦИЯ: ${user.organization || 'Не указана'}  
+🏢 ${user.organization || 'Не указана'}  
 
-👷 ФИО: ${user.fullName || 'Не указано'}  
+👷 ${user.fullName || 'Не указано'}  
 
-📍 ОБЪЕКТЫ:\n${objectsList}  
+${objectsList}  
 
-⏳ СТАТУС: ${user.status || 'Не указан'}  
+⏳ ${user.status || 'Не указан'}  
 ➖➖➖➖➖➖➖➖➖➖➖
 `.trim();
 
