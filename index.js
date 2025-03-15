@@ -150,7 +150,7 @@ async function loadUserReports(userId) {
         return reports;
     } catch (err) {
         console.error('Ошибка загрузки отчетов:', err.message);
-        throw err;
+        return {};
     } finally {
         client.release();
     }
@@ -200,6 +200,7 @@ async function getReportText(objectName) {
             'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp',
             [objectName]
         );
+        if (res.rows.length === 0) return '';
         const reportText = res.rows.map(row => {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
             return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${escapeMarkdown(row.fullname)}\nОбъект: ${escapeMarkdown(row.objectname)}\nРаботы: ${escapeMarkdown(row.workdone)}\nМатериалы: ${escapeMarkdown(row.materials)}\n--------------------------\n`;
@@ -207,7 +208,7 @@ async function getReportText(objectName) {
         return reportText;
     } catch (err) {
         console.error('Ошибка получения текста отчета:', err.message);
-        throw err;
+        return '';
     } finally {
         client.release();
     }
@@ -300,9 +301,13 @@ async function showProfile(ctx) {
 👤 *Личный кабинет*  
 ━━━━━━━━━━━━━━━━━━━━  
 👷 *ФИО:* ${user.fullName || 'Не указано'}  
+
 📋 *Должность:* ${user.position || 'Не указана'}  
+
 📍 *Объекты:*\n${objectsList}  
+
 ⏳ *Статус:* ${user.status || 'Не указан'}  
+
 ✅ *Подтвержден:* ${user.isApproved ? 'Да' : 'Нет'}  
 ━━━━━━━━━━━━━━━━━━━━
     `.trim();
@@ -325,7 +330,7 @@ async function showDownloadReport(ctx) {
     const users = await loadUsers();
     await deletePreviousMessage(ctx, userId);
 
-    if (!users[userId].isApproved) {
+    if (!users[userId]?.isApproved) {
         const message = await ctx.reply('У вас нет прав для выгрузки отчетов.');
         updateLastMessageId(ctx, userId, message);
         return;
@@ -344,23 +349,31 @@ async function downloadReportFile(ctx, objectName) {
     const userId = ctx.from.id.toString();
     await deletePreviousMessage(ctx, userId);
 
-    const reportText = await getReportText(objectName);
-    if (!reportText) {
-        const message = await ctx.reply(`Отчет для объекта "${escapeMarkdown(objectName)}" не найден.`,
+    try {
+        const reportText = await getReportText(objectName);
+        if (!reportText) {
+            const message = await ctx.reply(`Отчет для объекта "${escapeMarkdown(objectName)}" не найден.`,
+                Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'download_report')]])
+            );
+            updateLastMessageId(ctx, userId, message);
+            return;
+        }
+
+        await ctx.replyWithDocument({
+            source: Buffer.from(reportText, 'utf-8'),
+            filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
+        });
+        const message = await ctx.reply('Файл успешно отправлен.',
+            Markup.inlineKeyboard([[Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]])
+        );
+        updateLastMessageId(ctx, userId, message);
+    } catch (err) {
+        console.error('Ошибка при выгрузке отчета:', err.message);
+        const message = await ctx.reply('Произошла ошибка при выгрузке отчета.',
             Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'download_report')]])
         );
         updateLastMessageId(ctx, userId, message);
-        return;
     }
-
-    await ctx.replyWithDocument({
-        source: Buffer.from(reportText, 'utf-8'),
-        filename: `${objectName}.txt`
-    });
-    const message = await ctx.reply('Файл успешно отправлен.',
-        Markup.inlineKeyboard([[Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]])
-    );
-    updateLastMessageId(ctx, userId, message);
 }
 
 bot.command('getreport', async (ctx) => {
@@ -404,7 +417,7 @@ bot.command('getreport', async (ctx) => {
 
     await ctx.replyWithDocument({
         source: Buffer.from(reportText, 'utf-8'),
-        filename: `${objectName}.txt`
+        filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
     });
 });
 
@@ -532,6 +545,7 @@ async function showReports(ctx) {
 
     users[userId].reports = await loadUserReports(userId);
     const userReports = users[userId].reports || {};
+
     if (Object.keys(userReports).length === 0) {
         const message = await ctx.reply('У вас пока нет отчетов.', Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', 'profile')]
@@ -872,7 +886,7 @@ bot.on('text', async (ctx) => {
 
     switch (state.step) {
         case 'fullName':
-            users[userId].fullName = ctx.message.text;
+            users[userId].fullName = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
             delete userStates[userId];
             const fullNameMsg = await ctx.reply('ФИО обновлено.');
@@ -892,13 +906,13 @@ bot.on('text', async (ctx) => {
             }
             break;
         case 'workDone':
-            state.report.workDone = ctx.message.text;
+            state.report.workDone = ctx.message.text.trim();
             userStates[userId].step = 'materials';
             const workMsg = await ctx.reply('Введите информацию о поставленных материалах (или "доставки не было"):');
             updateLastMessageId(ctx, userId, workMsg);
             break;
         case 'materials':
-            state.report.materials = ctx.message.text;
+            state.report.materials = ctx.message.text.trim();
             const date = new Date().toISOString().split('T')[0];
             const timestamp = new Date().toISOString();
             const reportId = `${date}_${users[userId].nextReportId++}`;
@@ -946,13 +960,13 @@ bot.on('text', async (ctx) => {
             updateLastMessageId(ctx, userId, userReportMsg);
             break;
         case 'editWorkDone':
-            state.report.workDone = ctx.message.text;
+            state.report.workDone = ctx.message.text.trim();
             userStates[userId].step = 'editMaterials';
             const editWorkMsg = await ctx.reply('Введите новую информацию о поставленных материалах (или "доставки не было"):');
             updateLastMessageId(ctx, userId, editWorkMsg);
             break;
         case 'editMaterials':
-            state.report.materials = ctx.message.text;
+            state.report.materials = ctx.message.text.trim();
             state.report.timestamp = new Date().toISOString();
 
             const updatedReportText = `
