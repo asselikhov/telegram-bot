@@ -231,7 +231,7 @@ async function getReportText(objectName) {
         if (res.rows.length === 0) return '';
         const reportText = res.rows.map(row => {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return `${row.date}\n${timestamp}\n${row.fullname}\n${row.objectname}\nРаботы:\n${row.workdone}\nМатериалы:\n${row.materials}\n--------------------------\n`;
+            return `${timestamp}\n${row.objectname}\n${row.position} ${row.organization} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n\n${row.materials}\n--------------------------\n`;
         }).join('');
         return reportText;
     } catch (err) {
