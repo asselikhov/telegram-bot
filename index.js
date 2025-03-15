@@ -231,7 +231,7 @@ async function getReportText(objectName) {
         if (res.rows.length === 0) return '';
         const reportText = res.rows.map(row => {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return `Дата: ${row.date}\nВремя: ${timestamp}\nИТР: ${row.fullname}\nОбъект: ${row.objectname}\nРаботы:\n${row.workdone}\nМатериалы:\n${row.materials}\n--------------------------\n`;
+            return `${timestamp}\n${row.fullname}\n${row.objectname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n\n${row.workdone}\n\nПОСТАВЛЕННЫЕ Материалы:\n\n${row.materials}\n--------------------------\n`;
         }).join('');
         return reportText;
     } catch (err) {
@@ -391,7 +391,9 @@ async function downloadReportFile(ctx, objectIndex) {
     await deletePreviousMessage(ctx, userId);
 
     if (!objectName) {
-        const message = await ctx.reply('Ошибка: объект не найден.');
+        const message = await ctx.reply('Ошибка: объект не найден.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
+        ]));
         updateLastMessageId(ctx, userId, message);
         return;
     }
@@ -399,7 +401,9 @@ async function downloadReportFile(ctx, objectIndex) {
     try {
         const reportText = await getReportText(objectName);
         if (!reportText) {
-            const message = await ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
+            const message = await ctx.reply(`Отчет для объекта "${objectName}" не найден.`, Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
+            ]));
             updateLastMessageId(ctx, userId, message);
             return;
         }
@@ -408,11 +412,15 @@ async function downloadReportFile(ctx, objectIndex) {
         await ctx.replyWithDocument({
             source: Buffer.from(reportText, 'utf-8'),
             filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
-        });
+        }, Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
+        ]));
     } catch (err) {
         console.error('Ошибка при выгрузке отчета:', err.message);
         await deletePreviousMessage(ctx, userId); // Удаляем перед отправкой ошибки
-        const message = await ctx.reply('Произошла ошибка при выгрузке отчета.');
+        const message = await ctx.reply('Произошла ошибка при выгрузке отчета.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
+        ]));
         updateLastMessageId(ctx, userId, message);
     }
 }
@@ -487,7 +495,7 @@ bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
 
             const reportText = res.rows.map(row => {
                 const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-                return `${row.date}\n${timestamp}\n${row.position} ${row.organization} ${row.fullname}\n${row.objectname}\nВыполненные работы:\n${row.workdone}\nЗавезенные материалы:\n${row.materials}\n--------------------------\n`;
+                return `${timestamp}\n${row.position} ${row.organization} ${row.fullname}\n${row.objectname}\n\nВыполненные работы:\n\n${row.workdone}\n\nЗавезенные материалы:\n\n${row.materials}\n--------------------------\n`;
             }).join('');
 
             await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой результата
