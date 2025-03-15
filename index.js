@@ -97,12 +97,10 @@ const OBJECT_GROUPS = {
 let userStates = {};
 let lastMessageIds = {};
 
-// Функция для экранирования специальных символов Markdown (оставляем для отчетов, но не для ФИО)
 function escapeMarkdown(text) {
     return text.replace(/([_*[\]()~`>#+\-.!])/g, '\\$1');
 }
 
-// Функция для фильтрации объектов
 function filterValidObjects(objects) {
     return [...new Set(objects)].filter(obj => OBJECTS_LIST_CYRILLIC.includes(obj));
 }
@@ -701,13 +699,11 @@ bot.command('approve', async (ctx) => {
     bot.telegram.sendMessage(targetUserId, 'Ваш профиль подтвержден администратором.');
 });
 
-// Тестовая команда
 bot.command('test', async (ctx) => {
     console.log('Тестовая команда получена от:', ctx.from.id);
     await ctx.reply('Бот работает!');
 });
 
-// Исправленный /listproducers
 bot.command('listproducers', async (ctx) => {
     try {
         console.log('=== Начало обработки /listproducers === от userId:', ctx.from.id);
@@ -727,7 +723,8 @@ bot.command('listproducers', async (ctx) => {
             const producerList = res.rows.map((row, index) => {
                 const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
                 const objectNames = objects.length > 0
-                    ? filterValidObjects(objects).map(obj => escapeMarkdown(obj)).join(', ');
+                    ? filterValidObjects(objects).map(obj => escapeMarkdown(obj)).join(', ')
+                    : 'Не выбраны';
                 const fullName = escapeMarkdown(row.fullname || 'Не указано');
                 const status = escapeMarkdown(row.status || 'в работе');
                 return `${index + 1}. *${fullName}* (ID: ${row.userid})\n   Объекты: ${objectNames}\n   Статус: ${status}`;
@@ -1044,7 +1041,6 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     }
 });
 
-// Настройка вебхука и сервера
 app.use(express.json());
 
 app.use((req, res, next) => {
@@ -1066,7 +1062,6 @@ app.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}, внешний домен: ${process.env.RENDER_EXTERNAL_HOSTNAME}`);
 });
 
-// Обработка завершения процесса
 process.once('SIGINT', async () => {
     console.log('Получен сигнал SIGINT, останавливаем бота');
     await pool.end();
