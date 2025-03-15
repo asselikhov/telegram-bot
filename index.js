@@ -293,21 +293,25 @@ async function showProfile(ctx) {
     const user = users[userId] || {};
     const validObjects = filterValidObjects(user.selectedObjects);
     const objectsList = validObjects.length > 0
-        ? validObjects.map(obj => `🏢 ${obj}`).join('\n')
-        : '🏢 Не выбраны';
+        ? validObjects.map(obj => `   · ${obj}`).join('\n')
+        : '   · Не выбраны';
 
     await deletePreviousMessage(ctx, userId);
 
     const profileText = `
-👤 Личный кабинет  
-━━━━━━━━━━━━━━━━━━━━  
+👤 ЛИЧНЫЙ КАБИНЕТ  
+➖➖➖➖➖➖➖➖➖➖➖  
 👷 ФИО: ${user.fullName || 'Не указано'}  
-📋 Должность: ${user.position || 'Не указана'}  
-📍 Объекты:\n${objectsList}  
-⏳ Статус: ${user.status || 'Не указан'}  
-✅ Подтвержден: ${user.isApproved ? 'Да' : 'Нет'}  
-━━━━━━━━━━━━━━━━━━━━
-    `.trim();
+
+📋 ДОЛЖНОСТЬ: ${user.position || 'Не указана'}  
+
+📍 ОБЪЕКТЫ:\n${objectsList}  
+
+⏳ СТАТУС: ${user.status || 'Не указан'}  
+
+✅ ПОДТВЕРЖДЕН: ${user.isApproved ? 'Да' : 'Нет'}  
+➖➖➖➖➖➖➖➖➖➖➖
+`.trim();
 
     const buttons = [
         [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
@@ -643,14 +647,19 @@ async function viewReport(ctx, reportId) {
     const timestamp = report.timestamp || reportId.split('_')[1];
     const time = new Date(timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     const reportText = `
-📋 Отчет за ${report.date} (${time})  
-━━━━━━━━━━━━━━━━━━━━  
-· ИТР: ${users[userId].fullName}  
-· Объект: ${report.objectName}  
-· Работы:\n${report.workDone}  
-· Материалы:\n${report.materials}  
-━━━━━━━━━━━━━━━━━━━━
-    `.trim();
+📋 ОТЧЕТ ЗА ${report.date} (${time})  
+➖➖➖➖➖➖➖➖➖➖➖  
+✦ ИТР: ${users[userId].fullName}  
+
+✦ ОБЪЕКТ: ${report.objectName}  
+
+✦ РАБОТЫ:  
+   ${report.workDone}  
+
+✦ МАТЕРИАЛЫ:  
+   ${report.materials}  
+➖➖➖➖➖➖➖➖➖➖➖
+`.trim();
 
     const message = await ctx.reply(reportText, Markup.inlineKeyboard([
         [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
@@ -957,13 +966,17 @@ bot.on('text', async (ctx) => {
             };
 
             const reportText = `
-📅 Отчет за ${date}  
-🏢 Объект: ${state.report.objectName}  
-━━━━━━━━━━━━━━━━━━━━━ 
+📅 ОТЧЕТ ЗА ${date}  
+🏢 ОБЪЕКТ: ${state.report.objectName}  
+➖➖➖➖➖➖➖➖➖➖➖ 
 👷 ИТР: ${users[userId].fullName}  
-🔧 Выполненные работы:\n${state.report.workDone}  
-📦 Поставленные материалы:\n${state.report.materials}  
-━━━━━━━━━━━━━━━━━━━━━
+
+🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
+   ${state.report.workDone}  
+
+📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+   ${state.report.materials}  
+➖➖➖➖➖➖➖➖➖➖➖
             `.trim();
 
             const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
@@ -995,13 +1008,17 @@ bot.on('text', async (ctx) => {
             state.report.timestamp = new Date().toISOString();
 
             const updatedReportText = `
-📅 Отчет за ${state.report.date} (обновлен)  
-🏢 Объект: ${state.report.objectName}  
-━━━━━━━━━━━━━━━━━━━━━  
+📅 ОТЧЕТ ЗА ${state.report.date} (ОБНОВЛЕН)  
+🏢 ОБЪЕКТ: ${state.report.objectName}  
+➖➖➖➖➖➖➖➖➖➖➖  
 👷 ИТР: ${users[userId].fullName}  
-🔧 Выполненные работы:\n${state.report.workDone}  
-📦 Поставленные материалы:\n${state.report.materials}  
-━━━━━━━━━━━━━━━━━━━━━
+
+🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
+   ${state.report.workDone}  
+
+📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+   ${state.report.materials}  
+➖➖➖➖➖➖➖➖➖➖➖
             `.trim();
 
             const updatedGroupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
