@@ -913,19 +913,19 @@ bot.command('listproducers', async (ctx) => {
             const producerList = res.rows.map((row, index) => {
                 const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
                 const objectNames = objects.length > 0
-                    ? filterValidObjects(objects).map(obj => `   - ${obj}`).join('\n')
-                    : '   - Не выбраны';
+                    ? filterValidObjects(objects).map(obj => `   · ${obj}`).join('\n')
+                    : '   · Не выбраны';
                 const fullName = row.fullname || 'Не указано';
                 const organization = row.organization || 'Не указано';
-                const status = row.status || 'В работе';
-                return `${index + 1}. ${fullName} (ID: ${row.userid})\n   Организация: ${organization}\n   Объекты:\n${objectNames}\n   Статус: ${status}`;
+                const status = row.status === 'В работе' ? '🟢 В работе' : '🔴 В отпуске';
+                return `${index + 1}. ${fullName}\n\n   ${organization}\n\n${objectNames}\n\n   ${status}`;
             }).join('\n\n');
 
             await ctx.reply(
-                `👷‍♂️ Список производителей работ 👷‍♂️\n` +
-                `═══════════════════════\n` +
+                `👷‍♂️ СПИСОК ПРОИЗВОДИТЕЛЕЙ РАБОТ 👷‍♂️\n` +
+                `➖➖➖➖➖➖➖➖➖➖➖\n` +
                 `${producerList}\n` +
-                `═══════════════════════\n` +
+                `➖➖➖➖➖➖➖➖➖➖➖\n` +
                 `Всего: ${res.rows.length}`
             );
             console.log('Ответ отправлен: Список производителей');
