@@ -90,8 +90,8 @@ const OBJECT_GROUPS = {
     'Кольцевой МНПП': '-1002394790037',
     'Ярославль-Москва': '-1002318741372',
     'Ярославль-Кириши1': '-1002153878927',
-    'Никулино-Пенза, 881,2-886,0км': '',
-    'Ростовка-Никольское, 595,4-608,1км': ''
+    'Никулино-Пенза, 881,2-886,0км': '-1002597582709',
+    'Ростовка-Никольское, 595,4-608,1км': '-1002627066168'
 };
 
 let userStates = {};
@@ -240,9 +240,9 @@ async function showPositionSelection(ctx, userId) {
 
 async function showObjectSelection(ctx, userId, selected = []) {
     await deletePreviousMessage(ctx, userId);
-    const buttons = OBJECTS_LIST_CYRILLIC.map(obj => {
+    const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) => {
         const isSelected = selected.includes(obj);
-        return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${obj}`, `toggle_object_${obj}`)];
+        return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${obj}`, `toggle_object_${index}`)];
     });
     buttons.push([Markup.button.callback('Готово', 'confirm_objects')]);
     const message = await ctx.reply('Выберите объекты (можно несколько):', Markup.inlineKeyboard(buttons));
@@ -441,12 +441,13 @@ bot.action(/select_initial_position_(.+)/, async (ctx) => {
     await showObjectSelection(ctx, userId);
 });
 
-bot.action(/toggle_object_(.+)/, async (ctx) => {
+bot.action(/toggle_object_(\d+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
-    const objectName = ctx.match[1];
+    const objectIndex = parseInt(ctx.match[1], 10);
+    const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
     const state = userStates[userId];
 
-    if (!state || state.step !== 'selectObjects') return;
+    if (!state || state.step !== 'selectObjects' || !objectName) return;
 
     const selectedObjects = state.selectedObjects;
     const index = selectedObjects.indexOf(objectName);
