@@ -76,22 +76,22 @@ initializeDatabase();
 
 // Список объектов только на кириллице
 const OBJECTS_LIST_CYRILLIC = [
-    'Кольцевой МНПП',
-    'Ярославль-Москва',
-    'Ярославль-Кириши1',
-    'Никулино-Пенза, 881,2-886,0км',
-    'Ростовка-Никольское, 595,4-608,1км'
+    'Кольцевой МНПП, 132км',
+    'Ярославль-Москва, 201-204км',
+    'Ярославль-Кириши1, 115-132км',
+    'Никулино-Пенза, 881-886км',
+    'Ростовка-Никольское, 595-608км'
 ];
 
-const POSITIONS_LIST = ['производитель работ', 'мастер', 'инженер'];
+const POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'другая'];
 
 // Группы для объектов (используем кириллические названия)
 const OBJECT_GROUPS = {
     'Кольцевой МНПП': '-1002394790037',
     'Ярославль-Москва': '-1002318741372',
     'Ярославль-Кириши1': '-1002153878927',
-    'Никулино-Пенза, 881,2-886,0км': '-1002597582709',
-    'Ростовка-Никольское, 595,4-608,1км': '-1002627066168'
+    'Никулино-Пенза, 881-886км': '-1002597582709',
+    'Ростовка-Никольское, 595-608км': '-1002627066168'
 };
 
 let userStates = {};
@@ -284,9 +284,9 @@ async function showProfile(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const user = users[userId] || {};
-    const escapedObjects = (user.selectedObjects?.length > 0
+    const escapedObjects = user.selectedObjects.length > 0
         ? user.selectedObjects.map(obj => escapeMarkdown(obj)).join(', ')
-        : 'Не выбраны');
+        : 'Не выбраны';
 
     await deletePreviousMessage(ctx, userId);
 
@@ -302,12 +302,12 @@ async function showProfile(ctx) {
     `.trim();
 
     const buttons = [
-        [Markup.button.callback('✏️ ФИО', 'edit_fullName')],
-        [Markup.button.callback('🏢 Должность', 'edit_position')],
-        [Markup.button.callback('🏠 Объекты', 'edit_object')],
-        [Markup.button.callback('📅 Статус', 'edit_status')],
-        [Markup.button.callback('📋 Мои отчеты', 'view_reports')],
-        [Markup.button.callback('↩️ В главное меню', 'main_menu')]
+        [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
+        [Markup.button.callback('🏢 Изменить должность', 'edit_position')],
+        [Markup.button.callback('🏠 Изменить объекты', 'edit_object')],
+        [Markup.button.callback('📅 Изменить статус', 'edit_status')],
+        [Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')],
+        [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ];
 
     const message = await ctx.replyWithMarkdown(profileText, Markup.inlineKeyboard(buttons));
@@ -328,7 +328,7 @@ async function showDownloadReport(ctx) {
     const buttons = OBJECTS_LIST_CYRILLIC.map(obj =>
         [Markup.button.callback(obj, `download_report_file_${obj}`)]
     );
-    buttons.push([Markup.button.callback('↩️ В главное меню', 'main_menu')]);
+    buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
     const message = await ctx.reply('Выберите объект для выгрузки отчета:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
@@ -352,7 +352,7 @@ async function downloadReportFile(ctx, objectName) {
         filename: `${objectName}.txt`
     });
     const message = await ctx.reply('Файл успешно отправлен.',
-        Markup.inlineKeyboard([[Markup.button.callback('↩️ В главное меню', 'main_menu')]])
+        Markup.inlineKeyboard([[Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]])
     );
     updateLastMessageId(ctx, userId, message);
 }
@@ -650,7 +650,7 @@ async function showHelp(ctx) {
     `.trim();
 
     const message = await ctx.replyWithMarkdown(helpText, Markup.inlineKeyboard([
-        [Markup.button.callback('↩️ В главное меню', 'main_menu')]
+        [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ]));
     updateLastMessageId(ctx, userId, message);
 }
@@ -669,7 +669,7 @@ async function showAdminPanel(ctx) {
     `.trim();
 
     const message = await ctx.replyWithMarkdown(adminText, Markup.inlineKeyboard([
-        [Markup.button.callback('↩️ В главное меню', 'main_menu')]
+        [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ]));
     updateLastMessageId(ctx, userId, message);
 }
@@ -707,7 +707,7 @@ bot.command('listproducers', async (ctx) => {
         const client = await pool.connect();
         try {
             const res = await client.query(
-                'SELECT userid, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
+                'SELECT userId, fullName, selectedObjects, status FROM users WHERE position = $1 AND isApproved = $2',
                 ['производитель работ', 1]
             );
 
@@ -768,7 +768,7 @@ bot.action('edit_status', async (ctx) => {
     const message = await ctx.reply('Выберите новый статус:', Markup.inlineKeyboard([
         [Markup.button.callback('В работе', 'status_work')],
         [Markup.button.callback('В отпуске', 'status_vacation')],
-        [Markup.button.callback('↩️ В главное меню', 'main_menu')]
+        [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ]));
     updateLastMessageId(ctx, userId, message);
 });
@@ -935,7 +935,7 @@ bot.on('text', async (ctx) => {
 
             const userReportMsg = await ctx.replyWithMarkdown(
                 `*Ваш отчет опубликован:*\n\n*🏢 Объект:* ${escapeMarkdown(state.report.objectName)}\n\n*🔧 Работы:*\n${escapeMarkdown(state.report.workDone)}\n\n*📦 Материалы:*\n${escapeMarkdown(state.report.materials)}`,
-                Markup.inlineKeyboard([[Markup.button.callback('↩️ В главное меню', 'main_menu')]])
+                Markup.inlineKeyboard([[Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]])
             );
             updateLastMessageId(ctx, userId, userReportMsg);
             break;
