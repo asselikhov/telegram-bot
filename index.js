@@ -46,7 +46,7 @@ async function initializeDatabase() {
                 position TEXT,
                 organization TEXT,
                 selectedObjects TEXT,
-                status TEXT DEFAULT 'в работе',
+                status TEXT DEFAULT 'В работе',
                 isApproved INTEGER DEFAULT 0,
                 nextReportId INTEGER DEFAULT 1
             );
@@ -104,7 +104,7 @@ const BASE_POSITIONS_LIST = ['Производитель работ', 'Дело�
 function getPositionsList(userId) {
     const positions = [...BASE_POSITIONS_LIST];
     if (userId === ADMIN_ID) {
-        positions.push('админ');
+        positions.push('Админ');
     }
     return positions;
 }
@@ -144,7 +144,7 @@ async function loadUsers() {
                 position: row.position || '',
                 organization: row.organization || '',
                 selectedObjects: filterValidObjects(selectedObjects),
-                status: row.status || 'в работе',
+                status: row.status || 'В работе',
                 isApproved: Boolean(row.isapproved),
                 nextReportId: row.nextreportid || 1,
                 reports: {}
@@ -334,7 +334,7 @@ async function showProfile(ctx) {
         : 'Не выбраны';
 
     // Определяем эмодзи для статуса
-    const statusEmoji = user.status === 'в работе' ? '🟢' : user.status === 'в отпуске' ? '🔴' : '⏳';
+    const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
 
     await deletePreviousMessage(ctx, userId);
 
@@ -483,7 +483,7 @@ bot.start(async (ctx) => {
             position: '',
             organization: '',
             selectedObjects: [],
-            status: 'в работе',
+            status: 'В работе',
             isApproved: false,
             nextReportId: 1,
             reports: {}
@@ -910,7 +910,7 @@ bot.command('listproducers', async (ctx) => {
                     : '   - Не выбраны';
                 const fullName = row.fullname || 'Не указано';
                 const organization = row.organization || 'Не указано';
-                const status = row.status || 'в работе';
+                const status = row.status || 'В работе';
                 return `${index + 1}. ${fullName} (ID: ${row.userid})\n   Организация: ${organization}\n   Объекты:\n${objectNames}\n   Статус: ${status}`;
             }).join('\n\n');
 
@@ -982,7 +982,7 @@ bot.action('status_work', async (ctx) => {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     await deletePreviousMessage(ctx, userId);
-    users[userId].status = 'в работе';
+    users[userId].status = 'В работе';
     await saveUser(userId, users[userId]);
     const message = await ctx.reply('Статус обновлен на "В работе".');
     updateLastMessageId(ctx, userId, message);
@@ -993,7 +993,7 @@ bot.action('status_vacation', async (ctx) => {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     await deletePreviousMessage(ctx, userId);
-    users[userId].status = 'в отпуске';
+    users[userId].status = 'В отпуске';
     await saveUser(userId, users[userId]);
     const message = await ctx.reply('Статус обновлен на "В отпуске".');
     updateLastMessageId(ctx, userId, message);
@@ -1270,7 +1270,7 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     const users = await loadUsers();
     for (const userId in users) {
         const user = users[userId];
-        if (user.position === 'производитель работ' && user.isApproved && user.status !== 'в отпуске') {
+        if (user.position === 'производитель работ' && user.isApproved && user.status !== 'В отпуске') {
             user.reports = await loadUserReports(userId);
             const hasReportToday = Object.keys(user.reports).some(reportId => reportId.startsWith(today));
             if (!hasReportToday) {
