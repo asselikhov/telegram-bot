@@ -425,9 +425,9 @@ async function downloadReportFile(ctx, objectIndex) {
     }
 }
 
+// Обновленная команда /getreport, доступная во всех группах
 bot.command('getreport', async (ctx) => {
     const userId = ctx.from.id.toString();
-    const chatId = ctx.chat.id.toString();
     const users = await loadUsers();
     const user = users[userId];
 
@@ -436,8 +436,31 @@ bot.command('getreport', async (ctx) => {
         return;
     }
 
-    if (chatId !== GENERAL_GROUP_CHAT_ID) {
-        await ctx.reply('Эта команда доступна только в общей группе отчетов.');
+    if (!user || !user.isApproved) {
+        await ctx.reply('У вас нет прав для выгрузки отчетов.');
+        return;
+    }
+
+    // Показываем список объектов для выбора
+    const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
+        [Markup.button.callback(obj, `download_report_by_object_${index}`)]
+    );
+    await ctx.reply(
+        '📤 Выберите объект для выгрузки отчета:',
+        Markup.inlineKeyboard(buttons)
+    );
+});
+
+// Обработка выбора объекта и выгрузка отчета
+bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
+    const userId = ctx.from.id.toString();
+    const objectIndex = parseInt(ctx.match[1], 10);
+    const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!objectName) {
+        await ctx.reply('Ошибка: объект не найден.');
         return;
     }
 
@@ -446,28 +469,36 @@ bot.command('getreport', async (ctx) => {
         return;
     }
 
-    const args = ctx.message.text.split(' ').slice(1);
-    if (args.length === 0) {
-        await ctx.reply('Укажите объект, например: /getreport Кольцевой МНПП, 132км\nДоступные объекты: ' + OBJECTS_LIST_CYRILLIC.join(', '));
-        return;
-    }
+    try {
+        const client = await pool.connect();
+        try {
+            const res = await client.query(
+                'SELECT r.*, u.fullName, u.position FROM reports r JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp',
+                [objectName]
+            );
 
-    const objectName = args.join(' ');
-    if (!OBJECTS_LIST_CYRILLIC.includes(objectName)) {
-        await ctx.reply('Неверное название объекта. Доступные объекты: ' + OBJECTS_LIST_CYRILLIC.join(', '));
-        return;
-    }
+            if (res.rows.length === 0) {
+                await ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
+                return;
+            }
 
-    const reportText = await getReportText(objectName);
-    if (!reportText) {
-        await ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
-        return;
-    }
+            const reportText = res.rows.map(row => {
+                const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+                return `Дата: ${row.date}\nВремя: ${timestamp}\nДолжность: ${row.position}\nОбъект: ${row.objectname}\nВыполненные работы:\n${row.workdone}\nЗавезенные материалы:\n${row.materials}\n--------------------------\n`;
+            }).join('');
 
-    await ctx.replyWithDocument({
-        source: Buffer.from(reportText, 'utf-8'),
-        filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
-    });
+            await ctx.replyWithDocument({
+                source: Buffer.from(reportText, 'utf-8'),
+                filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
+            });
+            console.log(`Отчет для ${objectName} успешно выгружен`);
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error('Ошибка при выгрузке отчета:', err.message);
+        await ctx.reply('Произошла ошибка при выгрузке отчета.');
+    }
 });
 
 bot.start(async (ctx) => {
@@ -894,7 +925,7 @@ bot.command('test', async (ctx) => {
     await ctx.reply('Бот работает!');
 });
 
-// Новая команда listproducers с выбором объекта
+// Команда listproducers
 bot.command('listproducers', async (ctx) => {
     try {
         console.log('=== Начало обработки /listproducers === от userId:', ctx.from.id);
