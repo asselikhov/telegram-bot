@@ -329,7 +329,7 @@ async function showProfile(ctx) {
     const user = users[userId] || {};
     const validObjects = filterValidObjects(user.selectedObjects);
     const objectsList = validObjects.length > 0
-        ? validObjects.map(obj => `${obj}`).join('\n')
+        ? validObjects.map(obj => `· ${obj}`).join('\n') // Добавлен символ · перед каждым объектом
         : 'Не выбраны';
 
     const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
@@ -345,7 +345,7 @@ async function showProfile(ctx) {
 
 👷 ${user.fullName || 'Не указано'}  
 
-· ${objectsList}  
+${objectsList}  
 
 ${statusEmoji} ${user.status || 'Не указан'}  
 ➖➖➖➖➖➖➖➖➖➖➖
