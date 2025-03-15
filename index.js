@@ -391,9 +391,7 @@ async function downloadReportFile(ctx, objectIndex) {
     await deletePreviousMessage(ctx, userId);
 
     if (!objectName) {
-        const message = await ctx.reply('Ошибка: объект не найден.',
-            Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'download_report')]])
-        );
+        const message = await ctx.reply('Ошибка: объект не найден.');
         updateLastMessageId(ctx, userId, message);
         return;
     }
@@ -401,57 +399,56 @@ async function downloadReportFile(ctx, objectIndex) {
     try {
         const reportText = await getReportText(objectName);
         if (!reportText) {
-            const message = await ctx.reply(`Отчет для объекта "${objectName}" не найден.`,
-                Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'download_report')]])
-            );
+            const message = await ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
             updateLastMessageId(ctx, userId, message);
             return;
         }
 
+        await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой результата
         await ctx.replyWithDocument({
             source: Buffer.from(reportText, 'utf-8'),
             filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
         });
-        const message = await ctx.reply('Файл успешно отправлен.',
-            Markup.inlineKeyboard([[Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]])
-        );
-        updateLastMessageId(ctx, userId, message);
     } catch (err) {
         console.error('Ошибка при выгрузке отчета:', err.message);
-        const message = await ctx.reply('Произошла ошибка при выгрузке отчета.',
-            Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'download_report')]])
-        );
+        await deletePreviousMessage(ctx, userId); // Удаляем перед отправкой ошибки
+        const message = await ctx.reply('Произошла ошибка при выгрузке отчета.');
         updateLastMessageId(ctx, userId, message);
     }
 }
 
-// Обновленная команда /getreport, доступная во всех группах
+// Команда /getreport с удалением предыдущих сообщений
 bot.command('getreport', async (ctx) => {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const user = users[userId];
 
     if (ctx.chat.type !== 'group' && ctx.chat.type !== 'supergroup') {
-        await ctx.reply('Эта команда доступна только в группах.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('Эта команда доступна только в группах.');
+        updateLastMessageId(ctx, userId, message);
         return;
     }
 
     if (!user || !user.isApproved) {
-        await ctx.reply('У вас нет прав для выгрузки отчетов.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('У вас нет прав для выгрузки отчетов.');
+        updateLastMessageId(ctx, userId, message);
         return;
     }
 
-    // Показываем список объектов для выбора
     const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
         [Markup.button.callback(obj, `download_report_by_object_${index}`)]
     );
-    await ctx.reply(
+    await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой списка объектов
+    const message = await ctx.reply(
         '📤 Выберите объект для выгрузки отчета:',
         Markup.inlineKeyboard(buttons)
     );
+    updateLastMessageId(ctx, userId, message);
 });
 
-// Обработка выбора объекта и выгрузка отчета
+// Обработка выбора объекта и выгрузка отчета с удалением предыдущих сообщений
 bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
     const objectIndex = parseInt(ctx.match[1], 10);
@@ -460,12 +457,16 @@ bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
     const user = users[userId];
 
     if (!objectName) {
-        await ctx.reply('Ошибка: объект не найден.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('Ошибка: объект не найден.');
+        updateLastMessageId(ctx, userId, message);
         return;
     }
 
     if (!user || !user.isApproved) {
-        await ctx.reply('У вас нет прав для выгрузки отчетов.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('У вас нет прав для выгрузки отчетов.');
+        updateLastMessageId(ctx, userId, message);
         return;
     }
 
@@ -478,7 +479,9 @@ bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
             );
 
             if (res.rows.length === 0) {
-                await ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
+                await deletePreviousMessage(ctx, userId);
+                const message = await ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
+                updateLastMessageId(ctx, userId, message);
                 return;
             }
 
@@ -487,6 +490,7 @@ bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
                 return `Дата: ${row.date}\nВремя: ${timestamp}\nДолжность: ${row.position}\nОбъект: ${row.objectname}\nВыполненные работы:\n${row.workdone}\nЗавезенные материалы:\n${row.materials}\n--------------------------\n`;
             }).join('');
 
+            await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой результата
             await ctx.replyWithDocument({
                 source: Buffer.from(reportText, 'utf-8'),
                 filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
@@ -497,7 +501,9 @@ bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
         }
     } catch (err) {
         console.error('Ошибка при выгрузке отчета:', err.message);
-        await ctx.reply('Произошла ошибка при выгрузке отчета.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('Произошла ошибка при выгрузке отчета.');
+        updateLastMessageId(ctx, userId, message);
     }
 });
 
@@ -906,27 +912,37 @@ bot.command('approve', async (ctx) => {
     const users = await loadUsers();
 
     if (userId !== ADMIN_ID) {
-        await ctx.reply('У вас нет прав для этой команды.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('У вас нет прав для этой команды.');
+        updateLastMessageId(ctx, userId, message);
         return;
     }
     const targetUserId = ctx.message.text.split(' ')[1];
     if (!targetUserId || !users[targetUserId]) {
-        await ctx.reply('Пользователь не найден. Укажите корректный ID.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('Пользователь не найден. Укажите корректный ID.');
+        updateLastMessageId(ctx, userId, message);
         return;
     }
     users[targetUserId].isApproved = true;
     await saveUser(targetUserId, users[targetUserId]);
-    await ctx.reply(`Пользователь ${users[targetUserId].fullName} подтвержден.`);
+    await deletePreviousMessage(ctx, userId);
+    const message = await ctx.reply(`Пользователь ${users[targetUserId].fullName} подтвержден.`);
+    updateLastMessageId(ctx, userId, message);
     bot.telegram.sendMessage(targetUserId, 'Ваш профиль подтвержден администратором.');
 });
 
 bot.command('test', async (ctx) => {
     console.log('Тестовая команда получена от:', ctx.from.id);
-    await ctx.reply('Бот работает!');
+    const userId = ctx.from.id.toString();
+    await deletePreviousMessage(ctx, userId);
+    const message = await ctx.reply('Бот работает!');
+    updateLastMessageId(ctx, userId, message);
 });
 
-// Команда listproducers
+// Команда listproducers с удалением предыдущих сообщений
 bot.command('listproducers', async (ctx) => {
+    const userId = ctx.from.id.toString();
     try {
         console.log('=== Начало обработки /listproducers === от userId:', ctx.from.id);
 
@@ -934,24 +950,31 @@ bot.command('listproducers', async (ctx) => {
             [Markup.button.callback(obj, `show_producers_${index}`)]
         );
 
-        await ctx.reply(
+        await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой списка объектов
+        const message = await ctx.reply(
             '👷‍♂️ Выберите объект для просмотра производителей работ:',
             Markup.inlineKeyboard(buttons)
         );
+        updateLastMessageId(ctx, userId, message);
     } catch (err) {
         console.error('Ошибка в /listproducers:', err.message);
-        await ctx.reply('⚠️ Произошла ошибка при загрузке.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('⚠️ Произошла ошибка при загрузке.');
+        updateLastMessageId(ctx, userId, message);
     }
 });
 
-// Обработка выбора объекта и показ производителей
+// Обработка выбора объекта и показ производителей с удалением предыдущих сообщений
 bot.action(/show_producers_(\d+)/, async (ctx) => {
+    const userId = ctx.from.id.toString();
     try {
         const objectIndex = parseInt(ctx.match[1], 10);
         const selectedObject = OBJECTS_LIST_CYRILLIC[objectIndex];
 
         if (!selectedObject) {
-            await ctx.reply('⚠️ Объект не найден');
+            await deletePreviousMessage(ctx, userId);
+            const message = await ctx.reply('⚠️ Объект не найден');
+            updateLastMessageId(ctx, userId, message);
             return;
         }
 
@@ -969,13 +992,15 @@ bot.action(/show_producers_(\d+)/, async (ctx) => {
             });
 
             if (filteredProducers.length === 0) {
-                await ctx.reply(
+                await deletePreviousMessage(ctx, userId);
+                const message = await ctx.reply(
                     `👷‍♂️ Производители работ на объекте "${selectedObject}" не найдены.\n` +
                     `➖➖➖➖➖➖➖➖➖➖➖`,
                     Markup.inlineKeyboard([
                         [Markup.button.callback('🔙 Выбрать другой объект', 'back_to_list')]
                     ])
                 );
+                updateLastMessageId(ctx, userId, message);
                 return;
             }
 
@@ -986,7 +1011,8 @@ bot.action(/show_producers_(\d+)/, async (ctx) => {
                 return `${index + 1}. ${fullName}\n\n   ${organization}\n\n   ${status}`;
             }).join('\n\n');
 
-            await ctx.reply(
+            await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой результата
+            const message = await ctx.reply(
                 `👷‍♂️ ПРОИЗВОДИТЕЛИ РАБОТ\n` +
                 `🏢 ${selectedObject}\n` +
                 `➖➖➖➖➖➖➖➖➖➖➖\n` +
@@ -997,30 +1023,38 @@ bot.action(/show_producers_(\d+)/, async (ctx) => {
                     [Markup.button.callback('🔙 Выбрать другой объект', 'back_to_list')]
                 ])
             );
+            updateLastMessageId(ctx, userId, message);
             console.log(`Ответ отправлен: Список производителей для ${selectedObject}`);
         } finally {
             client.release();
         }
     } catch (err) {
         console.error('Ошибка в show_producers:', err.message);
-        await ctx.reply('⚠️ Произошла ошибка при загрузке списка.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('⚠️ Произошла ошибка при загрузке списка.');
+        updateLastMessageId(ctx, userId, message);
     }
 });
 
-// Возврат к списку объектов
+// Возврат к списку объектов с удалением предыдущих сообщений
 bot.action('back_to_list', async (ctx) => {
+    const userId = ctx.from.id.toString();
     try {
         const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
             [Markup.button.callback(obj, `show_producers_${index}`)]
         );
 
-        await ctx.editMessageText(
+        await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед возвратом к списку
+        const message = await ctx.reply(
             '👷‍♂️ Выберите объект для просмотра производителей работ:',
             Markup.inlineKeyboard(buttons)
         );
+        updateLastMessageId(ctx, userId, message);
     } catch (err) {
         console.error('Ошибка в back_to_list:', err.message);
-        await ctx.reply('⚠️ Произошла ошибка.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('⚠️ Произошла ошибка.');
+        updateLastMessageId(ctx, userId, message);
     }
 });
 
@@ -1029,20 +1063,26 @@ bot.action('profile', showProfile);
 bot.action('admin_panel', showAdminPanel);
 bot.action('view_reports', showReports);
 bot.action(/view_reports_by_object_(\d+)/, async (ctx) => {
+    const userId = ctx.from.id.toString();
     const objectIndex = parseInt(ctx.match[1], 10);
     const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
     if (!objectName) {
-        await ctx.reply('Ошибка: объект не найден.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('Ошибка: объект не найден.');
+        updateLastMessageId(ctx, userId, message);
         return;
     }
     await showReportsByObject(ctx, objectName);
 });
 bot.action(/view_reports_by_day_(\d+)_(.+)/, async (ctx) => {
+    const userId = ctx.from.id.toString();
     const objectIndex = parseInt(ctx.match[1], 10);
     const day = ctx.match[2];
     const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
     if (!objectName) {
-        await ctx.reply('Ошибка: объект не найден.');
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('Ошибка: объект не найден.');
+        updateLastMessageId(ctx, userId, message);
         return;
     }
     await showReportsByDay(ctx, objectName, day);
