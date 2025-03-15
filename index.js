@@ -1010,29 +1010,19 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
     }
 });
 
-// Команда /listproducers с усиленной отладкой
+// Команда /listproducers теперь доступна всем пользователям
 bot.command('listproducers', async (ctx) => {
     try {
         console.log('=== Начало обработки /listproducers ===');
         console.log('Получено обновление:', JSON.stringify(ctx.update));
         console.log('Команда /listproducers получена от userId:', ctx.from.id);
-        console.log('Текущий ADMIN_ID:', process.env.ADMIN_ID);
 
-        const userId = ctx.from.id.toString();
-        console.log('userId:', userId, 'typeof userId:', typeof userId);
-        console.log('ADMIN_ID:', process.env.ADMIN_ID, 'typeof ADMIN_ID:', typeof process.env.ADMIN_ID);
-        console.log('Проверка доступа:', userId === process.env.ADMIN_ID);
+        console.log('Выполняем запрос к БД');
+        const client = await pool.connect().catch(err => {
+            console.error('Ошибка подключения к БД:', err.message);
+            throw err;
+        });
 
-        if (userId !== process.env.ADMIN_ID) {
-            console.log('Доступ запрещен для userId:', userId);
-            await ctx.reply('У вас нет прав для этой команды.');
-            console.log('Ответ "Нет прав" отправлен');
-            return;
-        }
-        console.log('Доступ разрешен, выполняем запрос к БД');
-
-        const client = await pool.connect();
-        console.log('Соединение с БД установлено');
         try {
             console.log('Запрос к базе данных для производителей работ');
             const res = await client.query(
@@ -1040,9 +1030,10 @@ bot.command('listproducers', async (ctx) => {
                 ['производитель работ', 1]
             );
             console.log('Результат запроса:', res.rows);
+
             if (res.rows.length === 0) {
                 await ctx.reply('Производители работ не найдены.');
-                console.log('Ответ "Не найдены" отправлен');
+                console.log('Ответ отправлен: Не найдены');
                 return;
             }
 
@@ -1063,14 +1054,15 @@ bot.command('listproducers', async (ctx) => {
             await ctx.replyWithMarkdown(
                 `*📋 Список производителей работ:*\n━━━━━━━━━━━━━━━━━━━━\n${producerList}\n━━━━━━━━━━━━━━━━━━━━`
             );
-            console.log('Список производителей отправлен');
+            console.log('Ответ отправлен: Список производителей');
         } finally {
             client.release();
             console.log('Соединение с БД освобождено');
         }
     } catch (err) {
-        console.error('Ошибка в обработке /listproducers:', err.message, err.stack);
+        console.error('Ошибка в /listproducers:', err.message, err.stack);
         await ctx.reply('Произошла ошибка при выполнении команды.');
+        console.log('Ответ отправлен: Ошибка');
     }
 });
 
