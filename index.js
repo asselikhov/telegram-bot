@@ -85,7 +85,7 @@ const OBJECTS_LIST_CYRILLIC = [
 ];
 
 // Список должностей
-const BASE_POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'другая'];
+const BASE_POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто'];
 
 function getPositionsList(userId) {
     const positions = [...BASE_POSITIONS_LIST];
@@ -96,7 +96,7 @@ function getPositionsList(userId) {
 }
 
 // Список организаций
-const ORGANIZATIONS_LIST = ['ООО "СтройТех"', 'АО "НефтеГаз"', 'ИП Иванов', 'ООО "Прогресс"'];
+const ORGANIZATIONS_LIST = ['ООО "РСХ"', 'ООО "РемонтСервис"', 'ООО "Строительные Системы"'];
 
 // Группы для объектов
 const OBJECT_GROUPS = {
