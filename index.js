@@ -99,7 +99,7 @@ const OBJECTS_LIST_CYRILLIC = [
 ];
 
 // Список должностей
-const BASE_POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто'];
+const BASE_POSITIONS_LIST = ['производитель работ', 'делопроизводитель', 'инженер по комплектации', 'инженер пто', 'другая'];
 
 function getPositionsList(userId) {
     const positions = [...BASE_POSITIONS_LIST];
@@ -110,7 +110,7 @@ function getPositionsList(userId) {
 }
 
 // Список организаций
-const ORGANIZATIONS_LIST = ['ООО "Регионакльный Строительный Холдинг"', 'ООО "Строительные Системы"', 'ООО "РемонтСервис"'];
+const ORGANIZATIONS_LIST = ['ООО "СтройТех"', 'АО "НефтеГаз"', 'ИП Иванов', 'ООО "Прогресс"'];
 
 // Группы для объектов
 const OBJECT_GROUPS = {
@@ -333,6 +333,9 @@ async function showProfile(ctx) {
         ? validObjects.map(obj => `${obj}`).join('\n')
         : 'Не выбраны';
 
+    // Определяем эмодзи для статуса
+    const statusEmoji = user.status === 'в работе' ? '🟢' : user.status === 'в отпуске' ? '🔴' : '⏳';
+
     await deletePreviousMessage(ctx, userId);
 
     const profileText = `
@@ -346,7 +349,7 @@ async function showProfile(ctx) {
 
 ${objectsList}  
 
-⏳ ${user.status || 'Не указан'}  
+${statusEmoji} ${user.status || 'Не указан'}  
 ➖➖➖➖➖➖➖➖➖➖➖
 `.trim();
 
@@ -1293,7 +1296,7 @@ app.use((req, res, next) => {
     next();
 });
 
-app.get('/', (req, res) => res.send('Telegram bot is running'));
+app.get('/', (req, res) => res.send(' Telegram bot is running'));
 
 app.use(bot.webhookCallback('/telegram-webhook'));
 
