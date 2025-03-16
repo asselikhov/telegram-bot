@@ -1492,11 +1492,12 @@ ${state.report.materials}
 ➖➖➖➖➖➖➖➖➖➖➖
             `.trim();
 
-            const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
-            if (state.report.groupMessageId) await deleteGroupMessage(groupChatId, state.report.groupMessageId);
+            // Переименовываем groupChatId для избежания конфликта
+            const adminGroupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
+            if (state.report.groupMessageId) await deleteGroupMessage(adminGroupChatId, state.report.groupMessageId);
             if (state.report.generalMessageId) await deleteGroupMessage(GENERAL_GROUP_CHAT_ID, state.report.generalMessageId);
 
-            const newGroupMessage = await bot.telegram.sendMessage(groupChatId, adminUpdatedReportText);
+            const newGroupMessage = await bot.telegram.sendMessage(adminGroupChatId, adminUpdatedReportText);
             const newGeneralMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, adminUpdatedReportText);
 
             state.report.groupMessageId = newGroupMessage.message_id;
