@@ -408,7 +408,7 @@ async function downloadReportFile(ctx, objectIndex) {
             return;
         }
 
-        await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой результата
+        await deletePreviousMessage(ctx, userId);
         await ctx.replyWithDocument({
             source: Buffer.from(reportText, 'utf-8'),
             filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
@@ -417,7 +417,7 @@ async function downloadReportFile(ctx, objectIndex) {
         ]));
     } catch (err) {
         console.error('Ошибка при выгрузке отчета:', err.message);
-        await deletePreviousMessage(ctx, userId); // Удаляем перед отправкой ошибки
+        await deletePreviousMessage(ctx, userId);
         const message = await ctx.reply('Произошла ошибка при выгрузке отчета.', Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
         ]));
@@ -425,7 +425,6 @@ async function downloadReportFile(ctx, objectIndex) {
     }
 }
 
-// Команда /getreport с удалением предыдущих сообщений
 bot.command('getreport', async (ctx) => {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
@@ -448,7 +447,7 @@ bot.command('getreport', async (ctx) => {
     const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
         [Markup.button.callback(obj, `download_report_by_object_${index}`)]
     );
-    await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой списка объектов
+    await deletePreviousMessage(ctx, userId);
     const message = await ctx.reply(
         '📤 Выберите объект для выгрузки отчета:',
         Markup.inlineKeyboard(buttons)
@@ -456,7 +455,6 @@ bot.command('getreport', async (ctx) => {
     updateLastMessageId(ctx, userId, message);
 });
 
-// Обработка выбора объекта и выгрузка отчета с удалением предыдущих сообщений
 bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
     const objectIndex = parseInt(ctx.match[1], 10);
@@ -498,7 +496,7 @@ bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
                 return `${timestamp}\n${row.objectname}\n${row.position} ${row.organization} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n${row.materials}\n--------------------------\n`;
             }).join('');
 
-            await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой результата
+            await deletePreviousMessage(ctx, userId);
             await ctx.replyWithDocument({
                 source: Buffer.from(reportText, 'utf-8'),
                 filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
@@ -520,7 +518,6 @@ bot.start(async (ctx) => {
     const userId = ctx.from.id.toString();
     const chatType = ctx.chat.type;
 
-    // Проверяем, что команда вызвана в личном чате
     if (chatType !== 'private') {
         await deletePreviousMessage(ctx, userId);
         const message = await ctx.reply('Команда /start доступна только в личных сообщениях с ботом.');
@@ -647,13 +644,9 @@ bot.action('confirm_objects', async (ctx) => {
             `НОВАЯ ЗАЯВКА  
 ➖➖➖➖➖➖➖➖➖➖➖  
 📋 ${users[userId].position || 'Не указана'}  
-
-🏢 ${users[userId].organization || 'Не указана'}
-  
-👷 ${users[userId].fullName}
-  
-${users[userId].selectedObjects.map(obj => `   · ${obj}`).join('\n')}
-  
+🏢 ${users[userId].organization || 'Не указана'}  
+👷 ${users[userId].fullName}  
+${users[userId].selectedObjects.map(obj => `   · ${obj}`).join('\n')}  
 🆔 ${userId}  
 ➖➖➖➖➖➖➖➖➖➖➖`,
             Markup.inlineKeyboard([
@@ -892,13 +885,9 @@ async function showAdminPanel(ctx) {
             `ЗАЯВКА #${index + 1}  
 ➖➖➖➖➖➖➖➖➖➖➖  
 📋 ДОЛЖНОСТЬ: ${u.position}  
-
 🏢 ОРГАНИЗАЦИЯ: ${u.organization}  
-
 👷 ФИО: ${u.fullName}  
-
 📍 ОБЪЕКТЫ:\n${u.objects}  
-
 🆔 ID: ${u.userId}  
 ➖➖➖➖➖➖➖➖➖➖➖`
         ).join('\n\n');
@@ -913,10 +902,124 @@ async function showAdminPanel(ctx) {
             ])
         );
     }
+    buttons.push([Markup.button.callback('✏️ Редактировать отчеты', 'edit_reports_admin')]);
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
     const message = await ctx.reply(adminText, Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
+}
+
+async function showAdminReports(ctx) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    await deletePreviousMessage(ctx, userId);
+
+    const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
+        [Markup.button.callback(obj, `admin_reports_by_object_${index}`)]
+    );
+    buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
+
+    const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
+    updateLastMessageId(ctx, userId, message);
+}
+
+async function showAdminReportsByObject(ctx, objectIndex) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
+    await deletePreviousMessage(ctx, userId);
+
+    if (!objectName) {
+        const message = await ctx.reply('Ошибка: объект не найден.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
+        ]));
+        updateLastMessageId(ctx, userId, message);
+        return;
+    }
+
+    const client = await pool.connect();
+    try {
+        const res = await client.query(
+            'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp DESC',
+            [objectName]
+        );
+
+        if (res.rows.length === 0) {
+            const message = await ctx.reply(`Нет отчетов для объекта "${objectName}".`, Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
+            ]));
+            updateLastMessageId(ctx, userId, message);
+            return;
+        }
+
+        const buttons = res.rows.map(row => {
+            const dateTime = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+            return [Markup.button.callback(`${dateTime} - ${row.fullname}`, `admin_edit_report_${row.reportid}`)];
+        });
+        buttons.push([Markup.button.callback('↩️ Назад', 'edit_reports_admin')]);
+
+        const message = await ctx.reply(`Отчеты для объекта "${objectName}":`, Markup.inlineKeyboard(buttons));
+        updateLastMessageId(ctx, userId, message);
+    } catch (err) {
+        console.error('Ошибка загрузки отчетов:', err.message);
+        const message = await ctx.reply('Ошибка при загрузке отчетов.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
+        ]));
+        updateLastMessageId(ctx, userId, message);
+    } finally {
+        client.release();
+    }
+}
+
+async function startAdminEditReport(ctx, reportId) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    await deletePreviousMessage(ctx, userId);
+
+    const client = await pool.connect();
+    try {
+        const res = await client.query(
+            'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId WHERE r.reportId = $1',
+            [reportId]
+        );
+        const report = res.rows[0];
+        if (!report) {
+            const message = await ctx.reply('Отчет не найден.', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
+            ]));
+            updateLastMessageId(ctx, userId, message);
+            return;
+        }
+
+        userStates[userId] = {
+            step: 'adminEditObject',
+            reportId: report.reportid,
+            report: {
+                objectName: report.objectname,
+                workDone: report.workdone,
+                materials: report.materials,
+                date: report.date,
+                timestamp: report.timestamp,
+                groupMessageId: report.groupmessageid,
+                generalMessageId: report.generalmessageid,
+                userId: report.userid
+            }
+        };
+
+        const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
+            [Markup.button.callback(obj, `admin_edit_object_${index}`)]
+        );
+        const message = await ctx.reply(`Текущий объект: ${report.objectname}\nВыберите новый объект:`, Markup.inlineKeyboard(buttons));
+        updateLastMessageId(ctx, userId, message);
+    } catch (err) {
+        console.error('Ошибка при загрузке отчета:', err.message);
+        const message = await ctx.reply('Ошибка при загрузке отчета.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
+        ]));
+        updateLastMessageId(ctx, userId, message);
+    } finally {
+        client.release();
+    }
 }
 
 bot.command('approve', async (ctx) => {
@@ -952,7 +1055,6 @@ bot.command('test', async (ctx) => {
     updateLastMessageId(ctx, userId, message);
 });
 
-// Команда listproducers с удалением предыдущих сообщений
 bot.command('listproducers', async (ctx) => {
     const userId = ctx.from.id.toString();
     try {
@@ -962,7 +1064,7 @@ bot.command('listproducers', async (ctx) => {
             [Markup.button.callback(obj, `show_producers_${index}`)]
         );
 
-        await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой списка объектов
+        await deletePreviousMessage(ctx, userId);
         const message = await ctx.reply(
             '👷‍♂️ Выберите объект для просмотра производителей работ:',
             Markup.inlineKeyboard(buttons)
@@ -976,7 +1078,6 @@ bot.command('listproducers', async (ctx) => {
     }
 });
 
-// Обработка выбора объекта и показ производителей с удалением предыдущих сообщений
 bot.action(/show_producers_(\d+)/, async (ctx) => {
     const userId = ctx.from.id.toString();
     try {
@@ -997,7 +1098,6 @@ bot.action(/show_producers_(\d+)/, async (ctx) => {
                 ['Производитель работ', 1]
             );
 
-            // Фильтруем производителей по выбранному объекту
             const filteredProducers = res.rows.filter(row => {
                 const objects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
                 return objects.includes(selectedObject);
@@ -1006,8 +1106,7 @@ bot.action(/show_producers_(\d+)/, async (ctx) => {
             if (filteredProducers.length === 0) {
                 await deletePreviousMessage(ctx, userId);
                 const message = await ctx.reply(
-                    `👷‍♂️ Производители работ на объекте "${selectedObject}" не найдены.\n` +
-                    `➖➖➖➖➖➖➖➖➖➖➖`,
+                    `👷‍♂️ Производители работ на объекте "${selectedObject}" не найдены.\n➖➖➖➖➖➖➖➖➖➖➖`,
                     Markup.inlineKeyboard([
                         [Markup.button.callback('🔙 Выбрать другой объект', 'back_to_list')]
                     ])
@@ -1023,14 +1122,9 @@ bot.action(/show_producers_(\d+)/, async (ctx) => {
                 return `${index + 1}. ${fullName}\n\n   ${organization}\n\n   ${status}`;
             }).join('\n\n');
 
-            await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой результата
+            await deletePreviousMessage(ctx, userId);
             const message = await ctx.reply(
-                `👷‍♂️ ПРОИЗВОДИТЕЛИ РАБОТ\n` +
-                `🏢 ${selectedObject}\n` +
-                `➖➖➖➖➖➖➖➖➖➖➖\n` +
-                `${producerList}\n` +
-                `➖➖➖➖➖➖➖➖➖➖➖\n` +
-                `Всего: ${filteredProducers.length}`,
+                `👷‍♂️ ПРОИЗВОДИТЕЛИ РАБОТ\n🏢 ${selectedObject}\n➖➖➖➖➖➖➖➖➖➖➖\n${producerList}\n➖➖➖➖➖➖➖➖➖➖➖\nВсего: ${filteredProducers.length}`,
                 Markup.inlineKeyboard([
                     [Markup.button.callback('🔙 Выбрать другой объект', 'back_to_list')]
                 ])
@@ -1048,7 +1142,6 @@ bot.action(/show_producers_(\d+)/, async (ctx) => {
     }
 });
 
-// Возврат к списку объектов с удалением предыдущих сообщений
 bot.action('back_to_list', async (ctx) => {
     const userId = ctx.from.id.toString();
     try {
@@ -1056,7 +1149,7 @@ bot.action('back_to_list', async (ctx) => {
             [Markup.button.callback(obj, `show_producers_${index}`)]
         );
 
-        await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед возвратом к списку
+        await deletePreviousMessage(ctx, userId);
         const message = await ctx.reply(
             '👷‍♂️ Выберите объект для просмотра производителей работ:',
             Markup.inlineKeyboard(buttons)
@@ -1206,6 +1299,29 @@ bot.action(/edit_object_(\d+)/, async (ctx) => {
     updateLastMessageId(ctx, userId, message);
 });
 
+bot.action('edit_reports_admin', showAdminReports);
+bot.action(/admin_reports_by_object_(\d+)/, async (ctx) => {
+    const objectIndex = parseInt(ctx.match[1], 10);
+    await showAdminReportsByObject(ctx, objectIndex);
+});
+bot.action(/admin_edit_report_(.+)/, async (ctx) => {
+    const reportId = ctx.match[1];
+    await startAdminEditReport(ctx, reportId);
+});
+bot.action(/admin_edit_object_(\d+)/, async (ctx) => {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    const objectIndex = parseInt(ctx.match[1], 10);
+    const selectedObject = OBJECTS_LIST_CYRILLIC[objectIndex];
+    if (!selectedObject) return;
+
+    await deletePreviousMessage(ctx, userId);
+    userStates[userId].report.objectName = selectedObject;
+    userStates[userId].step = 'adminEditWorkDone';
+    const message = await ctx.reply(`Текущие работы:\n${userStates[userId].report.workDone}\nВведите новые выполненные работы (или "работы не производились"):`);
+    updateLastMessageId(ctx, userId, message);
+});
+
 bot.on('text', async (ctx) => {
     if (ctx.message.text.startsWith('/')) return;
 
@@ -1284,10 +1400,8 @@ bot.on('text', async (ctx) => {
 🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
 👷 ИТР: ${users[userId].fullName}  
-
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
 ${state.report.workDone}  
-
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 ${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
@@ -1326,10 +1440,8 @@ ${state.report.materials}
 🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖
 👷 ${users[userId].fullName}  
-
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ: 
 ${state.report.workDone}  
-
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 ${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
@@ -1355,6 +1467,54 @@ ${state.report.materials}
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ К отчетам', 'view_reports')]])
             );
             updateLastMessageId(ctx, userId, updatedMsg);
+            break;
+        case 'adminEditObject':
+            break;
+        case 'adminEditWorkDone':
+            state.report.workDone = ctx.message.text.trim();
+            userStates[userId].step = 'adminEditMaterials';
+            const message = await ctx.reply(`Текущие материалы:\n${state.report.materials}\nВведите новые материалы (или "доставки не было"):`);
+            updateLastMessageId(ctx, userId, message);
+            break;
+        case 'adminEditMaterials':
+            state.report.materials = ctx.message.text.trim();
+            state.report.timestamp = new Date().toISOString();
+
+            const adminUpdatedReportText = `
+📅 ОТЧЕТ ЗА ${state.report.date} (ОБНОВЛЕН АДМИНОМ)  
+🏢 ${state.report.objectName}  
+➖➖➖➖➖➖➖➖➖➖➖
+👷 ${users[state.report.userId].fullName}  
+🔧 ВЫПОЛНЕННЫЕ РАБОТЫ: 
+${state.report.workDone}  
+📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+${state.report.materials}  
+➖➖➖➖➖➖➖➖➖➖➖
+            `.trim();
+
+            const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
+            if (state.report.groupMessageId) await deleteGroupMessage(groupChatId, state.report.groupMessageId);
+            if (state.report.generalMessageId) await deleteGroupMessage(GENERAL_GROUP_CHAT_ID, state.report.generalMessageId);
+
+            const newGroupMessage = await bot.telegram.sendMessage(groupChatId, adminUpdatedReportText);
+            const newGeneralMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, adminUpdatedReportText);
+
+            state.report.groupMessageId = newGroupMessage.message_id;
+            state.report.generalMessageId = newGeneralMessage.message_id;
+
+            await saveReport(state.report.userId, state.report);
+
+            delete userStates[userId];
+
+            const adminUpdatedMsg = await ctx.reply(
+                `Отчет обновлен:\n🏢 Объект: ${state.report.objectName}\n🔧 Работы:\n${state.report.workDone}\n📦 Материалы:\n${state.report.materials}`,
+                Markup.inlineKeyboard([[Markup.button.callback('↩️ К списку отчетов', 'edit_reports_admin')]])
+            );
+            updateLastMessageId(ctx, userId, adminUpdatedMsg);
+
+            await bot.telegram.sendMessage(state.report.userId,
+                `Ваш отчет за ${state.report.date} для объекта "${state.report.objectName}" был изменен администратором.\nНовые данные:\n🔧 Работы: ${state.report.workDone}\n📦 Материалы: ${state.report.materials}`
+            );
             break;
     }
 });
