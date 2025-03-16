@@ -909,19 +909,65 @@ async function showAdminPanel(ctx) {
     updateLastMessageId(ctx, userId, message);
 }
 
+// Обновленная функция showAdminReports
 async function showAdminReports(ctx) {
     const userId = ctx.from.id.toString();
     if (userId !== ADMIN_ID) return;
     await deletePreviousMessage(ctx, userId);
 
-    const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
-        [Markup.button.callback(obj, `admin_reports_by_object_${index}`)]
-    );
+    const buttons = [
+        ...OBJECTS_LIST_CYRILLIC.map((obj, index) =>
+            [Markup.button.callback(obj, `admin_reports_by_object_${index}`)]
+        ),
+        [Markup.button.callback('Общая группа', 'admin_reports_general_group')]
+    ];
     buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
 
-    const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply('Выберите объект или общую группу для просмотра отчетов:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
+
+// Новая функция для отчетов из GENERAL_GROUP_CHAT_ID
+async function showAdminReportsGeneralGroup(ctx) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    await deletePreviousMessage(ctx, userId);
+
+    const client = await pool.connect();
+    try {
+        const res = await client.query(
+            'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId WHERE r.generalMessageId IS NOT NULL ORDER BY r.timestamp DESC'
+        );
+
+        if (res.rows.length === 0) {
+            const message = await ctx.reply(`Нет отчетов в общей группе (${GENERAL_GROUP_CHAT_ID}).`, Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
+            ]));
+            updateLastMessageId(ctx, userId, message);
+            return;
+        }
+
+        const buttons = res.rows.map(row => {
+            const dateTime = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+            return [Markup.button.callback(`${dateTime} - ${row.fullname} (${row.objectname})`, `admin_edit_report_${row.reportid}`)];
+        });
+        buttons.push([Markup.button.callback('↩️ Назад', 'edit_reports_admin')]);
+
+        const message = await ctx.reply(`Отчеты из общей группы (${GENERAL_GROUP_CHAT_ID}):`, Markup.inlineKeyboard(buttons));
+        updateLastMessageId(ctx, userId, message);
+    } catch (err) {
+        console.error('Ошибка загрузки отчетов из общей группы:', err.message);
+        const message = await ctx.reply('Ошибка при загрузке отчетов.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
+        ]));
+        updateLastMessageId(ctx, userId, message);
+    } finally {
+        client.release();
+    }
+}
+
+// Добавляем обработчик для новой кнопки
+bot.action('admin_reports_general_group', showAdminReportsGeneralGroup);
 
 async function showAdminReportsByObject(ctx, objectIndex) {
     const userId = ctx.from.id.toString();
