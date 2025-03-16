@@ -981,11 +981,12 @@ async function showAdminReportsGeneralGroup(ctx) {
 
     const client = await pool.connect();
     try {
+        // Получаем все отчеты из базы данных
         const res = await client.query(
             'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId ORDER BY r.timestamp DESC'
         );
 
-        console.log('Отчеты из базы данных:', res.rows); // Отладочный вывод
+        console.log('Все отчеты из базы данных:', res.rows.length, 'записей'); // Отладочный вывод
 
         if (res.rows.length === 0) {
             const message = await ctx.reply(`Нет отчетов в базе данных.`, Markup.inlineKeyboard([
@@ -995,23 +996,37 @@ async function showAdminReportsGeneralGroup(ctx) {
             return;
         }
 
-        const generalGroupReports = res.rows.filter(row => row.generalmessageid !== null);
+        // Фильтруем отчеты, которые потенциально относятся к общей группе
+        // Учитываем только те, где generalMessageId не null или где отчет мог быть отправлен в GENERAL_GROUP_CHAT_ID
+        const generalGroupReports = res.rows.filter(row => {
+            const hasGeneralMessageId = row.generalmessageid !== null && row.generalmessageid !== undefined;
+            return hasGeneralMessageId; // Оставляем только отчеты с generalMessageId
+        });
+
+        console.log(`Найдено отчетов для общей группы (${GENERAL_GROUP_CHAT_ID}):`, generalGroupReports.length);
 
         if (generalGroupReports.length === 0) {
-            const message = await ctx.reply(`Нет отчетов в общей группе (${GENERAL_GROUP_CHAT_ID}). Возможно, generalMessageId не заполнен.`, Markup.inlineKeyboard([
-                [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
-            ]));
+            const message = await ctx.reply(
+                `Нет отчетов в общей группе (${GENERAL_GROUP_CHAT_ID}). Возможно, они не были отправлены или generalMessageId не заполнен.`,
+                Markup.inlineKeyboard([
+                    [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
+                ])
+            );
             updateLastMessageId(ctx, userId, message);
             return;
         }
 
+        // Формируем кнопки для каждого отчета
         const buttons = generalGroupReports.map(row => {
             const dateTime = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
             return [Markup.button.callback(`${dateTime} - ${row.fullname} (${row.objectname})`, `admin_edit_report_${row.reportid}`)];
         });
         buttons.push([Markup.button.callback('↩️ Назад', 'edit_reports_admin')]);
 
-        const message = await ctx.reply(`Отчеты из общей группы (${GENERAL_GROUP_CHAT_ID}):`, Markup.inlineKeyboard(buttons));
+        const message = await ctx.reply(
+            `Отчеты из общей группы (${GENERAL_GROUP_CHAT_ID}):`,
+            Markup.inlineKeyboard(buttons)
+        );
         updateLastMessageId(ctx, userId, message);
     } catch (err) {
         console.error('Ошибка загрузки отчетов из общей группы:', err.message);
