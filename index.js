@@ -1492,16 +1492,15 @@ ${state.report.materials}
 ➖➖➖➖➖➖➖➖➖➖➖
             `.trim();
 
-            // Переименовываем groupChatId для избежания конфликта
             const adminGroupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
             if (state.report.groupMessageId) await deleteGroupMessage(adminGroupChatId, state.report.groupMessageId);
             if (state.report.generalMessageId) await deleteGroupMessage(GENERAL_GROUP_CHAT_ID, state.report.generalMessageId);
 
-            const newGroupMessage = await bot.telegram.sendMessage(adminGroupChatId, adminUpdatedReportText);
-            const newGeneralMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, adminUpdatedReportText);
+            const adminNewGroupMessage = await bot.telegram.sendMessage(adminGroupChatId, adminUpdatedReportText);
+            const adminNewGeneralMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, adminUpdatedReportText);
 
-            state.report.groupMessageId = newGroupMessage.message_id;
-            state.report.generalMessageId = newGeneralMessage.message_id;
+            state.report.groupMessageId = adminNewGroupMessage.message_id;
+            state.report.generalMessageId = adminNewGeneralMessage.message_id;
 
             await saveReport(state.report.userId, state.report);
 
