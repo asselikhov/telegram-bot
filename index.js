@@ -3,6 +3,7 @@ const { Telegraf, Markup } = require('telegraf');
 const { Pool } = require('pg');
 const schedule = require('node-schedule');
 const express = require('express');
+const pRetry = require('p-retry'); // Добавлено для повторных попыток
 require('dotenv').config();
 
 // Логируем переменные окружения
@@ -213,6 +214,7 @@ async function saveReport(userId, report) {
             ON CONFLICT (reportId) DO UPDATE
             SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9
         `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId]);
+        console.log(`Сохранен отчет ${reportId}: generalMessageId = ${generalMessageId}`);
     } catch (err) {
         console.error('Ошибка сохранения отчета:', err.message);
         throw err;
@@ -263,6 +265,22 @@ async function deleteGroupMessage(chatId, messageId) {
 
 async function updateLastMessageId(ctx, userId, message) {
     lastMessageIds[userId] = message.message_id;
+}
+
+async function sendMessageWithRetry(chatId, text) {
+    return pRetry(
+        () => bot.telegram.sendMessage(chatId, text),
+        {
+            retries: 3,
+            onFailedAttempt: (error) => {
+                console.error(`Попытка отправки в ${chatId} не удалась: ${error.message}`);
+            },
+        }
+    ).catch(async (err) => {
+        console.error(`Не удалось отправить сообщение в ${chatId} после всех попыток: ${err.message}`);
+        await bot.telegram.sendMessage(ADMIN_ID, `⚠️ Ошибка: Не удалось отправить сообщение в ${chatId}. Проверьте права бота или ID группы.`);
+        throw err;
+    });
 }
 
 async function showPositionSelection(ctx, userId) {
@@ -918,11 +936,11 @@ async function showAdminReports(ctx) {
         ...OBJECTS_LIST_CYRILLIC.map((obj, index) =>
             [Markup.button.callback(obj, `admin_reports_by_object_${index}`)]
         ),
-        [Markup.button.callback('Общая группа', 'admin_reports_general_group')]
+        [Markup.button.callback('Все отчеты', 'admin_reports_general_group')]
     ];
     buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
 
-    const message = await ctx.reply('Выберите объект или общую группу для просмотра отчетов:', Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply('Выберите объект или просмотрите все отчеты:', Markup.inlineKeyboard(buttons));
     updateLastMessageId(ctx, userId, message);
 }
 
@@ -995,40 +1013,18 @@ async function showAdminReportsGeneralGroup(ctx) {
             return;
         }
 
-        const generalGroupReports = res.rows.filter(row => {
-            const hasGeneralMessageId = row.generalmessageid !== null && row.generalmessageid !== undefined;
-            return hasGeneralMessageId;
-        });
-
-        console.log(`Найдено отчетов для общей группы (${GENERAL_GROUP_CHAT_ID}):`, generalGroupReports.length);
-
-        if (generalGroupReports.length === 0) {
-            const message = await ctx.reply(
-                `Нет отчетов в общей группе (${GENERAL_GROUP_CHAT_ID}). Возможно, они не были отправлены или generalMessageId не заполнен.`,
-                Markup.inlineKeyboard([
-                    [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
-                ])
-            );
-            updateLastMessageId(ctx, userId, message);
-            return;
-        }
-
-        console.log('Формирование кнопок для отчетов:', generalGroupReports.length);
-        const buttons = generalGroupReports.map((row, index) => {
+        const buttons = res.rows.map((row) => {
             const dateTime = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            const shortText = `${row.fullname} (${row.objectname})`; // Укороченный текст для кнопки
-            console.log(`Кнопка ${index + 1}: ${dateTime} - ${shortText}`);
+            const shortText = `${row.fullname} (${row.objectname})`;
             return [Markup.button.callback(shortText, `admin_edit_report_${row.reportid}`)];
         });
         buttons.push([Markup.button.callback('↩️ Назад', 'edit_reports_admin')]);
 
-        console.log('Отправка сообщения с кнопками администратору в чат:', ctx.chat.id);
         const message = await ctx.reply(
-            `Отчеты из общей группы (${GENERAL_GROUP_CHAT_ID}):`,
+            `Все отчеты:`,
             Markup.inlineKeyboard(buttons)
         );
         updateLastMessageId(ctx, userId, message);
-        console.log('Сообщение успешно отправлено администратору в чат:', ctx.chat.id);
     } catch (err) {
         console.error('Ошибка в showAdminReportsGeneralGroup:', err.message, err.stack);
         const message = await ctx.reply('Ошибка при загрузке отчетов.', Markup.inlineKeyboard([
@@ -1482,14 +1478,14 @@ ${state.report.materials}
             const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
 
             try {
-                const groupMessage = await bot.telegram.sendMessage(groupChatId, reportText);
+                const groupMessage = await sendMessageWithRetry(groupChatId, reportText);
                 report.groupMessageId = groupMessage.message_id;
             } catch (err) {
                 console.error(`Ошибка отправки отчета в группу ${groupChatId}:`, err.message);
             }
 
             try {
-                const generalMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText);
+                const generalMessage = await sendMessageWithRetry(GENERAL_GROUP_CHAT_ID, reportText);
                 report.generalMessageId = generalMessage.message_id;
             } catch (err) {
                 console.error(`Ошибка отправки отчета в общую группу ${GENERAL_GROUP_CHAT_ID}:`, err.message);
@@ -1538,8 +1534,8 @@ ${state.report.materials}
             if (oldReport.groupMessageId) await deleteGroupMessage(updatedGroupChatId, oldReport.groupMessageId);
             if (oldReport.generalMessageId) await deleteGroupMessage(GENERAL_GROUP_CHAT_ID, oldReport.generalMessageId);
 
-            const newGroupMessage = await bot.telegram.sendMessage(updatedGroupChatId, updatedReportText);
-            const newGeneralMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, updatedReportText);
+            const newGroupMessage = await sendMessageWithRetry(updatedGroupChatId, updatedReportText);
+            const newGeneralMessage = await sendMessageWithRetry(GENERAL_GROUP_CHAT_ID, updatedReportText);
 
             state.report.groupMessageId = newGroupMessage.message_id;
             state.report.generalMessageId = newGeneralMessage.message_id;
@@ -1583,8 +1579,8 @@ ${state.report.materials}
             if (state.report.groupMessageId) await deleteGroupMessage(adminGroupChatId, state.report.groupMessageId);
             if (state.report.generalMessageId) await deleteGroupMessage(GENERAL_GROUP_CHAT_ID, state.report.generalMessageId);
 
-            const adminNewGroupMessage = await bot.telegram.sendMessage(adminGroupChatId, adminUpdatedReportText);
-            const adminNewGeneralMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, adminUpdatedReportText);
+            const adminNewGroupMessage = await sendMessageWithRetry(adminGroupChatId, adminUpdatedReportText);
+            const adminNewGeneralMessage = await sendMessageWithRetry(GENERAL_GROUP_CHAT_ID, adminUpdatedReportText);
 
             state.report.groupMessageId = adminNewGroupMessage.message_id;
             state.report.generalMessageId = adminNewGeneralMessage.message_id;
@@ -1670,7 +1666,6 @@ schedule.scheduleJob({ hour: 19, minute: 0, tz: 'Europe/Moscow' }, async () => {
         }
     }
 });
-
 
 app.use(express.json());
 
