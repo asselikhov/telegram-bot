@@ -986,7 +986,7 @@ async function showAdminReportsGeneralGroup(ctx) {
             'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId ORDER BY r.timestamp DESC'
         );
 
-        console.log('Все отчеты из базы данных:', res.rows.length, 'записей'); // Отладочный вывод
+        console.log('Все отчеты из базы данных:', res.rows.length, 'записей');
 
         if (res.rows.length === 0) {
             const message = await ctx.reply(`Нет отчетов в базе данных.`, Markup.inlineKeyboard([
@@ -996,11 +996,10 @@ async function showAdminReportsGeneralGroup(ctx) {
             return;
         }
 
-        // Фильтруем отчеты, которые потенциально относятся к общей группе
-        // Учитываем только те, где generalMessageId не null или где отчет мог быть отправлен в GENERAL_GROUP_CHAT_ID
+        // Фильтруем отчеты для общей группы
         const generalGroupReports = res.rows.filter(row => {
             const hasGeneralMessageId = row.generalmessageid !== null && row.generalmessageid !== undefined;
-            return hasGeneralMessageId; // Оставляем только отчеты с generalMessageId
+            return hasGeneralMessageId;
         });
 
         console.log(`Найдено отчетов для общей группы (${GENERAL_GROUP_CHAT_ID}):`, generalGroupReports.length);
@@ -1016,20 +1015,25 @@ async function showAdminReportsGeneralGroup(ctx) {
             return;
         }
 
-        // Формируем кнопки для каждого отчета
-        const buttons = generalGroupReports.map(row => {
+        // Формируем кнопки
+        console.log('Формирование кнопок для отчетов:', generalGroupReports.length);
+        const buttons = generalGroupReports.map((row, index) => {
             const dateTime = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
+            console.log(`Кнопка ${index + 1}: ${dateTime} - ${row.fullname} (${row.objectname})`);
             return [Markup.button.callback(`${dateTime} - ${row.fullname} (${row.objectname})`, `admin_edit_report_${row.reportid}`)];
         });
         buttons.push([Markup.button.callback('↩️ Назад', 'edit_reports_admin')]);
 
+        // Отправляем сообщение с кнопками
+        console.log('Отправка сообщения с кнопками администратору');
         const message = await ctx.reply(
             `Отчеты из общей группы (${GENERAL_GROUP_CHAT_ID}):`,
             Markup.inlineKeyboard(buttons)
         );
         updateLastMessageId(ctx, userId, message);
+        console.log('Сообщение успешно отправлено администратору');
     } catch (err) {
-        console.error('Ошибка загрузки отчетов из общей группы:', err.message);
+        console.error('Ошибка в showAdminReportsGeneralGroup:', err.message, err.stack);
         const message = await ctx.reply('Ошибка при загрузке отчетов.', Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', 'edit_reports_admin')]
         ]));
@@ -1479,11 +1483,20 @@ ${state.report.materials}
             `.trim();
 
             const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
-            const groupMessage = await bot.telegram.sendMessage(groupChatId, reportText);
-            const generalMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText);
 
-            report.groupMessageId = groupMessage.message_id;
-            report.generalMessageId = generalMessage.message_id;
+            try {
+                const groupMessage = await bot.telegram.sendMessage(groupChatId, reportText);
+                report.groupMessageId = groupMessage.message_id;
+            } catch (err) {
+                console.error(`Ошибка отправки отчета в группу ${groupChatId}:`, err.message);
+            }
+
+            try {
+                const generalMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText);
+                report.generalMessageId = generalMessage.message_id;
+            } catch (err) {
+                console.error(`Ошибка отправки отчета в общую группу ${GENERAL_GROUP_CHAT_ID}:`, err.message);
+            }
 
             console.log(`Создан отчет ${reportId}: groupMessageId = ${report.groupMessageId}, generalMessageId = ${report.generalMessageId}`);
 
@@ -1660,6 +1673,7 @@ schedule.scheduleJob({ hour: 19, minute: 0, tz: 'Europe/Moscow' }, async () => {
         }
     }
 });
+
 
 app.use(express.json());
 
