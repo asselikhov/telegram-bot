@@ -1453,9 +1453,11 @@ bot.on('text', async (ctx) => {
 📅 ОТЧЕТ ЗА ${date}  
 🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ИТР: ${users[userId].fullName}  
+👷 ИТР: ${users[userId].fullName} 
+ 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
 ${state.report.workDone}  
+
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 ${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
@@ -1476,7 +1478,7 @@ ${state.report.materials}
             delete userStates[userId];
 
             const userReportMsg = await ctx.reply(
-                `✅ Ваш отчет опубликован:\n\n🏢 ${state.report.objectName}\n\n🔧 Выполненные работы:\n\n${state.report.workDone}\n\n📦 Поставленные материалы:\n\n${state.report.materials}`,
+                `✅ Ваш отчет опубликован:\n\n🏢 ${state.report.objectName}\n\n🔧 Выполненные работы:\n${state.report.workDone}\n\n📦 Поставленные материалы:\n${state.report.materials}`,
                 Markup.inlineKeyboard([[Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]])
             );
             updateLastMessageId(ctx, userId, userReportMsg);
@@ -1495,9 +1497,11 @@ ${state.report.materials}
 📅 ОТЧЕТ ЗА ${state.report.date} (ОБНОВЛЕН)  
 🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖
-👷 ${users[userId].fullName}  
+👷 ${users[userId].fullName} 
+ 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ: 
-${state.report.workDone}  
+${state.report.workDone} 
+ 
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 ${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
@@ -1540,9 +1544,11 @@ ${state.report.materials}
 📅 ОТЧЕТ ЗА ${state.report.date} (ОБНОВЛЕН АДМИНОМ)  
 🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖
-👷 ${users[state.report.userId].fullName}  
+👷 ${users[state.report.userId].fullName} 
+ 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ: 
-${state.report.workDone}  
+${state.report.workDone}
+  
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 ${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
