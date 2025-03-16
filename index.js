@@ -981,7 +981,6 @@ async function showAdminReportsGeneralGroup(ctx) {
 
     const client = await pool.connect();
     try {
-        // Получаем все отчеты из базы данных
         const res = await client.query(
             'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId ORDER BY r.timestamp DESC'
         );
@@ -996,7 +995,6 @@ async function showAdminReportsGeneralGroup(ctx) {
             return;
         }
 
-        // Фильтруем отчеты для общей группы
         const generalGroupReports = res.rows.filter(row => {
             const hasGeneralMessageId = row.generalmessageid !== null && row.generalmessageid !== undefined;
             return hasGeneralMessageId;
@@ -1015,23 +1013,22 @@ async function showAdminReportsGeneralGroup(ctx) {
             return;
         }
 
-        // Формируем кнопки
         console.log('Формирование кнопок для отчетов:', generalGroupReports.length);
         const buttons = generalGroupReports.map((row, index) => {
             const dateTime = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            console.log(`Кнопка ${index + 1}: ${dateTime} - ${row.fullname} (${row.objectname})`);
-            return [Markup.button.callback(`${dateTime} - ${row.fullname} (${row.objectname})`, `admin_edit_report_${row.reportid}`)];
+            const shortText = `${row.fullname} (${row.objectname})`; // Укороченный текст для кнопки
+            console.log(`Кнопка ${index + 1}: ${dateTime} - ${shortText}`);
+            return [Markup.button.callback(shortText, `admin_edit_report_${row.reportid}`)];
         });
         buttons.push([Markup.button.callback('↩️ Назад', 'edit_reports_admin')]);
 
-        // Отправляем сообщение с кнопками
-        console.log('Отправка сообщения с кнопками администратору');
+        console.log('Отправка сообщения с кнопками администратору в чат:', ctx.chat.id);
         const message = await ctx.reply(
             `Отчеты из общей группы (${GENERAL_GROUP_CHAT_ID}):`,
             Markup.inlineKeyboard(buttons)
         );
         updateLastMessageId(ctx, userId, message);
-        console.log('Сообщение успешно отправлено администратору');
+        console.log('Сообщение успешно отправлено администратору в чат:', ctx.chat.id);
     } catch (err) {
         console.error('Ошибка в showAdminReportsGeneralGroup:', err.message, err.stack);
         const message = await ctx.reply('Ошибка при загрузке отчетов.', Markup.inlineKeyboard([
