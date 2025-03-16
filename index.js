@@ -495,7 +495,7 @@ bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
 
             const reportText = res.rows.map(row => {
                 const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-                return `${timestamp}\n${row.objectname}\n${row.position} ${row.organization} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n\n${row.materials}\n--------------------------\n`;
+                return `${timestamp}\n${row.objectname}\n${row.position} ${row.organization} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n${row.materials}\n--------------------------\n`;
             }).join('');
 
             await deletePreviousMessage(ctx, userId); // Удаляем предыдущее сообщение перед отправкой результата
