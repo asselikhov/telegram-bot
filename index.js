@@ -3,7 +3,6 @@ const { Telegraf, Markup } = require('telegraf');
 const { Pool } = require('pg');
 const schedule = require('node-schedule');
 const express = require('express');
-const pRetry = require('p-retry'); // Добавлено для повторных попыток
 require('dotenv').config();
 
 // Логируем переменные окружения
@@ -22,7 +21,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Константы
-const ADMIN_ID = process.env.ADMIN_ID || 'YOUR_ADMIN_ID';
+const ADMIN_ID = process.env.ADMIN_ID || 'YOUR_ADMIN_ID'; // Убедитесь, что это строка в .env
 const GENERAL_GROUP_CHAT_ID = '-1002266023014';
 
 // Подключение к PostgreSQL
@@ -151,6 +150,7 @@ async function loadUsers() {
                 reports: {}
             };
         });
+        console.log('Загружено пользователей:', Object.keys(users).length);
         return users;
     } catch (err) {
         console.error('Ошибка загрузки пользователей:', err.message);
@@ -176,6 +176,7 @@ async function loadUserReports(userId) {
                 generalMessageId: row.generalmessageid
             };
         });
+        console.log(`Загружено отчетов для userId ${userId}: ${Object.keys(reports).length}`);
         return reports;
     } catch (err) {
         console.error('Ошибка загрузки отчетов:', err.message);
@@ -196,6 +197,7 @@ async function saveUser(userId, userData) {
             ON CONFLICT (userId) DO UPDATE
             SET fullName = $2, position = $3, organization = $4, selectedObjects = $5, status = $6, isApproved = $7, nextReportId = $8
         `, [userId, fullName, position, organization, JSON.stringify(filteredObjects), status, isApproved ? 1 : 0, nextReportId]);
+        console.log(`Сохранен пользователь ${userId}`);
     } catch (err) {
         console.error('Ошибка сохранения пользователя:', err.message);
         throw err;
@@ -214,9 +216,9 @@ async function saveReport(userId, report) {
             ON CONFLICT (reportId) DO UPDATE
             SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9
         `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId]);
-        console.log(`Сохранен отчет ${reportId}: generalMessageId = ${generalMessageId}`);
+        console.log(`Успешно сохранен отчет ${reportId} для userId: ${userId}`);
     } catch (err) {
-        console.error('Ошибка сохранения отчета:', err.message);
+        console.error('Ошибка сохранения отчета:', err.message, err.stack);
         throw err;
     } finally {
         client.release();
@@ -265,22 +267,6 @@ async function deleteGroupMessage(chatId, messageId) {
 
 async function updateLastMessageId(ctx, userId, message) {
     lastMessageIds[userId] = message.message_id;
-}
-
-async function sendMessageWithRetry(chatId, text) {
-    return pRetry(
-        () => bot.telegram.sendMessage(chatId, text),
-        {
-            retries: 3,
-            onFailedAttempt: (error) => {
-                console.error(`Попытка отправки в ${chatId} не удалась: ${error.message}`);
-            },
-        }
-    ).catch(async (err) => {
-        console.error(`Не удалось отправить сообщение в ${chatId} после всех попыток: ${err.message}`);
-        await bot.telegram.sendMessage(ADMIN_ID, `⚠️ Ошибка: Не удалось отправить сообщение в ${chatId}. Проверьте права бота или ID группы.`);
-        throw err;
-    });
 }
 
 async function showPositionSelection(ctx, userId) {
@@ -873,7 +859,10 @@ ${report.materials}
 
 async function showAdminPanel(ctx) {
     const userId = ctx.from.id.toString();
-    if (userId !== ADMIN_ID) return;
+    if (userId !== ADMIN_ID) {
+        console.log(`Доступ к админ-панели запрещен для userId: ${userId}, ADMIN_ID: ${ADMIN_ID}`);
+        return;
+    }
     await deletePreviousMessage(ctx, userId);
 
     const users = await loadUsers();
@@ -929,7 +918,10 @@ async function showAdminPanel(ctx) {
 
 async function showAdminReports(ctx) {
     const userId = ctx.from.id.toString();
-    if (userId !== ADMIN_ID) return;
+    if (userId !== ADMIN_ID) {
+        console.log(`Доступ к редактированию отчетов запрещен для userId: ${userId}, ADMIN_ID: ${ADMIN_ID}`);
+        return;
+    }
     await deletePreviousMessage(ctx, userId);
 
     const buttons = [
@@ -994,16 +986,22 @@ async function showAdminReportsByObject(ctx, objectIndex) {
 
 async function showAdminReportsGeneralGroup(ctx) {
     const userId = ctx.from.id.toString();
-    if (userId !== ADMIN_ID) return;
+    if (userId !== ADMIN_ID) {
+        console.log(`Доступ к просмотру всех отчетов запрещен для userId: ${userId}, ADMIN_ID: ${ADMIN_ID}`);
+        console.log(`Тип userId: ${typeof userId}, тип ADMIN_ID: ${typeof ADMIN_ID}`);
+        return;
+    }
     await deletePreviousMessage(ctx, userId);
 
     const client = await pool.connect();
     try {
-        const res = await client.query(
-            'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId ORDER BY r.timestamp DESC'
-        );
+        // Упрощенный запрос для теста
+        const res = await client.query('SELECT * FROM reports ORDER BY timestamp DESC');
 
-        console.log('Все отчеты из базы данных:', res.rows.length, 'записей');
+        console.log(`Найдено отчетов: ${res.rows.length}`);
+        res.rows.forEach(row => {
+            console.log(`Отчет ${row.reportid}: userId=${row.userid}, objectName=${row.objectname}, timestamp=${row.timestamp}`);
+        });
 
         if (res.rows.length === 0) {
             const message = await ctx.reply(`Нет отчетов в базе данных.`, Markup.inlineKeyboard([
@@ -1013,9 +1011,14 @@ async function showAdminReportsGeneralGroup(ctx) {
             return;
         }
 
-        const buttons = res.rows.map((row) => {
+        // Если отчеты есть, добавляем JOIN для получения имени
+        const detailedRes = await client.query(
+            'SELECT r.*, u.fullName FROM reports r LEFT JOIN users u ON r.userId = u.userId ORDER BY r.timestamp DESC'
+        );
+
+        const buttons = detailedRes.rows.map((row) => {
             const dateTime = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            const shortText = `${row.fullname} (${row.objectname})`;
+            const shortText = `${row.fullname || 'Неизвестный пользователь'} (${row.objectname})`;
             return [Markup.button.callback(shortText, `admin_edit_report_${row.reportid}`)];
         });
         buttons.push([Markup.button.callback('↩️ Назад', 'edit_reports_admin')]);
@@ -1392,6 +1395,7 @@ bot.on('text', async (ctx) => {
     if (ctx.message.text.startsWith('/')) return;
 
     const userId = ctx.from.id.toString();
+    console.log(`Получен текст от userId: ${userId}`);
     const state = userStates[userId];
     const users = await loadUsers();
 
@@ -1477,23 +1481,27 @@ ${state.report.materials}
 
             const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
 
+            console.log(`Создание отчета ${reportId} для userId: ${userId}, объект: ${state.report.objectName}`);
+
             try {
-                const groupMessage = await sendMessageWithRetry(groupChatId, reportText);
+                const groupMessage = await bot.telegram.sendMessage(groupChatId, reportText);
                 report.groupMessageId = groupMessage.message_id;
+                console.log(`Сообщение отправлено в группу ${groupChatId}: ${report.groupMessageId}`);
             } catch (err) {
-                console.error(`Ошибка отправки отчета в группу ${groupChatId}:`, err.message);
+                console.error(`Ошибка отправки в группу ${groupChatId}:`, err.message);
             }
 
             try {
-                const generalMessage = await sendMessageWithRetry(GENERAL_GROUP_CHAT_ID, reportText);
+                const generalMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText);
                 report.generalMessageId = generalMessage.message_id;
+                console.log(`Сообщение отправлено в общую группу ${GENERAL_GROUP_CHAT_ID}: ${report.generalMessageId}`);
             } catch (err) {
-                console.error(`Ошибка отправки отчета в общую группу ${GENERAL_GROUP_CHAT_ID}:`, err.message);
+                console.error(`Ошибка отправки в общую группу ${GENERAL_GROUP_CHAT_ID}:`, err.message);
             }
-
-            console.log(`Создан отчет ${reportId}: groupMessageId = ${report.groupMessageId}, generalMessageId = ${report.generalMessageId}`);
 
             await saveReport(userId, report);
+            console.log(`Отчет ${reportId} сохранен в БД для userId: ${userId}`);
+
             await saveUser(userId, users[userId]);
 
             delete userStates[userId];
@@ -1534,8 +1542,8 @@ ${state.report.materials}
             if (oldReport.groupMessageId) await deleteGroupMessage(updatedGroupChatId, oldReport.groupMessageId);
             if (oldReport.generalMessageId) await deleteGroupMessage(GENERAL_GROUP_CHAT_ID, oldReport.generalMessageId);
 
-            const newGroupMessage = await sendMessageWithRetry(updatedGroupChatId, updatedReportText);
-            const newGeneralMessage = await sendMessageWithRetry(GENERAL_GROUP_CHAT_ID, updatedReportText);
+            const newGroupMessage = await bot.telegram.sendMessage(updatedGroupChatId, updatedReportText);
+            const newGeneralMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, updatedReportText);
 
             state.report.groupMessageId = newGroupMessage.message_id;
             state.report.generalMessageId = newGeneralMessage.message_id;
@@ -1579,8 +1587,8 @@ ${state.report.materials}
             if (state.report.groupMessageId) await deleteGroupMessage(adminGroupChatId, state.report.groupMessageId);
             if (state.report.generalMessageId) await deleteGroupMessage(GENERAL_GROUP_CHAT_ID, state.report.generalMessageId);
 
-            const adminNewGroupMessage = await sendMessageWithRetry(adminGroupChatId, adminUpdatedReportText);
-            const adminNewGeneralMessage = await sendMessageWithRetry(GENERAL_GROUP_CHAT_ID, adminUpdatedReportText);
+            const adminNewGroupMessage = await bot.telegram.sendMessage(adminGroupChatId, adminUpdatedReportText);
+            const adminNewGeneralMessage = await bot.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, adminUpdatedReportText);
 
             state.report.groupMessageId = adminNewGroupMessage.message_id;
             state.report.generalMessageId = adminNewGeneralMessage.message_id;
@@ -1633,8 +1641,6 @@ bot.action(/reject_(.+)/, async (ctx) => {
         client.release();
     }
 });
-
-const { scheduleJob } = require('node-schedule');
 
 schedule.scheduleJob({ hour: 19, minute: 0, tz: 'Europe/Moscow' }, async () => {
     console.log('Проверка отчетов в 19:00 МСК');
