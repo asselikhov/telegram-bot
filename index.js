@@ -843,18 +843,12 @@ async function viewReport(ctx, reportId) {
 📅 ОТЧЕТ ЗА ${report.date} (${time})
 🏢 ${report.objectName}
 ➖➖➖➖➖➖➖➖➖➖➖  
-📋 ${users[userId].position}  
-
-🏢 ${users[userId].organization}
-
-👷 ${users[userId].fullName}   
+👷 ИТР: ${users[userId].fullName}   
 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
-
 ${report.workDone}  
 
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-
 ${report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
 `.trim();
@@ -1289,18 +1283,12 @@ bot.on('text', async (ctx) => {
 📅 ОТЧЕТ ЗА ${date}  
 🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
-📋 ${users[userId].position}  
-
-🏢 ${users[userId].organization}
-
-👷 ${users[userId].fullName}  
+👷 ИТР: ${users[userId].fullName}  
 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
-
 ${state.report.workDone}  
 
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-
 ${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
             `.trim();
@@ -1337,17 +1325,12 @@ ${state.report.materials}
 📅 ОТЧЕТ ЗА ${state.report.date} (ОБНОВЛЕН)  
 🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖
-📋 ${users[userId].position}  
-
-🏢 ${users[userId].organization}
-  
 👷 ${users[userId].fullName}  
 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ: 
- ${state.report.workDone}  
+${state.report.workDone}  
 
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-
 ${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
             `.trim();
