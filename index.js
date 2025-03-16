@@ -518,6 +518,16 @@ bot.action(/download_report_by_object_(\d+)/, async (ctx) => {
 bot.start(async (ctx) => {
     console.log('Обработка команды /start');
     const userId = ctx.from.id.toString();
+    const chatType = ctx.chat.type;
+
+    // Проверяем, что команда вызвана в личном чате
+    if (chatType !== 'private') {
+        await deletePreviousMessage(ctx, userId);
+        const message = await ctx.reply('Команда /start доступна только в личных сообщениях с ботом.');
+        updateLastMessageId(ctx, userId, message);
+        return;
+    }
+
     const users = await loadUsers();
 
     if (!users[userId]) {
@@ -1334,8 +1344,7 @@ ${state.report.materials}
 👷 ${users[userId].fullName}  
 
 🔧 ВЫПОЛНЕННЫЕ РАБОТЫ: 
- 
-${state.report.workDone}  
+ ${state.report.workDone}  
 
 📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 
@@ -1397,7 +1406,9 @@ bot.action(/reject_(.+)/, async (ctx) => {
     }
 });
 
-schedule.scheduleJob('0 0 19 * * *', async () => {
+const { scheduleJob } = require('node-schedule');
+
+schedule.scheduleJob({ hour: 19, minute: 0, tz: 'Europe/Moscow' }, async () => {
     console.log('Проверка отчетов в 19:00 МСК');
     const today = new Date().toISOString().split('T')[0];
     const users = await loadUsers();
@@ -1411,18 +1422,18 @@ schedule.scheduleJob('0 0 19 * * *', async () => {
             user.status === 'В работе'
         ) {
             user.reports = await loadUserReports(userId);
-            const hasReportToday = Object.keys(user.reports).some(reportId => reportId.startsWith(today));
-            if (!hasReportToday) {
-                const objects = user.selectedObjects.length > 0
-                    ? user.selectedObjects.join('\n')
-                    : 'Не выбраны';
-                const groupChatId = user.selectedObjects.length > 0
-                    ? OBJECT_GROUPS[user.selectedObjects[0]] || GENERAL_GROUP_CHAT_ID
-                    : OBJECT_GROUPS['Кольцевой МНПП, 132км'];
-                bot.telegram.sendMessage(
-                    groupChatId,
-                    `⚠️ Напоминание\n${user.fullName}, вы не предоставили отчет за ${today} по объектам:\n${objects}. Пожалуйста, внесите данные.`
-                ).catch(err => console.error('Ошибка уведомления:', err));
+
+            for (const obj of user.selectedObjects) {
+                const hasReport = Object.values(user.reports).some(report =>
+                    report.date === today && report.objectName === obj
+                );
+                if (!hasReport) {
+                    const groupChatId = OBJECT_GROUPS[obj] || GENERAL_GROUP_CHAT_ID;
+                    bot.telegram.sendMessage(
+                        groupChatId,
+                        `⚠️ Напоминание\n${user.fullName}, вы не предоставили отчет за ${today}.\n\nПожалуйста, внесите данные.`
+                    ).catch(err => console.error('Ошибка уведомления:', err));
+                }
             }
         }
     }
