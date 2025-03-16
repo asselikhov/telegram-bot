@@ -256,7 +256,7 @@ async function deletePreviousMessage(ctx, userId) {
 async function deleteGroupMessage(chatId, messageId) {
     try {
         await bot.telegram.deleteMessage(chatId, messageId);
-    } ловить (ошибка) {
+    } catch (err) {
         console.error(`Ошибка удаления сообщения ${messageId} из группы ${chatId}:`, err.message);
     }
 }
