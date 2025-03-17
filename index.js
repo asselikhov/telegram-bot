@@ -216,7 +216,7 @@ async function saveReport(userId, report) {
             ON CONFLICT (reportId) DO UPDATE
             SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9
         `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId]);
-        console.log(`Успешно сохранен отчет ${reportId} для userId: ${userId}`);
+        console.log(`Успешно сохранен отчет ${reportId} для userId: ${userId}, objectName: ${objectName}`);
     } catch (err) {
         console.error('Ошибка сохранения отчета:', err.message, err.stack);
         throw err;
@@ -953,9 +953,14 @@ async function showAdminReportsByObject(ctx, objectIndex) {
     const client = await pool.connect();
     try {
         const res = await client.query(
-            'SELECT r.*, u.fullName FROM reports r JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp DESC',
+            'SELECT r.*, u.fullName FROM reports r LEFT JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp DESC',
             [objectName]
         );
+
+        console.log(`Найдено отчетов для объекта ${objectName}: ${res.rows.length}`);
+        res.rows.forEach(row => {
+            console.log(`Отчет ${row.reportid}: userId=${row.userid}, timestamp=${row.timestamp}, fullName=${row.fullname || 'Не найдено'}`);
+        });
 
         if (res.rows.length === 0) {
             const message = await ctx.reply(`Нет отчетов для объекта "${objectName}".`, Markup.inlineKeyboard([
@@ -967,7 +972,7 @@ async function showAdminReportsByObject(ctx, objectIndex) {
 
         const buttons = res.rows.map(row => {
             const dateTime = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return [Markup.button.callback(`${dateTime} - ${row.fullname}`, `admin_edit_report_${row.reportid}`)];
+            return [Markup.button.callback(`${dateTime} - ${row.fullname || 'Неизвестный пользователь'}`, `admin_edit_report_${row.reportid}`)];
         });
         buttons.push([Markup.button.callback('↩️ Назад', 'edit_reports_admin')]);
 
@@ -988,19 +993,19 @@ async function showAdminReportsGeneralGroup(ctx) {
     const userId = ctx.from.id.toString();
     if (userId !== ADMIN_ID) {
         console.log(`Доступ к просмотру всех отчетов запрещен для userId: ${userId}, ADMIN_ID: ${ADMIN_ID}`);
-        console.log(`Тип userId: ${typeof userId}, тип ADMIN_ID: ${typeof ADMIN_ID}`);
         return;
     }
     await deletePreviousMessage(ctx, userId);
 
     const client = await pool.connect();
     try {
-        // Упрощенный запрос для теста
-        const res = await client.query('SELECT * FROM reports ORDER BY timestamp DESC');
+        const res = await client.query(
+            'SELECT r.*, u.fullName FROM reports r LEFT JOIN users u ON r.userId = u.userId ORDER BY r.timestamp DESC'
+        );
 
         console.log(`Найдено отчетов: ${res.rows.length}`);
         res.rows.forEach(row => {
-            console.log(`Отчет ${row.reportid}: userId=${row.userid}, objectName=${row.objectname}, timestamp=${row.timestamp}`);
+            console.log(`Отчет ${row.reportid}: userId=${row.userid}, objectName=${row.objectname}, timestamp=${row.timestamp}, fullName=${row.fullname || 'Не найдено'}`);
         });
 
         if (res.rows.length === 0) {
@@ -1011,22 +1016,14 @@ async function showAdminReportsGeneralGroup(ctx) {
             return;
         }
 
-        // Если отчеты есть, добавляем JOIN для получения имени
-        const detailedRes = await client.query(
-            'SELECT r.*, u.fullName FROM reports r LEFT JOIN users u ON r.userId = u.userId ORDER BY r.timestamp DESC'
-        );
-
-        const buttons = detailedRes.rows.map((row) => {
+        const buttons = res.rows.map(row => {
             const dateTime = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            const shortText = `${row.fullname || 'Неизвестный пользователь'} (${row.objectname})`;
+            const shortText = `${row.fullname || 'Неизвестный пользователь'} (${row.objectname}) - ${dateTime}`;
             return [Markup.button.callback(shortText, `admin_edit_report_${row.reportid}`)];
         });
         buttons.push([Markup.button.callback('↩️ Назад', 'edit_reports_admin')]);
 
-        const message = await ctx.reply(
-            `Все отчеты:`,
-            Markup.inlineKeyboard(buttons)
-        );
+        const message = await ctx.reply(`Все отчеты:`, Markup.inlineKeyboard(buttons));
         updateLastMessageId(ctx, userId, message);
     } catch (err) {
         console.error('Ошибка в showAdminReportsGeneralGroup:', err.message, err.stack);
