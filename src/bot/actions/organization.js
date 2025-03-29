@@ -84,6 +84,8 @@ module.exports = (bot) => {
             return;
         }
 
+        console.log(`Проверяем шаг для userId ${userId}: ${state.step}`);
+
         if (state.step === 'customOrganizationInput') {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
