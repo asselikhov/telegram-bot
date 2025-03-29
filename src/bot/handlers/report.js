@@ -111,15 +111,17 @@ module.exports = (bot) => {
 
         await clearPreviousMessages(ctx, userId);
 
-        ctx.state.userStates[userId] = { step: 'workDone', report: { objectName: selectedObject } };
+        ctx.state.userStates[userId] = { step: 'workDone', report: { objectName: selectedObject }, messageIds: ctx.state.userStates[userId].messageIds };
         await ctx.reply('Введите наименование проделанных работ (или "работы не производились"):');
     });
 
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        // Добавляем проверку, что state существует и соответствует ожидаемому шагу
+        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". Текущее состояние:`, state);
+
         if (!state || (!state.step?.includes('workDone') && !state.step?.includes('materials') && !state.step?.includes('editFullName'))) {
+            await clearPreviousMessages(ctx, userId);
             await ctx.reply('Пожалуйста, начните процесс заново, используя команды или кнопки.');
             return;
         }
@@ -147,7 +149,10 @@ module.exports = (bot) => {
     bot.action('edit_fullName', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId] = { step: 'editFullName' };
+        // Сохраняем messageIds, чтобы не потерять их при перезаписи состояния
+        const existingMessageIds = ctx.state.userStates[userId]?.messageIds || [];
+        ctx.state.userStates[userId] = { step: 'editFullName', messageIds: existingMessageIds };
+        console.log(`Установлено состояние editFullName для userId ${userId}. State:`, ctx.state.userStates[userId]);
         await ctx.reply('Введите ваше новое ФИО:');
     });
 
