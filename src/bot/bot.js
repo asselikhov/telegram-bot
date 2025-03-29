@@ -15,7 +15,7 @@ const bot = new Telegraf(BOT_TOKEN);
 // Инициализация состояния пользователей
 const userStates = {};
 
-// Middleware для передачи состояния и управления сообщениями
+// Middleware для передачи состояния и перехвата ctx.reply
 bot.use((ctx, next) => {
   const userId = ctx.from?.id.toString();
   if (!userStates[userId]) {
@@ -27,13 +27,28 @@ bot.use((ctx, next) => {
     };
   }
   ctx.state.userStates = userStates;
+
+  // Сохраняем оригинальный ctx.reply
+  const originalReply = ctx.reply.bind(ctx);
+  // Перехватываем ctx.reply
+  ctx.reply = async (text, extra) => {
+    const message = await originalReply(text, extra);
+    if (userStates[userId]) {
+      userStates[userId].messageIds.push(message.message_id);
+      console.log(`Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Текущий массив:`, userStates[userId].messageIds);
+    } else {
+      console.log(`Ошибка: userStates для ${userId} не инициализировано при отправке сообщения`);
+    }
+    return message;
+  };
+
   return next();
 });
 
-// Перехватываем отправку сообщений для сохранения message_id
-const originalReply = bot.telegram.sendMessage.bind(bot.telegram);
+// Перехватываем ctx.telegram.sendMessage для случаев, когда он используется напрямую
+const originalSendMessage = bot.telegram.sendMessage.bind(bot.telegram);
 bot.telegram.sendMessage = async (chatId, text, extra) => {
-  const message = await originalReply(chatId, text, extra);
+  const message = await originalSendMessage(chatId, text, extra);
   const userId = chatId.toString();
   if (userStates[userId]) {
     userStates[userId].messageIds.push(message.message_id);
