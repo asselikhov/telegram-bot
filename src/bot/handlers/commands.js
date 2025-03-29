@@ -1,6 +1,5 @@
 const { Markup } = require('telegraf');
-const { loadUsers } = require('../../database/userModel'); // Исправлен путь
-const { OBJECTS_LIST_CYRILLIC } = require('../../config/config'); // Исправлен путь
+const { loadUsers } = require('../../database/userModel');
 
 module.exports = (bot) => {
     bot.command('test', (ctx) => ctx.reply('Бот работает!'));
@@ -17,6 +16,7 @@ module.exports = (bot) => {
         const producers = Object.values(users)
             .filter(u => u.position === 'Производитель работ' && u.isApproved && u.selectedObjects.includes(selectedObject))
             .map(u => `${u.fullName} (${u.organization}) - ${u.status}`);
+
         await ctx.reply(producers.length ? producers.join('\n') : 'Производители не найдены.');
     });
 };

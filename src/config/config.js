@@ -24,7 +24,7 @@ const OBJECT_GROUPS = {
 
 module.exports = {
     BOT_TOKEN: process.env.BOT_TOKEN,
-    ADMIN_ID: process.env.ADMIN_ID || '942851377',
+    ADMIN_ID: process.env.ADMIN_ID || 'YOUR_ADMIN_ID',
     DATABASE_URL: process.env.DATABASE_URL,
     PORT: process.env.PORT || 3000,
     OBJECTS_LIST_CYRILLIC,

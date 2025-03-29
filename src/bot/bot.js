@@ -1,93 +1,75 @@
-const { Telegraf, Markup } = require('telegraf');
-const { BOT_TOKEN, ADMIN_ID } = require('../../config/config'); // На два уровня вверх от src/bot/
-const { loadUsers, saveUser } = require('../../database/userModel'); // На два уровня вверх
-const { getState, resetState } = require('../../stateManager'); // На два уровня вверх
+const { Telegraf } = require('telegraf');
+const { BOT_TOKEN } = require('../config/config');
+const startHandler = require('./handlers/start');
+const menuHandler = require('./handlers/menu');
+const reportHandler = require('./handlers/report');
+const adminHandler = require('./handlers/admin');
+const commandsHandler = require('./handlers/commands');
+const positionActions = require('./actions/position');
+const organizationActions = require('./actions/organization');
+const objectsActions = require('./actions/objects');
+const statusActions = require('./actions/status');
 
 const bot = new Telegraf(BOT_TOKEN);
 
+// Инициализация состояния пользователей
+const userStates = {};
+
+// Middleware для передачи состояния и перехвата ctx.reply
 bot.use((ctx, next) => {
   const userId = ctx.from?.id.toString();
   if (!userId) {
     console.log('Ошибка: userId не определён в контексте:', ctx.from);
     return next();
   }
-  ctx.state = getState(userId);
+  if (!userStates[userId]) {
+    userStates[userId] = {
+      step: null,
+      selectedObjects: [],
+      report: {},
+      messageIds: []
+    };
+  }
+  ctx.state.userStates = userStates;
+
+  // Сохраняем оригинальный ctx.reply
   const originalReply = ctx.reply.bind(ctx);
   ctx.reply = async (text, extra) => {
     const message = await originalReply(text, extra);
-    ctx.state.messageIds.push(message.message_id);
+    if (userStates[userId]) {
+      userStates[userId].messageIds.push(message.message_id);
+      console.log(`[ctx.reply] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
+    } else {
+      console.log(`Ошибка: userStates для ${userId} не инициализировано при ctx.reply`);
+    }
     return message;
   };
+
   return next();
 });
 
-bot.on('text', async (ctx) => {
-  const userId = ctx.from.id.toString();
-  const state = ctx.state;
-
-  if (ctx.message.text === '/start') {
-    if (ctx.chat.type !== 'private') {
-      await ctx.reply('Команда /start доступна только в личных сообщениях с ботом.');
-      return;
-    }
-    const users = await loadUsers();
-    if (!users[userId]) {
-      users[userId] = {
-        fullName: '',
-        position: '',
-        organization: '',
-        selectedObjects: [],
-        status: 'В работе',
-        isApproved: false,
-        nextReportId: 1,
-        reports: {}
-      };
-      await saveUser(userId, users[userId]);
-      state.step = 'selectObjects';
-      await require('../../actions/objects').showObjectSelection(ctx, userId); // Исправлен путь
-    } else if (users[userId].isApproved) {
-      await require('../../handlers/menu').showMainMenu(ctx); // Исправлен путь
-    } else {
-      const user = users[userId];
-      if (!user.selectedObjects.length) {
-        state.step = 'selectObjects';
-        await require('../../actions/objects').showObjectSelection(ctx, userId); // Исправлен путь
-      } else if (!user.position) {
-        state.step = 'selectPosition';
-        await require('../../actions/position').showPositionSelection(ctx, userId); // Исправлен путь
-      } else if (!user.organization) {
-        state.step = 'selectOrganization';
-        await require('../../actions/organization').showOrganizationSelection(ctx, userId); // Исправлен путь
-      } else if (!user.fullName) {
-        state.step = 'enterFullName';
-        await ctx.reply('Введите ваше ФИО:');
-      } else {
-        await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
-      }
-    }
-  } else if (state.step === 'enterFullName') {
-    const fullName = ctx.message.text.trim();
-    if (!fullName) {
-      await ctx.reply('ФИО не может быть пустым. Введите ваше ФИО:');
-      return;
-    }
-    const users = await loadUsers();
-    users[userId].fullName = fullName;
-    await saveUser(userId, users[userId]);
-    await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
-    await ctx.telegram.sendMessage(ADMIN_ID, `📝 Новая заявка: ${fullName}`);
-    resetState(userId);
+// Перехват ctx.telegram.sendMessage
+const originalSendMessage = bot.telegram.sendMessage.bind(bot.telegram);
+bot.telegram.sendMessage = async (chatId, text, extra) => {
+  const message = await originalSendMessage(chatId, text, extra);
+  const userId = chatId.toString();
+  if (userStates[userId]) {
+    userStates[userId].messageIds.push(message.message_id);
+    console.log(`[sendMessage] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
+  } else {
+    console.log(`Ошибка: userStates для ${userId} не инициализировано при sendMessage`);
   }
-});
+  return message;
+};
 
-// Исправленные пути для обработчиков и действий
-require('../../handlers/commands')(bot); // Исправлен путь
-require('../../handlers/menu')(bot); // Исправлен путь
-require('../../handlers/report')(bot); // Исправлен путь
-require('../../handlers/admin')(bot); // Исправлен путь
-require('../../actions/position')(bot); // Исправлен путь
-require('../../actions/organization')(bot); // Исправлен путь
-require('../../actions/objects')(bot); // Исправлен путь
-require('../../actions/status')(bot); // Исправлен путь
+startHandler(bot);
+menuHandler(bot);
+reportHandler(bot);
+adminHandler(bot);
+commandsHandler(bot);
+positionActions(bot);
+organizationActions(bot);
+objectsActions(bot);
+statusActions(bot);
 
 module.exports = bot;

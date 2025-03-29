@@ -57,7 +57,6 @@ async function initializeDatabase() {
         console.log('Таблицы созданы или уже существуют');
     } catch (err) {
         console.error('Ошибка при создании таблиц:', err.message);
-        throw err;
     } finally {
         client.release();
     }
