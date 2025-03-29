@@ -152,4 +152,19 @@ module.exports = (bot) => {
         const users = await loadUsers();
         const reports = await loadUserReports(userId);
 
-        await clearPrevious
+        await clearPreviousMessages(ctx, userId);
+
+        if (Object.keys(reports).length === 0) {
+            await ctx.reply('У вас пока нет отчетов.');
+            return;
+        }
+
+        const reportList = Object.values(reports).map(r => {
+            return `📅 ${r.date} - ${r.objectName}\n🔧 ${r.workDone}\n📦 ${r.materials}`;
+        }).join('\n\n');
+
+        await ctx.reply(`Ваши отчеты:\n\n${reportList}`, Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'profile')]
+        ]));
+    });
+};
