@@ -335,10 +335,9 @@ module.exports = (bot) => {
         const state = ctx.state.userStates[userId];
         console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". Текущее состояние:`, state);
 
-        if (!state || (!state.step?.includes('workDone') && !state.step?.includes('materials') && !state.step?.includes('editFullName') && !state.step?.includes('editWorkDone') && !state.step?.includes('editMaterials'))) {
-            await clearPreviousMessages(ctx, userId);
-            await ctx.reply('Пожалуйста, начните процесс заново, используя команды или кнопки.');
-            return;
+        // Обрабатываем только определенные шаги, связанные с отчетами
+        if (!state || !['workDone', 'materials', 'editWorkDone', 'editMaterials', 'editFullName'].includes(state.step)) {
+            return; // Пропускаем обработку, если шаг не связан с отчетами или редактированием ФИО
         }
 
         await clearPreviousMessages(ctx, userId);
