@@ -77,12 +77,12 @@ module.exports = (bot) => {
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
+        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". State:`, state);
+
         if (!state) {
-            console.log(`Нет состояния для userId ${userId}`);
+            console.log(`Нет состояния для userId ${userId}, пропускаем обработку`);
             return;
         }
-
-        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". State:`, state);
 
         if (state.step === 'customOrganizationInput') {
             await clearPreviousMessages(ctx, userId);
@@ -116,7 +116,7 @@ module.exports = (bot) => {
             console.log(`Заявка отправлена администратору для userId ${userId}`);
 
             ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
-            return; // Завершаем обработку
+            return;
         }
 
         if (state.step === 'customOrgEditInput') {
@@ -129,6 +129,8 @@ module.exports = (bot) => {
             state.messageIds.push(message.message_id);
             return;
         }
+
+        console.log(`Текст от userId ${userId} не обработан, шаг: ${state.step}`);
     });
 };
 
