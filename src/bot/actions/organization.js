@@ -97,17 +97,18 @@ module.exports = (bot) => {
         }
 
         if (state.step === 'enterFullName') {
+            console.log(`Начало обработки шага enterFullName для userId ${userId}`);
+
+            // Временно пропускаем очистку сообщений для теста
+            // try {
+            //     await clearPreviousMessages(ctx, userId);
+            //     console.log(`Предыдущие сообщения очищены для userId ${userId}`);
+            // } catch (clearError) {
+            //     console.error(`Ошибка при очистке сообщений для userId ${userId}:`, clearError.stack);
+            // }
+
             try {
-                console.log(`Начало обработки шага enterFullName для userId ${userId}`);
-
-                // Очистка предыдущих сообщений с изоляцией ошибки
-                try {
-                    await clearPreviousMessages(ctx, userId);
-                    console.log(`Предыдущие сообщения очищены для userId ${userId}`);
-                } catch (clearError) {
-                    console.error(`Ошибка при очистке сообщений для userId ${userId}:`, clearError.stack);
-                }
-
+                console.log(`Загружаем пользователей для userId ${userId}`);
                 const users = await loadUsers();
                 console.log(`Пользователи загружены для userId ${userId}:`, users[userId]);
 
@@ -115,9 +116,11 @@ module.exports = (bot) => {
                 users[userId].fullName = fullName;
                 console.log(`Установлено ФИО для userId ${userId}: ${fullName}`);
 
+                console.log(`Сохраняем данные для userId ${userId}`);
                 await saveUser(userId, users[userId]);
                 console.log(`ФИО сохранено в базе для userId ${userId}`);
 
+                console.log(`Отправляем сообщение пользователю для userId ${userId}`);
                 const userMessage = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
                 state.messageIds.push(userMessage.message_id);
                 console.log(`Сообщение отправлено пользователю для userId ${userId}, messageId: ${userMessage.message_id}`);
