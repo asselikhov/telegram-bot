@@ -73,65 +73,6 @@ module.exports = (bot) => {
         const message = await ctx.reply('Введите новое название организации:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
-
-    bot.on('text', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        const state = ctx.state.userStates[userId];
-        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". State:`, state);
-
-        if (!state) {
-            console.log(`Нет состояния для userId ${userId}, пропускаем обработку`);
-            return;
-        }
-
-        if (state.step === 'customOrganizationInput') {
-            await clearPreviousMessages(ctx, userId);
-            const users = await loadUsers();
-            users[userId].organization = ctx.message.text.trim();
-            await saveUser(userId, users[userId]);
-            state.step = 'enterFullName';
-            const message = await ctx.reply('Введите ваше ФИО:');
-            state.messageIds.push(message.message_id);
-            console.log(`Переход к enterFullName для userId ${userId}. State:`, state);
-            return;
-        }
-
-        if (state.step === 'enterFullName') {
-            await clearPreviousMessages(ctx, userId);
-            const users = await loadUsers();
-            users[userId].fullName = ctx.message.text.trim();
-            await saveUser(userId, users[userId]);
-
-            console.log(`ФИО сохранено для userId ${userId}: ${users[userId].fullName}`);
-
-            const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
-            state.messageIds.push(message.message_id);
-
-            const adminText = `\n${users[userId].fullName} - ${users[userId].position} (${users[userId].organization})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
-            await ctx.telegram.sendMessage(ADMIN_ID, `📝 СПИСОК ЗАЯВОК${adminText}`, Markup.inlineKeyboard([
-                [Markup.button.callback(`✅ Одобрить (${users[userId].fullName})`, `approve_${userId}`)],
-                [Markup.button.callback(`❌ Отклонить (${users[userId].fullName})`, `reject_${userId}`)]
-            ]));
-
-            console.log(`Заявка отправлена администратору для userId ${userId}`);
-
-            ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
-            return;
-        }
-
-        if (state.step === 'customOrgEditInput') {
-            await clearPreviousMessages(ctx, userId);
-            const users = await loadUsers();
-            users[userId].organization = ctx.message.text.trim();
-            await saveUser(userId, users[userId]);
-            state.step = null;
-            const message = await ctx.reply(`Организация обновлена на "${users[userId].organization}".`, Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'profile')]]));
-            state.messageIds.push(message.message_id);
-            return;
-        }
-
-        console.log(`Текст от userId ${userId} не обработан, шаг: ${state.step}`);
-    });
 };
 
 module.exports.showOrganizationSelection = showOrganizationSelection;
