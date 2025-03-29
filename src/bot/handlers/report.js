@@ -69,7 +69,8 @@ async function handleReportText(ctx, userId, state) {
         workDone: state.report.workDone,
         materials: state.report.materials,
         groupMessageId: null,
-        generalMessageId: null
+        generalMessageId: null,
+        fullName: users[userId].fullName // Добавляем fullName
     };
 
     const reportText = `
@@ -184,7 +185,7 @@ async function showReportDetails(ctx, reportId) {
 🏢 ${report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
 Время: ${new Date(report.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}  
-👷 ${ctx.from.first_name}  
+👷 ${report.fullName}  
 
 ВЫПОЛНЕННЫЕ РАБОТЫ:  
 ${report.workDone}  
@@ -250,7 +251,8 @@ async function handleEditedReport(ctx, userId, state) {
         workDone: state.report.workDone,
         materials: state.report.materials,
         groupMessageId: null,
-        generalMessageId: null
+        generalMessageId: null,
+        fullName: users[userId].fullName // Добавляем fullName
     };
 
     const reportText = `

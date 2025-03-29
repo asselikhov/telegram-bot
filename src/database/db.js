@@ -37,8 +37,23 @@ async function initializeDatabase() {
                 materials TEXT,
                 groupMessageId TEXT,
                 generalMessageId TEXT,
+                fullName TEXT,  -- Новый столбец
                 FOREIGN KEY (userId) REFERENCES users(userId)
             );
+        `);
+        // Добавляем столбец fullName, если он еще не существует
+        await client.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'reports' 
+                    AND column_name = 'fullname'
+                ) THEN
+                    ALTER TABLE reports ADD COLUMN fullName TEXT;
+                END IF;
+            END $$;
         `);
         console.log('Таблицы созданы или уже существуют');
     } catch (err) {
