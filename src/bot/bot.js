@@ -12,22 +12,49 @@ const statusActions = require('./actions/status');
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Инициализация состояния
+// Инициализация состояния пользователей
 const userStates = {};
 
+// Middleware для передачи состояния и управления сообщениями
 bot.use((ctx, next) => {
-  ctx.state.userStates = userStates; // Передаём состояние пользователей
-  ctx.state.lastMessageId = null;    // Храним ID последнего сообщения
+  const userId = ctx.from?.id.toString();
+  if (!userStates[userId]) {
+    userStates[userId] = {
+      step: null,
+      selectedObjects: [],
+      report: {},
+      messageIds: [] // Массив для хранения ID сообщений бота
+    };
+  }
+  ctx.state.userStates = userStates;
   return next();
 });
 
-// Перехватываем отправку сообщений, чтобы сохранить message_id
+// Перехватываем отправку сообщений для сохранения message_id
 const originalReply = bot.telegram.sendMessage.bind(bot.telegram);
 bot.telegram.sendMessage = async (chatId, text, extra) => {
   const message = await originalReply(chatId, text, extra);
-  if (ctx.state) ctx.state.lastMessageId = message.message_id; // Сохраняем ID
+  const userId = chatId.toString();
+  if (userStates[userId]) {
+    userStates[userId].messageIds.push(message.message_id);
+  }
   return message;
 };
+
+// Функция для удаления всех предыдущих сообщений пользователя
+async function clearPreviousMessages(ctx, userId) {
+  const state = ctx.state.userStates[userId];
+  if (state && state.messageIds.length > 0) {
+    for (const messageId of state.messageIds) {
+      try {
+        await ctx.telegram.deleteMessage(ctx.chat.id, messageId);
+      } catch (e) {
+        console.log(`Не удалось удалить сообщение ${messageId}:`, e.message);
+      }
+    }
+    state.messageIds = []; // Очищаем массив после удаления
+  }
+}
 
 startHandler(bot);
 menuHandler(bot);
@@ -40,3 +67,4 @@ objectsActions(bot);
 statusActions(bot);
 
 module.exports = bot;
+module.exports.clearPreviousMessages = clearPreviousMessages; // Экспортируем для использования в других модулях

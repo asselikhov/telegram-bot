@@ -2,6 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, saveReport, getReportText } = require('../../database/reportModel');
 const { OBJECTS_LIST_CYRILLIC, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
+const { clearPreviousMessages } = require('../bot');
 
 async function showDownloadReport(ctx) {
     const userId = ctx.from.id.toString();
@@ -11,14 +12,7 @@ async function showDownloadReport(ctx) {
         return ctx.reply('У вас нет прав для выгрузки отчетов.');
     }
 
-    // Удаляем предыдущее сообщение
-    if (ctx.state.lastMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-        } catch (e) {
-            console.log('Не удалось удалить сообщение:', e.message);
-        }
-    }
+    await clearPreviousMessages(ctx, userId);
 
     const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
         [Markup.button.callback(obj, `download_report_file_${index}`)]
@@ -29,6 +23,7 @@ async function showDownloadReport(ctx) {
 }
 
 async function downloadReportFile(ctx, objectIndex) {
+    const userId = ctx.from.id.toString();
     const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
     if (!objectName) return ctx.reply('Ошибка: объект не найден.');
 
@@ -37,14 +32,7 @@ async function downloadReportFile(ctx, objectIndex) {
         return ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
     }
 
-    // Удаляем предыдущее сообщение
-    if (ctx.state.lastMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-        } catch (e) {
-            console.log('Не удалось удалить сообщение:', e.message);
-        }
-    }
+    await clearPreviousMessages(ctx, userId);
 
     await ctx.replyWithDocument({
         source: Buffer.from(reportText, 'utf-8'),
@@ -59,14 +47,7 @@ async function createReport(ctx) {
         return ctx.reply('У вас нет прав для создания отчетов.');
     }
 
-    // Удаляем предыдущее сообщение
-    if (ctx.state.lastMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-        } catch (e) {
-            console.log('Не удалось удалить сообщение:', e.message);
-        }
-    }
+    await clearPreviousMessages(ctx, userId);
 
     const buttons = users[userId].selectedObjects.map((obj, index) =>
         [Markup.button.callback(obj, `select_object_${index}`)]
@@ -113,14 +94,7 @@ ${state.report.materials}
     await saveReport(userId, report);
     await saveUser(userId, users[userId]);
 
-    // Удаляем предыдущее сообщение
-    if (ctx.state.lastMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-        } catch (e) {
-            console.log('Не удалось удалить сообщение:', e.message);
-        }
-    }
+    await clearPreviousMessages(ctx, userId);
 
     await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}`);
 }
@@ -135,14 +109,7 @@ module.exports = (bot) => {
         const selectedObject = OBJECTS_LIST_CYRILLIC[objectIndex];
         if (!selectedObject) return;
 
-        // Удаляем предыдущее сообщение
-        if (ctx.state.lastMessageId) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-            } catch (e) {
-                console.log('Не удалось удалить сообщение:', e.message);
-            }
-        }
+        await clearPreviousMessages(ctx, userId);
 
         ctx.state.userStates[userId] = { step: 'workDone', report: { objectName: selectedObject } };
         await ctx.reply('Введите наименование проделанных работ (или "работы не производились"):');
@@ -153,14 +120,7 @@ module.exports = (bot) => {
         const state = ctx.state.userStates[userId];
         if (!state || (!state.step.includes('workDone') && !state.step.includes('materials') && !state.step.includes('editFullName'))) return;
 
-        // Удаляем предыдущее сообщение
-        if (ctx.state.lastMessageId) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-            } catch (e) {
-                console.log('Не удалось удалить сообщение:', e.message);
-            }
-        }
+        await clearPreviousMessages(ctx, userId);
 
         if (state.step === 'workDone') {
             state.report.workDone = ctx.message.text.trim();
@@ -182,14 +142,7 @@ module.exports = (bot) => {
 
     bot.action('edit_fullName', async (ctx) => {
         const userId = ctx.from.id.toString();
-        // Удаляем предыдущее сообщение
-        if (ctx.state.lastMessageId) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-            } catch (e) {
-                console.log('Не удалось удалить сообщение:', e.message);
-            }
-        }
+        await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId] = { step: 'editFullName' };
         await ctx.reply('Введите ваше новое ФИО:');
     });
@@ -199,26 +152,4 @@ module.exports = (bot) => {
         const users = await loadUsers();
         const reports = await loadUserReports(userId);
 
-        // Удаляем предыдущее сообщение
-        if (ctx.state.lastMessageId) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-            } catch (e) {
-                console.log('Не удалось удалить сообщение:', e.message);
-            }
-        }
-
-        if (Object.keys(reports).length === 0) {
-            await ctx.reply('У вас пока нет отчетов.');
-            return;
-        }
-
-        const reportList = Object.values(reports).map(r => {
-            return `📅 ${r.date} - ${r.objectName}\n🔧 ${r.workDone}\n📦 ${r.materials}`;
-        }).join('\n\n');
-
-        await ctx.reply(`Ваши отчеты:\n\n${reportList}`, Markup.inlineKeyboard([
-            [Markup.button.callback('↩️ Назад', 'profile')]
-        ]));
-    });
-};
+        await clearPrevious

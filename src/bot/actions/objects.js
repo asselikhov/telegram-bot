@@ -1,16 +1,10 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { OBJECTS_LIST_CYRILLIC } = require('../../config/config');
+const { clearPreviousMessages } = require('../bot');
 
 async function showObjectSelection(ctx, userId, selected = []) {
-    // Удаляем предыдущее сообщение, если оно есть
-    if (ctx.state.lastMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-        } catch (e) {
-            console.log('Не удалось удалить сообщение:', e.message);
-        }
-    }
+    await clearPreviousMessages(ctx, userId);
 
     const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) => {
         const isSelected = selected.includes(obj);
@@ -44,14 +38,7 @@ module.exports = (bot) => {
         const users = await loadUsers();
 
         if (!state || state.selectedObjects.length === 0) {
-            // Удаляем предыдущее сообщение
-            if (ctx.state.lastMessageId) {
-                try {
-                    await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-                } catch (e) {
-                    console.log('Не удалось удалить сообщение:', e.message);
-                }
-            }
+            await clearPreviousMessages(ctx, userId);
             await ctx.reply('Выберите хотя бы один объект.');
             return;
         }
@@ -59,7 +46,7 @@ module.exports = (bot) => {
         users[userId].selectedObjects = state.selectedObjects;
         await saveUser(userId, users[userId]);
         delete ctx.state.userStates[userId];
-        await require('../handlers/menu').showProfile(ctx); // Возвращаемся в профиль
+        await require('../handlers/menu').showProfile(ctx);
     });
 
     bot.action('edit_object', async (ctx) => {

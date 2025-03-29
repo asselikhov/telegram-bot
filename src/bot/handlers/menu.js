@@ -1,19 +1,13 @@
 const { Markup } = require('telegraf');
 const { loadUsers } = require('../../database/userModel');
+const { clearPreviousMessages } = require('../bot');
 
 async function showMainMenu(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const user = users[userId] || {};
 
-    // Удаляем предыдущее сообщение, если оно есть
-    if (ctx.state.lastMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-        } catch (e) {
-            console.log('Не удалось удалить сообщение:', e.message);
-        }
-    }
+    await clearPreviousMessages(ctx, userId);
 
     const menuText = `
 🚀 Главное меню  
@@ -45,14 +39,7 @@ async function showProfile(ctx) {
         ? user.selectedObjects.map(obj => `· ${obj}`).join('\n')
         : 'Не выбраны';
 
-    // Удаляем предыдущее сообщение, если оно есть
-    if (ctx.state.lastMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-        } catch (e) {
-            console.log('Не удалось удалить сообщение:', e.message);
-        }
-    }
+    await clearPreviousMessages(ctx, userId);
 
     const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
 
@@ -80,7 +67,6 @@ ${statusEmoji} ${user.status || 'Не указан'}
     await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
 }
 
-// Экспорт функций и обработчиков
 module.exports = (bot) => {
     bot.action('main_menu', showMainMenu);
     bot.action('profile', showProfile);

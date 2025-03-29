@@ -1,16 +1,10 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { ORGANIZATIONS_LIST } = require('../../config/config');
+const { clearPreviousMessages } = require('../bot');
 
 async function showOrganizationSelection(ctx, userId) {
-    // Удаляем предыдущее сообщение
-    if (ctx.state.lastMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-        } catch (e) {
-            console.log('Не удалось удалить сообщение:', e.message);
-        }
-    }
+    await clearPreviousMessages(ctx, userId);
 
     const buttons = ORGANIZATIONS_LIST.map((org, index) => [Markup.button.callback(org, `select_organization_${index}`)]);
     buttons.push([Markup.button.callback('Ввести свою организацию', 'custom_organization')]);
@@ -24,14 +18,7 @@ module.exports = (bot) => {
         const selectedOrganization = ORGANIZATIONS_LIST[orgIndex];
         if (!selectedOrganization) return;
 
-        // Удаляем предыдущее сообщение
-        if (ctx.state.lastMessageId) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-            } catch (e) {
-                console.log('Не удалось удалить сообщение:', e.message);
-            }
-        }
+        await clearPreviousMessages(ctx, userId);
 
         const users = await loadUsers();
         users[userId].organization = selectedOrganization;
@@ -42,29 +29,14 @@ module.exports = (bot) => {
 
     bot.action('custom_organization', async (ctx) => {
         const userId = ctx.from.id.toString();
-        // Удаляем предыдущее сообщение
-        if (ctx.state.lastMessageId) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-            } catch (e) {
-                console.log('Не удалось удалить сообщение:', e.message);
-            }
-        }
+        await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId] = { step: 'customOrganizationInput' };
         await ctx.reply('Введите название вашей организации:');
     });
 
-    // Обработчик для edit_organization
     bot.action('edit_organization', async (ctx) => {
         const userId = ctx.from.id.toString();
-        // Удаляем предыдущее сообщение
-        if (ctx.state.lastMessageId) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-            } catch (e) {
-                console.log('Не удалось удалить сообщение:', e.message);
-            }
-        }
+        await clearPreviousMessages(ctx, userId);
         const buttons = ORGANIZATIONS_LIST.map((org, index) => [Markup.button.callback(org, `select_org_edit_${index}`)]);
         buttons.push([Markup.button.callback('Ввести свою организацию', 'custom_org_edit')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
@@ -77,32 +49,18 @@ module.exports = (bot) => {
         const selectedOrganization = ORGANIZATIONS_LIST[orgIndex];
         if (!selectedOrganization) return;
 
-        // Удаляем предыдущее сообщение
-        if (ctx.state.lastMessageId) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-            } catch (e) {
-                console.log('Не удалось удалить сообщение:', e.message);
-            }
-        }
+        await clearPreviousMessages(ctx, userId);
 
         const users = await loadUsers();
         users[userId].organization = selectedOrganization;
         await saveUser(userId, users[userId]);
         await ctx.reply(`Организация обновлена на "${selectedOrganization}".`);
-        await require('../handlers/menu').showProfile(ctx); // Возвращаемся в профиль
+        await require('../handlers/menu').showProfile(ctx);
     });
 
     bot.action('custom_org_edit', async (ctx) => {
         const userId = ctx.from.id.toString();
-        // Удаляем предыдущее сообщение
-        if (ctx.state.lastMessageId) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-            } catch (e) {
-                console.log('Не удалось удалить сообщение:', e.message);
-            }
-        }
+        await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId] = { step: 'customOrgEditInput' };
         await ctx.reply('Введите новое название организации:');
     });
@@ -112,14 +70,7 @@ module.exports = (bot) => {
         const state = ctx.state.userStates[userId];
         if (!state || (!state.step.includes('customOrganizationInput') && !state.step.includes('customOrgEditInput'))) return;
 
-        // Удаляем предыдущее сообщение
-        if (ctx.state.lastMessageId) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
-            } catch (e) {
-                console.log('Не удалось удалить сообщение:', e.message);
-            }
-        }
+        await clearPreviousMessages(ctx, userId);
 
         const users = await loadUsers();
         if (state.step === 'customOrganizationInput') {
