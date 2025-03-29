@@ -6,6 +6,15 @@ async function showMainMenu(ctx) {
     const users = await loadUsers();
     const user = users[userId] || {};
 
+    // Удаляем предыдущее сообщение, если оно есть
+    if (ctx.state.lastMessageId) {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
+        } catch (e) {
+            console.log('Не удалось удалить сообщение:', e.message);
+        }
+    }
+
     const menuText = `
 🚀 Главное меню  
 ━━━━━━━━━━━━━━━━━━━━  
@@ -35,6 +44,15 @@ async function showProfile(ctx) {
     const objectsList = user.selectedObjects.length > 0
         ? user.selectedObjects.map(obj => `· ${obj}`).join('\n')
         : 'Не выбраны';
+
+    // Удаляем предыдущее сообщение, если оно есть
+    if (ctx.state.lastMessageId) {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
+        } catch (e) {
+            console.log('Не удалось удалить сообщение:', e.message);
+        }
+    }
 
     const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
 
@@ -68,5 +86,5 @@ module.exports = (bot) => {
     bot.action('profile', showProfile);
 };
 
-module.exports.showMainMenu = showMainMenu; // Экспорт функции для использования в других модулях
-module.exports.showProfile = showProfile;   // Экспорт функции (опционально, если потребуется)
+module.exports.showMainMenu = showMainMenu;
+module.exports.showProfile = showProfile;

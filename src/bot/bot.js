@@ -16,9 +16,18 @@ const bot = new Telegraf(BOT_TOKEN);
 const userStates = {};
 
 bot.use((ctx, next) => {
-  ctx.state.userStates = userStates; // Передаём состояние в контекст
+  ctx.state.userStates = userStates; // Передаём состояние пользователей
+  ctx.state.lastMessageId = null;    // Храним ID последнего сообщения
   return next();
 });
+
+// Перехватываем отправку сообщений, чтобы сохранить message_id
+const originalReply = bot.telegram.sendMessage.bind(bot.telegram);
+bot.telegram.sendMessage = async (chatId, text, extra) => {
+  const message = await originalReply(chatId, text, extra);
+  if (ctx.state) ctx.state.lastMessageId = message.message_id; // Сохраняем ID
+  return message;
+};
 
 startHandler(bot);
 menuHandler(bot);

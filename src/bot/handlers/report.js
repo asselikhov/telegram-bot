@@ -11,6 +11,15 @@ async function showDownloadReport(ctx) {
         return ctx.reply('У вас нет прав для выгрузки отчетов.');
     }
 
+    // Удаляем предыдущее сообщение
+    if (ctx.state.lastMessageId) {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
+        } catch (e) {
+            console.log('Не удалось удалить сообщение:', e.message);
+        }
+    }
+
     const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
         [Markup.button.callback(obj, `download_report_file_${index}`)]
     );
@@ -28,6 +37,15 @@ async function downloadReportFile(ctx, objectIndex) {
         return ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
     }
 
+    // Удаляем предыдущее сообщение
+    if (ctx.state.lastMessageId) {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
+        } catch (e) {
+            console.log('Не удалось удалить сообщение:', e.message);
+        }
+    }
+
     await ctx.replyWithDocument({
         source: Buffer.from(reportText, 'utf-8'),
         filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
@@ -39,6 +57,15 @@ async function createReport(ctx) {
     const users = await loadUsers();
     if (users[userId].position !== 'Производитель работ' || !users[userId].isApproved) {
         return ctx.reply('У вас нет прав для создания отчетов.');
+    }
+
+    // Удаляем предыдущее сообщение
+    if (ctx.state.lastMessageId) {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
+        } catch (e) {
+            console.log('Не удалось удалить сообщение:', e.message);
+        }
     }
 
     const buttons = users[userId].selectedObjects.map((obj, index) =>
@@ -86,6 +113,15 @@ ${state.report.materials}
     await saveReport(userId, report);
     await saveUser(userId, users[userId]);
 
+    // Удаляем предыдущее сообщение
+    if (ctx.state.lastMessageId) {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
+        } catch (e) {
+            console.log('Не удалось удалить сообщение:', e.message);
+        }
+    }
+
     await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}`);
 }
 
@@ -99,6 +135,15 @@ module.exports = (bot) => {
         const selectedObject = OBJECTS_LIST_CYRILLIC[objectIndex];
         if (!selectedObject) return;
 
+        // Удаляем предыдущее сообщение
+        if (ctx.state.lastMessageId) {
+            try {
+                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
+            } catch (e) {
+                console.log('Не удалось удалить сообщение:', e.message);
+            }
+        }
+
         ctx.state.userStates[userId] = { step: 'workDone', report: { objectName: selectedObject } };
         await ctx.reply('Введите наименование проделанных работ (или "работы не производились"):');
     });
@@ -107,6 +152,15 @@ module.exports = (bot) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
         if (!state || (!state.step.includes('workDone') && !state.step.includes('materials') && !state.step.includes('editFullName'))) return;
+
+        // Удаляем предыдущее сообщение
+        if (ctx.state.lastMessageId) {
+            try {
+                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
+            } catch (e) {
+                console.log('Не удалось удалить сообщение:', e.message);
+            }
+        }
 
         if (state.step === 'workDone') {
             state.report.workDone = ctx.message.text.trim();
@@ -122,22 +176,37 @@ module.exports = (bot) => {
             await saveUser(userId, users[userId]);
             await ctx.reply(`ФИО обновлено на "${users[userId].fullName}".`);
             delete ctx.state.userStates[userId];
-            await require('./menu').showProfile(ctx); // Возвращаемся в профиль
+            await require('./menu').showProfile(ctx);
         }
     });
 
-    // Добавляем обработчик для edit_fullName
     bot.action('edit_fullName', async (ctx) => {
         const userId = ctx.from.id.toString();
+        // Удаляем предыдущее сообщение
+        if (ctx.state.lastMessageId) {
+            try {
+                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
+            } catch (e) {
+                console.log('Не удалось удалить сообщение:', e.message);
+            }
+        }
         ctx.state.userStates[userId] = { step: 'editFullName' };
         await ctx.reply('Введите ваше новое ФИО:');
     });
 
-    // Добавляем обработчик для view_reports
     bot.action('view_reports', async (ctx) => {
         const userId = ctx.from.id.toString();
         const users = await loadUsers();
         const reports = await loadUserReports(userId);
+
+        // Удаляем предыдущее сообщение
+        if (ctx.state.lastMessageId) {
+            try {
+                await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.lastMessageId);
+            } catch (e) {
+                console.log('Не удалось удалить сообщение:', e.message);
+            }
+        }
 
         if (Object.keys(reports).length === 0) {
             await ctx.reply('У вас пока нет отчетов.');
