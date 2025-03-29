@@ -11,7 +11,7 @@ async function clearPreviousMessages(ctx, userId) {
                 console.log(`Сообщение ${messageId} успешно удалено`);
             } catch (e) {
                 console.log(`Не удалось удалить сообщение ${messageId}:`, e.message);
-                // Не добавляем в новый массив ID сообщений, которые не удалось удалить
+                // Игнорируем ошибки удаления, чтобы не прерывать процесс
             }
         }
         state.messageIds = newMessageIds; // Обновляем массив только с актуальными ID

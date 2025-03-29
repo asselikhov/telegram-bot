@@ -99,8 +99,14 @@ module.exports = (bot) => {
         if (state.step === 'enterFullName') {
             try {
                 console.log(`Начало обработки шага enterFullName для userId ${userId}`);
-                await clearPreviousMessages(ctx, userId);
-                console.log(`Предыдущие сообщения очищены для userId ${userId}`);
+
+                // Очистка предыдущих сообщений с изоляцией ошибки
+                try {
+                    await clearPreviousMessages(ctx, userId);
+                    console.log(`Предыдущие сообщения очищены для userId ${userId}`);
+                } catch (clearError) {
+                    console.error(`Ошибка при очистке сообщений для userId ${userId}:`, clearError.stack);
+                }
 
                 const users = await loadUsers();
                 console.log(`Пользователи загружены для userId ${userId}:`, users[userId]);
@@ -132,7 +138,11 @@ module.exports = (bot) => {
                 console.log(`Состояние сброшено для userId ${userId}`);
             } catch (error) {
                 console.error(`Ошибка при обработке шага enterFullName для userId ${userId}:`, error.stack);
-                await ctx.reply('Произошла ошибка. Попробуйте позже.');
+                try {
+                    await ctx.reply('Произошла ошибка. Попробуйте позже.');
+                } catch (replyError) {
+                    console.error(`Ошибка при отправке сообщения об ошибке для userId ${userId}:`, replyError.stack);
+                }
             }
             return;
         }
