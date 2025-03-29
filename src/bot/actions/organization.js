@@ -99,54 +99,20 @@ module.exports = (bot) => {
         if (state.step === 'enterFullName') {
             console.log(`Начало обработки шага enterFullName для userId ${userId}`);
 
-            // Временно пропускаем очистку сообщений для теста
-            // try {
-            //     await clearPreviousMessages(ctx, userId);
-            //     console.log(`Предыдущие сообщения очищены для userId ${userId}`);
-            // } catch (clearError) {
-            //     console.error(`Ошибка при очистке сообщений для userId ${userId}:`, clearError.stack);
-            // }
+            const fullName = ctx.message.text.trim();
+            console.log(`Получено ФИО для userId ${userId}: ${fullName}`);
 
+            // Временно убираем все асинхронные вызовы для теста, кроме отправки сообщения
             try {
-                console.log(`Загружаем пользователей для userId ${userId}`);
-                const users = await loadUsers();
-                console.log(`Пользователи загружены для userId ${userId}:`, users[userId]);
-
-                const fullName = ctx.message.text.trim();
-                users[userId].fullName = fullName;
-                console.log(`Установлено ФИО для userId ${userId}: ${fullName}`);
-
-                console.log(`Сохраняем данные для userId ${userId}`);
-                await saveUser(userId, users[userId]);
-                console.log(`ФИО сохранено в базе для userId ${userId}`);
-
-                console.log(`Отправляем сообщение пользователю для userId ${userId}`);
-                const userMessage = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
+                console.log(`Отправляем тестовое сообщение пользователю для userId ${userId}`);
+                const userMessage = await ctx.reply(`Тест: ваше ФИО - ${fullName}`);
                 state.messageIds.push(userMessage.message_id);
-                console.log(`Сообщение отправлено пользователю для userId ${userId}, messageId: ${userMessage.message_id}`);
-
-                const adminText = `\n${users[userId].fullName || 'ФИО не указано'} - ${users[userId].position || 'Не указана'} (${users[userId].organization || 'Не указана'})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
-                console.log(`Отправляем заявку администратору для userId ${userId}: ${adminText}`);
-                const adminMessage = await ctx.telegram.sendMessage(
-                    ADMIN_ID,
-                    `📝 НОВАЯ ЗАЯВКА${adminText}`,
-                    Markup.inlineKeyboard([
-                        [Markup.button.callback(`✅ Одобрить (${users[userId].fullName || 'Без имени'})`, `approve_${userId}`)],
-                        [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Без имени'})`, `reject_${userId}`)]
-                    ])
-                );
-                console.log(`Заявка успешно отправлена администратору для userId ${userId}. Message ID: ${adminMessage.message_id}`);
-
-                ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
-                console.log(`Состояние сброшено для userId ${userId}`);
+                console.log(`Тестовое сообщение отправлено для userId ${userId}, messageId: ${userMessage.message_id}`);
             } catch (error) {
-                console.error(`Ошибка при обработке шага enterFullName для userId ${userId}:`, error.stack);
-                try {
-                    await ctx.reply('Произошла ошибка. Попробуйте позже.');
-                } catch (replyError) {
-                    console.error(`Ошибка при отправке сообщения об ошибке для userId ${userId}:`, replyError.stack);
-                }
+                console.error(`Ошибка при отправке тестового сообщения для userId ${userId}:`, error.stack);
             }
+
+            console.log(`Конец обработки шага enterFullName для userId ${userId}`);
             return;
         }
 
