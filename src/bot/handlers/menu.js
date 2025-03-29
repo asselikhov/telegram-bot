@@ -8,7 +8,6 @@ async function showMainMenu(ctx) {
     const user = users[userId] || {};
 
     await clearPreviousMessages(ctx, userId);
-    // Очищаем messageIds после полного возврата в главное меню
     if (ctx.state.userStates[userId]) {
         ctx.state.userStates[userId].messageIds = [];
         console.log(`messageIds очищен для userId ${userId} при возврате в главное меню`);
@@ -51,20 +50,22 @@ async function showProfile(ctx) {
     const profileText = `
 👤 ЛИЧНЫЙ КАБИНЕТ  
 ➖➖➖➖➖➖➖➖➖➖➖  
-📋 ${user.position || 'Не указана'}  
-🏢 ${user.organization || 'Не указана'}  
-👷 ${user.fullName || 'Не указано'}  
+${user.position || 'Не указана'}  
+${user.organization || 'Не указана'}  
+ИТР: ${user.fullName || 'Не указано'}  
+
 ${objectsList}  
+
 ${statusEmoji} ${user.status || 'Не указан'}  
 ➖➖➖➖➖➖➖➖➖➖➖
 `.trim();
 
     const buttons = [
         [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
-        [Markup.button.callback('🏢 Изменить должность', 'edit_position')],
-        [Markup.button.callback('🏭 Изменить организацию', 'edit_organization')],
-        [Markup.button.callback('🏠 Изменить объекты', 'edit_object')],
-        [Markup.button.callback('📅 Изменить статус', 'edit_status')],
+        [Markup.button.callback('✏️ Изменить должность', 'edit_position')],
+        [Markup.button.callback('✏️ Изменить организацию', 'edit_organization')],
+        [Markup.button.callback('✏️ Изменить объекты', 'edit_object')],
+        [Markup.button.callback('✏️ Изменить статус', 'edit_status')],
         [Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')],
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ];
