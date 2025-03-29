@@ -1,5 +1,5 @@
 const { Telegraf } = require('telegraf');
-const { BOT_TOKEN } = require('../config/config');
+const { BOT_TOKEN, ADMIN_ID } = require('../config/config');
 const startHandler = require('./handlers/start');
 const menuHandler = require('./handlers/menu');
 const reportHandler = require('./handlers/report');
@@ -45,14 +45,24 @@ bot.use((ctx, next) => {
   return next();
 });
 
-// Глобальный обработчик текста для диагностики
+// Обработчик для enterFullName
 bot.on('text', async (ctx) => {
   const userId = ctx.from.id.toString();
   console.log(`[Глобальный] Получен текст от userId ${userId}: "${ctx.message.text}"`);
   const state = ctx.state.userStates[userId];
   console.log(`[Глобальный] Состояние для userId ${userId}:`, state);
-  await ctx.reply(`Эхо: ${ctx.message.text}`);
-  console.log(`[Глобальный] Ответ отправлен для userId ${userId}`);
+
+  if (state && state.step === 'enterFullName') {
+    const fullName = ctx.message.text.trim();
+    await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
+    await ctx.telegram.sendMessage(ADMIN_ID, `📝 Новая заявка: ${fullName}`);
+    console.log(`[Глобальный] Заявка отправлена для userId ${userId}`);
+    state.step = null;
+    state.messageIds = [];
+  } else {
+    await ctx.reply(`Эхо: ${ctx.message.text}`);
+    console.log(`[Глобальный] Эхо отправлено для userId ${userId}`);
+  }
 });
 
 // Подключение остальных обработчиков

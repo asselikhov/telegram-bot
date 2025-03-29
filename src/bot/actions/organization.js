@@ -17,23 +17,6 @@ module.exports = (bot) => {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
         console.log(`Шаг enterFullName установлен для userId ${userId}. State:`, ctx.state.userStates[userId]);
     });
-
-    bot.on('text', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}"`);
-
-        const state = ctx.state.userStates[userId];
-        console.log(`Состояние для userId ${userId}:`, state);
-
-        if (state && state.step === 'enterFullName') {
-            const fullName = ctx.message.text.trim();
-            await ctx.reply(`Ваше ФИО: ${fullName}`);
-            console.log(`Ответ отправлен для userId ${userId}: ${fullName}`);
-            state.step = null;
-        } else {
-            console.log(`Шаг не enterFullName или state отсутствует для userId ${userId}`);
-        }
-    });
 };
 
 module.exports.showOrganizationSelection = showOrganizationSelection;
