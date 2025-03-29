@@ -59,10 +59,8 @@ bot.on('text', async (ctx) => {
     console.log(`[Глобальный] Заявка отправлена для userId ${userId}`);
     state.step = null;
     state.messageIds = [];
-  } else {
-    await ctx.reply(`Эхо: ${ctx.message.text}`);
-    console.log(`[Глобальный] Эхо отправлено для userId ${userId}`);
   }
+  // Убираем эхо, чтобы не мешать другим обработчикам
 });
 
 // Подключение остальных обработчиков
