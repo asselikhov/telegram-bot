@@ -2,7 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, saveReport, getReportText } = require('../../database/reportModel');
 const { OBJECTS_LIST_CYRILLIC, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
-const { clearPreviousMessages } = require('../utils'); // Новый импорт
+const { clearPreviousMessages } = require('../utils');
 
 async function showDownloadReport(ctx) {
     const userId = ctx.from.id.toString();
@@ -118,7 +118,11 @@ module.exports = (bot) => {
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        if (!state || (!state.step.includes('workDone') && !state.step.includes('materials') && !state.step.includes('editFullName'))) return;
+        // Добавляем проверку, что state существует и соответствует ожидаемому шагу
+        if (!state || (!state.step?.includes('workDone') && !state.step?.includes('materials') && !state.step?.includes('editFullName'))) {
+            await ctx.reply('Пожалуйста, начните процесс заново, используя команды или кнопки.');
+            return;
+        }
 
         await clearPreviousMessages(ctx, userId);
 
