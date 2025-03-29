@@ -62,7 +62,11 @@ ${statusEmoji} ${user.status || 'Не указан'}
     await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
 }
 
+// Экспорт функций и обработчиков
 module.exports = (bot) => {
     bot.action('main_menu', showMainMenu);
     bot.action('profile', showProfile);
 };
+
+module.exports.showMainMenu = showMainMenu; // Экспорт функции для использования в других модулях
+module.exports.showProfile = showProfile;   // Экспорт функции (опционально, если потребуется)
