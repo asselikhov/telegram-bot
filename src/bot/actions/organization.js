@@ -102,16 +102,6 @@ module.exports = (bot) => {
             const fullName = ctx.message.text.trim();
             console.log(`Получено ФИО для userId ${userId}: ${fullName}`);
 
-            // Временно убираем все асинхронные вызовы для теста, кроме отправки сообщения
-            try {
-                console.log(`Отправляем тестовое сообщение пользователю для userId ${userId}`);
-                const userMessage = await ctx.reply(`Тест: ваше ФИО - ${fullName}`);
-                state.messageIds.push(userMessage.message_id);
-                console.log(`Тестовое сообщение отправлено для userId ${userId}, messageId: ${userMessage.message_id}`);
-            } catch (error) {
-                console.error(`Ошибка при отправке тестового сообщения для userId ${userId}:`, error.stack);
-            }
-
             console.log(`Конец обработки шага enterFullName для userId ${userId}`);
             return;
         }
