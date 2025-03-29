@@ -98,16 +98,23 @@ module.exports = (bot) => {
 
         if (state.step === 'enterFullName') {
             try {
+                console.log(`Начало обработки шага enterFullName для userId ${userId}`);
                 await clearPreviousMessages(ctx, userId);
+                console.log(`Предыдущие сообщения очищены для userId ${userId}`);
+
                 const users = await loadUsers();
+                console.log(`Пользователи загружены для userId ${userId}:`, users[userId]);
+
                 const fullName = ctx.message.text.trim();
                 users[userId].fullName = fullName;
+                console.log(`Установлено ФИО для userId ${userId}: ${fullName}`);
 
-                console.log(`Сохраняем ФИО для userId ${userId}: ${fullName}`);
                 await saveUser(userId, users[userId]);
+                console.log(`ФИО сохранено в базе для userId ${userId}`);
 
                 const userMessage = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
                 state.messageIds.push(userMessage.message_id);
+                console.log(`Сообщение отправлено пользователю для userId ${userId}, messageId: ${userMessage.message_id}`);
 
                 const adminText = `\n${users[userId].fullName || 'ФИО не указано'} - ${users[userId].position || 'Не указана'} (${users[userId].organization || 'Не указана'})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
                 console.log(`Отправляем заявку администратору для userId ${userId}: ${adminText}`);
@@ -119,12 +126,12 @@ module.exports = (bot) => {
                         [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Без имени'})`, `reject_${userId}`)]
                     ])
                 );
-                console.log(`Заявка успешно отправлена администратору. Message ID: ${adminMessage.message_id}`);
+                console.log(`Заявка успешно отправлена администратору для userId ${userId}. Message ID: ${adminMessage.message_id}`);
 
                 ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
                 console.log(`Состояние сброшено для userId ${userId}`);
             } catch (error) {
-                console.error(`Ошибка при обработке шага enterFullName для userId ${userId}:`, error);
+                console.error(`Ошибка при обработке шага enterFullName для userId ${userId}:`, error.stack);
                 await ctx.reply('Произошла ошибка. Попробуйте позже.');
             }
             return;
