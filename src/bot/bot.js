@@ -39,14 +39,19 @@ bot.use((ctx, next) => {
 
   const originalReply = ctx.reply.bind(ctx);
   ctx.reply = async (text, extra) => {
-    const message = await originalReply(text, extra);
-    if (userStates[userId]) {
-      userStates[userId].messageIds.push(message.message_id);
-      console.log(`[ctx.reply] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
-    } else {
-      console.log(`Ошибка: userStates для ${userId} не инициализировано при ctx.reply`);
+    try {
+      const message = await originalReply(text, extra);
+      if (userStates[userId]) {
+        userStates[userId].messageIds.push(message.message_id);
+        console.log(`[ctx.reply] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
+      } else {
+        console.log(`Ошибка: userStates для ${userId} не инициализировано при ctx.reply`);
+      }
+      return message;
+    } catch (error) {
+      console.error(`[ctx.reply] Ошибка при отправке сообщения для userId ${userId}:`, error.message);
+      throw error;
     }
-    return message;
   };
 
   return next();
@@ -55,15 +60,20 @@ bot.use((ctx, next) => {
 // Перехват ctx.telegram.sendMessage
 const originalSendMessage = bot.telegram.sendMessage.bind(bot.telegram);
 bot.telegram.sendMessage = async (chatId, text, extra) => {
-  const message = await originalSendMessage(chatId, text, extra);
-  const userId = chatId.toString();
-  if (userStates[userId]) {
-    userStates[userId].messageIds.push(message.message_id);
-    console.log(`[sendMessage] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
-  } else {
-    console.log(`Ошибка: userStates для ${userId} не инициализировано при sendMessage`);
+  try {
+    const message = await originalSendMessage(chatId, text, extra);
+    const userId = chatId.toString();
+    if (userStates[userId]) {
+      userStates[userId].messageIds.push(message.message_id);
+      console.log(`[sendMessage] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
+    } else {
+      console.log(`Ошибка: userStates для ${userId} не инициализировано при sendMessage`);
+    }
+    return message;
+  } catch (error) {
+    console.error(`[sendMessage] Ошибка при отправке сообщения для chatId ${chatId}:`, error.message);
+    throw error;
   }
-  return message;
 };
 
 // Обработчик всех текстовых сообщений (кроме команд)
@@ -73,7 +83,6 @@ bot.on('text', async (ctx) => {
   const state = ctx.state.userStates[userId];
   console.log(`Получен текст от userId ${userId}: "${text}". Текущее состояние:`, state);
 
-  // Игнорируем команды (начинаются с "/")
   if (text.startsWith('/')) {
     return; // Пропускаем команды, они обрабатываются отдельно
   }
@@ -84,25 +93,20 @@ bot.on('text', async (ctx) => {
 
   await clearPreviousMessages(ctx, userId);
 
-  // Регистрация: выбор кастомной должности
-  if (state.step === 'customPositionInput') {
+  if (state.step === 'custom  customPositionInput') {
     const users = await loadUsers();
     users[userId].position = text.trim();
     await saveUser(userId, users[userId]);
     state.step = 'selectOrganization';
     await require('./actions/organization').showOrganizationSelection(ctx, userId);
-  }
-  // Регистрация: выбор кастомной организации
-  else if (state.step === 'customOrganizationInput') {
+  } else if (state.step === 'customOrganizationInput') {
     const users = await loadUsers();
     users[userId].organization = text.trim();
     await saveUser(userId, users[userId]);
     state.step = 'enterFullName';
     const message = await ctx.reply('Введите ваше ФИО:');
     state.messageIds.push(message.message_id);
-  }
-  // Регистрация: ввод ФИО
-  else if (state.step === 'enterFullName') {
+  } else if (state.step === 'enterFullName') {
     const users = await loadUsers();
     users[userId].fullName = text.trim();
     await saveUser(userId, users[userId]);
@@ -117,41 +121,32 @@ bot.on('text', async (ctx) => {
     ]));
 
     ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
-  }
-  // Редактирование профиля: ФИО
-  else if (state.step === 'editFullName') {
+  } else if (state.step === 'editFullName') {
     const users = await loadUsers();
     users[userId].fullName = text.trim();
     await saveUser(userId, users[userId]);
     await ctx.reply(`ФИО обновлено на "${users[userId].fullName}".`);
     state.step = null;
     await require('./handlers/menu').showProfile(ctx);
-  }
-  // Редактирование профиля: кастомная должность
-  else if (state.step === 'customPositionEditInput') {
+  } else if (state.step === 'customPositionEditInput') {
     const users = await loadUsers();
     users[userId].position = text.trim();
     await saveUser(userId, users[userId]);
     state.step = null;
     await ctx.reply(`Должность обновлена на "${users[userId].position}".`);
     await require('./handlers/menu').showProfile(ctx);
-  }
-  // Редактирование профиля: кастомная организация
-  else if (state.step === 'customOrgEditInput') {
+  } else if (state.step === 'customOrgEditInput') {
     const users = await loadUsers();
     users[userId].organization = text.trim();
     await saveUser(userId, users[userId]);
     state.step = null;
     const message = await ctx.reply(`Организация обновлена на "${users[userId].organization}".`, Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'profile')]]));
     state.messageIds.push(message.message_id);
-  }
-  // Создание отчета
-  else if (state.step === 'workDone') {
+  } else if (state.step === 'workDone') {
     state.report.workDone = text.trim();
     state.step = 'materials';
     await ctx.reply('💡 Введите информацию о поставленных материалах:');
-  }
-  else if (state.step === 'materials') {
+  } else if (state.step === 'materials') {
     state.report.materials = text.trim();
     const users = await loadUsers();
     const date = new Date().toISOString().split('T')[0];
@@ -197,14 +192,11 @@ ${state.report.materials}
     await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}`);
     state.step = null;
     state.report = {};
-  }
-  // Редактирование отчета
-  else if (state.step === 'editWorkDone') {
+  } else if (state.step === 'editWorkDone') {
     state.report.workDone = text.trim();
     state.step = 'editMaterials';
     await ctx.reply('💡 Введите новую информацию о поставленных материалах:');
-  }
-  else if (state.step === 'editMaterials') {
+  } else if (state.step === 'editMaterials') {
     state.report.materials = text.trim();
     const users = await loadUsers();
     const originalReportId = state.report.originalReportId;
