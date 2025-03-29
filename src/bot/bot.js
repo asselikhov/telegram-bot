@@ -66,11 +66,17 @@ bot.telegram.sendMessage = async (chatId, text, extra) => {
   return message;
 };
 
-// Обработчик всех текстовых сообщений
+// Обработчик всех текстовых сообщений (кроме команд)
 bot.on('text', async (ctx) => {
   const userId = ctx.from.id.toString();
+  const text = ctx.message.text;
   const state = ctx.state.userStates[userId];
-  console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". Текущее состояние:`, state);
+  console.log(`Получен текст от userId ${userId}: "${text}". Текущее состояние:`, state);
+
+  // Игнорируем команды (начинаются с "/")
+  if (text.startsWith('/')) {
+    return; // Пропускаем команды, они обрабатываются отдельно
+  }
 
   if (!state || !state.step) {
     return; // Игнорируем сообщения, если нет активного шага
@@ -81,7 +87,7 @@ bot.on('text', async (ctx) => {
   // Регистрация: выбор кастомной должности
   if (state.step === 'customPositionInput') {
     const users = await loadUsers();
-    users[userId].position = ctx.message.text.trim();
+    users[userId].position = text.trim();
     await saveUser(userId, users[userId]);
     state.step = 'selectOrganization';
     await require('./actions/organization').showOrganizationSelection(ctx, userId);
@@ -89,7 +95,7 @@ bot.on('text', async (ctx) => {
   // Регистрация: выбор кастомной организации
   else if (state.step === 'customOrganizationInput') {
     const users = await loadUsers();
-    users[userId].organization = ctx.message.text.trim();
+    users[userId].organization = text.trim();
     await saveUser(userId, users[userId]);
     state.step = 'enterFullName';
     const message = await ctx.reply('Введите ваше ФИО:');
@@ -98,7 +104,7 @@ bot.on('text', async (ctx) => {
   // Регистрация: ввод ФИО
   else if (state.step === 'enterFullName') {
     const users = await loadUsers();
-    users[userId].fullName = ctx.message.text.trim();
+    users[userId].fullName = text.trim();
     await saveUser(userId, users[userId]);
 
     const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
@@ -115,7 +121,7 @@ bot.on('text', async (ctx) => {
   // Редактирование профиля: ФИО
   else if (state.step === 'editFullName') {
     const users = await loadUsers();
-    users[userId].fullName = ctx.message.text.trim();
+    users[userId].fullName = text.trim();
     await saveUser(userId, users[userId]);
     await ctx.reply(`ФИО обновлено на "${users[userId].fullName}".`);
     state.step = null;
@@ -124,7 +130,7 @@ bot.on('text', async (ctx) => {
   // Редактирование профиля: кастомная должность
   else if (state.step === 'customPositionEditInput') {
     const users = await loadUsers();
-    users[userId].position = ctx.message.text.trim();
+    users[userId].position = text.trim();
     await saveUser(userId, users[userId]);
     state.step = null;
     await ctx.reply(`Должность обновлена на "${users[userId].position}".`);
@@ -133,7 +139,7 @@ bot.on('text', async (ctx) => {
   // Редактирование профиля: кастомная организация
   else if (state.step === 'customOrgEditInput') {
     const users = await loadUsers();
-    users[userId].organization = ctx.message.text.trim();
+    users[userId].organization = text.trim();
     await saveUser(userId, users[userId]);
     state.step = null;
     const message = await ctx.reply(`Организация обновлена на "${users[userId].organization}".`, Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'profile')]]));
@@ -141,12 +147,12 @@ bot.on('text', async (ctx) => {
   }
   // Создание отчета
   else if (state.step === 'workDone') {
-    state.report.workDone = ctx.message.text.trim();
+    state.report.workDone = text.trim();
     state.step = 'materials';
     await ctx.reply('💡 Введите информацию о поставленных материалах:');
   }
   else if (state.step === 'materials') {
-    state.report.materials = ctx.message.text.trim();
+    state.report.materials = text.trim();
     const users = await loadUsers();
     const date = new Date().toISOString().split('T')[0];
     const timestamp = new Date().toISOString();
@@ -194,12 +200,12 @@ ${state.report.materials}
   }
   // Редактирование отчета
   else if (state.step === 'editWorkDone') {
-    state.report.workDone = ctx.message.text.trim();
+    state.report.workDone = text.trim();
     state.step = 'editMaterials';
     await ctx.reply('💡 Введите новую информацию о поставленных материалах:');
   }
   else if (state.step === 'editMaterials') {
-    state.report.materials = ctx.message.text.trim();
+    state.report.materials = text.trim();
     const users = await loadUsers();
     const originalReportId = state.report.originalReportId;
     let originalReport = null;
