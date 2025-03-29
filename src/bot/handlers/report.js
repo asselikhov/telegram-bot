@@ -142,6 +142,8 @@ async function showReportDates(ctx, objectIndex) {
 async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
+    console.log(`[showReportTimestamps] Отчёты для userId ${userId}:`, reports);
+
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const objectName = uniqueObjects[objectIndex];
     const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
@@ -151,6 +153,8 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     await clearPreviousMessages(ctx, userId);
 
     const dateReports = objectReports.filter(r => r.date === selectedDate);
+    console.log(`[showReportTimestamps] Отчёты для "${objectName}" за ${selectedDate}:`, dateReports);
+
     const buttons = dateReports.map((report) => {
         const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
         return [Markup.button.callback(time, `select_report_time_${report.reportId}`)];
@@ -163,11 +167,15 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex) {
 async function showReportDetails(ctx, reportId) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
+    console.log(`[showReportDetails] Отчёты для userId ${userId}:`, reports);
+    console.log(`[showReportDetails] Поиск отчёта с reportId ${reportId}`);
+
     const report = reports[reportId];
 
     await clearPreviousMessages(ctx, userId);
 
     if (!report) {
+        console.log(`[showReportDetails] Отчёт с ID ${reportId} не найден`);
         return ctx.reply('Ошибка: отчёт не найден.');
     }
 
@@ -199,11 +207,14 @@ ${report.materials}
 async function editReport(ctx, reportId) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
+    console.log(`[editReport] Отчёты для userId ${userId}:`, reports);
+    console.log(`[editReport] Поиск отчёта с reportId ${reportId}`);
+
     const report = reports[reportId];
 
     if (!report || !report.reportId) {
         await clearPreviousMessages(ctx, userId);
-        console.log(`[editReport] Ошибка: отчёт с ID ${reportId} не найден или отсутствует reportId. Reports:`, reports);
+        console.log(`[editReport] Ошибка: отчёт с ID ${reportId} не найден или отсутствует reportId`);
         return ctx.reply('Ошибка: не удалось найти отчёт для редактирования.');
     }
 
@@ -214,6 +225,7 @@ async function editReport(ctx, reportId) {
         report: { ...report, originalReportId: report.reportId },
         messageIds: ctx.state.userStates[userId].messageIds
     };
+    console.log(`[editReport] Состояние установлено для userId ${userId}:`, ctx.state.userStates[userId]);
     await ctx.reply('💡 Введите новую информацию о выполненных работах:');
 }
 
