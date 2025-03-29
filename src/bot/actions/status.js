@@ -2,32 +2,43 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
 
-const STATUSES = ['В работе', 'В отпуске'];
-
 module.exports = (bot) => {
     bot.action('edit_status', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
-
-        const buttons = STATUSES.map((status, index) => [Markup.button.callback(status, `select_status_${index}`)]);
-        buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
-
-        await ctx.reply('Выберите новый статус:', Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].step = 'selectStatus'; // Устанавливаем step
+        await ctx.reply('Выберите новый статус:', Markup.inlineKeyboard([
+            [Markup.button.callback('В работе', 'status_work')],
+            [Markup.button.callback('В отпуске', 'status_vacation')],
+            [Markup.button.callback('↩️ Назад', 'profile')]
+        ]));
     });
 
-    bot.action(/select_status_(\d+)/, async (ctx) => {
+    bot.action('status_work', async (ctx) => {
         const userId = ctx.from.id.toString();
-        const statusIndex = parseInt(ctx.match[1], 10);
-        const selectedStatus = STATUSES[statusIndex];
-        if (!selectedStatus) return;
+        const users = await loadUsers();
 
         await clearPreviousMessages(ctx, userId);
-
-        const users = await loadUsers();
-        users[userId].status = selectedStatus;
+        users[userId].status = 'В работе';
         await saveUser(userId, users[userId]);
+        ctx.state.userStates[userId].step = null; // Сбрасываем только step
+        await ctx.reply('Статус обновлён на "В работе".');
+        await require('../handlers/menu').showProfile(ctx);
+    });
 
-        await ctx.reply(`Статус обновлен на "${selectedStatus}".`);
+    bot.action('status_vacation', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const users = await loadUsers();
+
+        await clearPreviousMessages(ctx, userId);
+        users[userId].status = 'В отпуске';
+        await saveUser(userId, users[userId]);
+        ctx.state.userStates[userId].step = null; // Сбрасываем только step
+        await ctx.reply('Статус обновлён на "В отпуске".');
+        await require('../handlers/menu').showProfile(ctx);
+    });
+
+    bot.action('profile', async (ctx) => {
         await require('../handlers/menu').showProfile(ctx);
     });
 };

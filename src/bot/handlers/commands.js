@@ -1,22 +1,22 @@
+const { Markup } = require('telegraf');
 const { loadUsers } = require('../../database/userModel');
-const { showMainMenu } = require('./menu');
 
 module.exports = (bot) => {
-    bot.command('test', async (ctx) => {
-        await ctx.reply('Тестовая команда выполнена!');
-    });
-
+    bot.command('test', (ctx) => ctx.reply('Бот работает!'));
     bot.command('listproducers', async (ctx) => {
-        const userId = ctx.from.id.toString();
+        const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
+            [Markup.button.callback(obj, `show_producers_${index}`)]
+        );
+        await ctx.reply('Выберите объект:', Markup.inlineKeyboard(buttons));
+    });
+    bot.action(/show_producers_(\d+)/, async (ctx) => {
+        const objectIndex = parseInt(ctx.match[1], 10);
+        const selectedObject = OBJECTS_LIST_CYRILLIC[objectIndex];
         const users = await loadUsers();
-        const producers = Object.entries(users)
-            .filter(([_, user]) => user.isApproved && user.position === 'Производитель работ')
-            .map(([_, user]) => `${user.fullName} (${user.organization})`);
+        const producers = Object.values(users)
+            .filter(u => u.position === 'Производитель работ' && u.isApproved && u.selectedObjects.includes(selectedObject))
+            .map(u => `${u.fullName} (${u.organization}) - ${u.status}`);
 
-        if (producers.length === 0) {
-            return ctx.reply('Нет зарегистрированных производителей работ.');
-        }
-
-        await ctx.reply(`Список производителей работ:\n${producers.join('\n')}`);
+        await ctx.reply(producers.length ? producers.join('\n') : 'Производители не найдены.');
     });
 };

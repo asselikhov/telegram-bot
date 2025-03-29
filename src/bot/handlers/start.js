@@ -6,21 +6,18 @@ const { showOrganizationSelection } = require('../actions/organization');
 const { clearPreviousMessages } = require('../utils');
 
 module.exports = (bot) => {
-    console.log('[start.js] Регистрация обработчика bot.start');
     bot.start(async (ctx) => {
         const userId = ctx.from.id.toString();
         const chatType = ctx.chat.type;
-        console.log(`[start] Получена команда /start от userId ${userId} в чате типа ${chatType}`);
 
         if (chatType !== 'private') {
-            console.log(`[start] Команда /start отклонена: не приватный чат`);
             return ctx.reply('Команда /start доступна только в личных сообщениях с ботом.');
         }
 
         const users = await loadUsers();
-        console.log(`[start] Пользователи загружены для userId ${userId}:`, users[userId]);
 
         if (!users[userId]) {
+            // Новый пользователь: инициализируем данные и начинаем с выбора объектов
             users[userId] = {
                 fullName: '',
                 position: '',
@@ -42,9 +39,10 @@ module.exports = (bot) => {
             await showObjectSelection(ctx, userId, []);
             console.log(`Новый пользователь ${userId} начал регистрацию с выбора объектов`);
         } else if (users[userId].isApproved) {
-            console.log(`[start] Пользователь ${userId} подтвержден, показываем меню`);
+            // Подтвержденный пользователь: показываем главное меню
             await require('./menu').showMainMenu(ctx);
         } else {
+            // Неподтвержденный пользователь: проверяем, завершена ли заявка
             const user = users[userId];
             await clearPreviousMessages(ctx, userId);
 
@@ -86,6 +84,7 @@ module.exports = (bot) => {
                 ctx.state.userStates[userId].messageIds.push(message.message_id);
                 console.log(`Пользователь ${userId} возобновил регистрацию с ввода ФИО`);
             } else {
+                // Все поля заполнены, заявка на рассмотрении
                 const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
                 ctx.state.userStates[userId].messageIds.push(message.message_id);
                 console.log(`Пользователь ${userId} уже заполнил заявку и ожидает подтверждения`);

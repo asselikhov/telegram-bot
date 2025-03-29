@@ -55,6 +55,53 @@ async function createReport(ctx) {
     await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
 }
 
+async function handleReportText(ctx, userId, state) {
+    const users = await loadUsers();
+    const date = new Date().toISOString().split('T')[0];
+    const timestamp = new Date().toISOString();
+    const reportId = `${date}_${users[userId].nextReportId++}`;
+    const report = {
+        reportId,
+        userId,
+        objectName: state.report.objectName,
+        date,
+        timestamp,
+        workDone: state.report.workDone,
+        materials: state.report.materials,
+        groupMessageId: null,
+        generalMessageId: null,
+        fullName: users[userId].fullName // Добавляем fullName
+    };
+
+    const reportText = `
+📅 ОТЧЕТ ЗА ${date}  
+🏢 ${state.report.objectName}  
+➖➖➖➖➖➖➖➖➖➖➖ 
+👷 ${users[userId].fullName} 
+
+ВЫПОЛНЕННЫЕ РАБОТЫ:  
+${state.report.workDone}  
+
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+${state.report.materials}  
+➖➖➖➖➖➖➖➖➖➖➖
+    `.trim();
+
+    const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
+    const groupMessage = await ctx.telegram.sendMessage(groupChatId, reportText);
+    const generalMessage = await ctx.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText);
+
+    report.groupMessageId = groupMessage.message_id;
+    report.generalMessageId = generalMessage.message_id;
+
+    await saveReport(userId, report);
+    await saveUser(userId, users[userId]);
+
+    await clearPreviousMessages(ctx, userId);
+
+    await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}`);
+}
+
 async function showReportObjects(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
@@ -183,6 +230,83 @@ async function editReport(ctx, reportId) {
     await ctx.reply('💡 Введите новую информацию о выполненных работах:');
 }
 
+async function handleEditedReport(ctx, userId, state) {
+    const users = await loadUsers();
+    const originalReportId = state.report.originalReportId;
+    let originalReport = null;
+
+    if (originalReportId) {
+        const userReports = await loadUserReports(userId);
+        originalReport = userReports[originalReportId];
+    }
+
+    const newTimestamp = new Date().toISOString();
+    const newReportId = `${state.report.date}_${users[userId].nextReportId++}`;
+    const newReport = {
+        reportId: newReportId,
+        userId,
+        objectName: state.report.objectName,
+        date: state.report.date,
+        timestamp: newTimestamp,
+        workDone: state.report.workDone,
+        materials: state.report.materials,
+        groupMessageId: null,
+        generalMessageId: null,
+        fullName: users[userId].fullName // Добавляем fullName
+    };
+
+    const reportText = `
+📅 ОТЧЕТ ЗА ${newReport.date} (ОБНОВЛЁН)  
+🏢 ${newReport.objectName}  
+➖➖➖➖➖➖➖➖➖➖➖ 
+👷 ${users[userId].fullName} 
+
+ВЫПОЛНЕННЫЕ РАБОТЫ:  
+${newReport.workDone}  
+
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+${newReport.materials}  
+➖➖➖➖➖➖➖➖➖➖➖
+    `.trim();
+
+    const groupChatId = OBJECT_GROUPS[newReport.objectName] || GENERAL_GROUP_CHAT_ID;
+
+    if (originalReport) {
+        if (originalReport.groupMessageId) {
+            await ctx.telegram.deleteMessage(groupChatId, originalReport.groupMessageId)
+                .catch(e => console.log(`Не удалось удалить старое сообщение ${originalReport.groupMessageId}: ${e.message}`));
+        }
+        if (originalReport.generalMessageId) {
+            await ctx.telegram.deleteMessage(GENERAL_GROUP_CHAT_ID, originalReport.generalMessageId)
+                .catch(e => console.log(`Не удалось удалить старое сообщение ${originalReport.generalMessageId}: ${e.message}`));
+        }
+
+        const client = await require('../../database/db').pool.connect();
+        try {
+            await client.query('DELETE FROM reports WHERE reportId = $1', [originalReportId]);
+        } finally {
+            client.release();
+        }
+    } else {
+        console.log(`Предупреждение: старый отчёт с ID ${originalReportId} не найден для userId ${userId}`);
+    }
+
+    const groupMessage = await ctx.telegram.sendMessage(groupChatId, reportText);
+    const generalMessage = await ctx.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText);
+
+    newReport.groupMessageId = groupMessage.message_id;
+    newReport.generalMessageId = generalMessage.message_id;
+
+    await saveReport(userId, newReport);
+    await saveUser(userId, users[userId]);
+
+    await clearPreviousMessages(ctx, userId);
+
+    await ctx.reply(`✅ Ваш отчёт обновлён:\n\n${reportText}`, Markup.inlineKeyboard([
+        [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
+    ]));
+}
+
 module.exports = (bot) => {
     bot.action('download_report', showDownloadReport);
     bot.action(/download_report_file_(\d+)/, (ctx) => downloadReportFile(ctx, parseInt(ctx.match[1], 10)));
@@ -197,7 +321,7 @@ module.exports = (bot) => {
         await clearPreviousMessages(ctx, userId);
 
         ctx.state.userStates[userId] = { step: 'workDone', report: { objectName: selectedObject }, messageIds: ctx.state.userStates[userId].messageIds || [] };
-        await ctx.reply('💡 Введите информацию о выполненных работах:');
+        await ctx.reply('💡 Введите информацию о выполненных работ:');
     });
 
     bot.action('view_reports', showReportObjects);
@@ -205,6 +329,47 @@ module.exports = (bot) => {
     bot.action(/select_report_date_(\d+)_(\d+)/, (ctx) => showReportTimestamps(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
     bot.action(/select_report_time_(.+)/, (ctx) => showReportDetails(ctx, ctx.match[1]));
     bot.action(/edit_report_(.+)/, (ctx) => editReport(ctx, ctx.match[1]));
+
+    bot.on('text', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". Текущее состояние:`, state);
+
+        if (!state || (!state.step?.includes('workDone') && !state.step?.includes('materials') && !state.step?.includes('editFullName') && !state.step?.includes('editWorkDone') && !state.step?.includes('editMaterials'))) {
+            await clearPreviousMessages(ctx, userId);
+            await ctx.reply('Пожалуйста, начните процесс заново, используя команды или кнопки.');
+            return;
+        }
+
+        await clearPreviousMessages(ctx, userId);
+
+        if (state.step === 'workDone') {
+            state.report.workDone = ctx.message.text.trim();
+            state.step = 'materials';
+            await ctx.reply('💡 Введите информацию о поставленных материалах:');
+        } else if (state.step === 'materials') {
+            state.report.materials = ctx.message.text.trim();
+            await handleReportText(ctx, userId, state);
+            state.step = null;
+            state.report = {};
+        } else if (state.step === 'editFullName') {
+            const users = await loadUsers();
+            users[userId].fullName = ctx.message.text.trim();
+            await saveUser(userId, users[userId]);
+            await ctx.reply(`ФИО обновлено на "${users[userId].fullName}".`);
+            state.step = null;
+            await require('./menu').showProfile(ctx);
+        } else if (state.step === 'editWorkDone') {
+            state.report.workDone = ctx.message.text.trim();
+            state.step = 'editMaterials';
+            await ctx.reply('💡 Введите новую информацию о поставленных материалах:');
+        } else if (state.step === 'editMaterials') {
+            state.report.materials = ctx.message.text.trim();
+            await handleEditedReport(ctx, userId, state);
+            state.step = null;
+            state.report = {};
+        }
+    });
 
     bot.action('edit_fullName', async (ctx) => {
         const userId = ctx.from.id.toString();
