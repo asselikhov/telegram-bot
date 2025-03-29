@@ -97,25 +97,36 @@ module.exports = (bot) => {
         }
 
         if (state.step === 'enterFullName') {
-            await clearPreviousMessages(ctx, userId);
-            const users = await loadUsers();
-            users[userId].fullName = ctx.message.text.trim();
-            await saveUser(userId, users[userId]);
+            try {
+                await clearPreviousMessages(ctx, userId);
+                const users = await loadUsers();
+                const fullName = ctx.message.text.trim();
+                users[userId].fullName = fullName;
 
-            console.log(`ФИО сохранено для userId ${userId}: ${users[userId].fullName}`);
+                console.log(`Сохраняем ФИО для userId ${userId}: ${fullName}`);
+                await saveUser(userId, users[userId]);
 
-            const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
-            state.messageIds.push(message.message_id);
+                const userMessage = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
+                state.messageIds.push(userMessage.message_id);
 
-            const adminText = `\n${users[userId].fullName} - ${users[userId].position} (${users[userId].organization})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
-            await ctx.telegram.sendMessage(ADMIN_ID, `📝 СПИСОК ЗАЯВОК${adminText}`, Markup.inlineKeyboard([
-                [Markup.button.callback(`✅ Одобрить (${users[userId].fullName})`, `approve_${userId}`)],
-                [Markup.button.callback(`❌ Отклонить (${users[userId].fullName})`, `reject_${userId}`)]
-            ]));
+                const adminText = `\n${users[userId].fullName || 'ФИО не указано'} - ${users[userId].position || 'Не указана'} (${users[userId].organization || 'Не указана'})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
+                console.log(`Отправляем заявку администратору для userId ${userId}: ${adminText}`);
+                const adminMessage = await ctx.telegram.sendMessage(
+                    ADMIN_ID,
+                    `📝 НОВАЯ ЗАЯВКА${adminText}`,
+                    Markup.inlineKeyboard([
+                        [Markup.button.callback(`✅ Одобрить (${users[userId].fullName || 'Без имени'})`, `approve_${userId}`)],
+                        [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Без имени'})`, `reject_${userId}`)]
+                    ])
+                );
+                console.log(`Заявка успешно отправлена администратору. Message ID: ${adminMessage.message_id}`);
 
-            console.log(`Заявка отправлена администратору для userId ${userId}`);
-
-            ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
+                ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
+                console.log(`Состояние сброшено для userId ${userId}`);
+            } catch (error) {
+                console.error(`Ошибка при обработке шага enterFullName для userId ${userId}:`, error);
+                await ctx.reply('Произошла ошибка. Попробуйте позже.');
+            }
             return;
         }
 
