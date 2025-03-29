@@ -1,6 +1,7 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { showPositionSelection } = require('../actions/position');
+const { showMainMenu } = require('./menu'); // Добавляем импорт
 
 module.exports = (bot) => {
     bot.start(async (ctx) => {
@@ -29,7 +30,7 @@ module.exports = (bot) => {
         } else if (!users[userId].isApproved) {
             await ctx.reply('Ваша заявка на рассмотрении.');
         } else {
-            await showMainMenu(ctx);
+            await showMainMenu(ctx); // Здесь используется импортированная функция
         }
     });
 };

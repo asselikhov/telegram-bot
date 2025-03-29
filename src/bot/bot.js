@@ -12,6 +12,14 @@ const statusActions = require('./actions/status');
 
 const bot = new Telegraf(BOT_TOKEN);
 
+// Инициализация состояния
+const userStates = {};
+
+bot.use((ctx, next) => {
+  ctx.state.userStates = userStates; // Передаём состояние в контекст
+  return next();
+});
+
 startHandler(bot);
 menuHandler(bot);
 reportHandler(bot);
