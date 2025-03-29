@@ -1,5 +1,6 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
+const { pool } = require('../../database/db'); // Добавляем импорт pool
 const { ADMIN_ID } = require('../../config/config');
 
 async function showAdminPanel(ctx) {
