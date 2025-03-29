@@ -28,6 +28,7 @@ module.exports = (bot) => {
         ctx.state.userStates[userId].step = 'enterFullName';
         const message = await ctx.reply('Введите ваше ФИО:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+        console.log(`Шаг enterFullName установлен для userId ${userId}. State:`, ctx.state.userStates[userId]);
     });
 
     bot.action('custom_organization', async (ctx) => {
@@ -36,6 +37,7 @@ module.exports = (bot) => {
         ctx.state.userStates[userId].step = 'customOrganizationInput';
         const message = await ctx.reply('Введите название вашей организации:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+        console.log(`Шаг customOrganizationInput установлен для userId ${userId}. State:`, ctx.state.userStates[userId]);
     });
 
     bot.action('edit_organization', async (ctx) => {
@@ -75,7 +77,12 @@ module.exports = (bot) => {
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        if (!state) return;
+        if (!state) {
+            console.log(`Нет состояния для userId ${userId}`);
+            return;
+        }
+
+        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". State:`, state);
 
         if (state.step === 'customOrganizationInput') {
             await clearPreviousMessages(ctx, userId);
@@ -85,11 +92,14 @@ module.exports = (bot) => {
             state.step = 'enterFullName';
             const message = await ctx.reply('Введите ваше ФИО:');
             state.messageIds.push(message.message_id);
+            console.log(`Переход к enterFullName для userId ${userId}. State:`, state);
         } else if (state.step === 'enterFullName') {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].fullName = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
+
+            console.log(`ФИО сохранено для userId ${userId}: ${users[userId].fullName}`);
 
             const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
             state.messageIds.push(message.message_id);
@@ -99,6 +109,8 @@ module.exports = (bot) => {
                 [Markup.button.callback(`✅ Одобрить (${users[userId].fullName})`, `approve_${userId}`)],
                 [Markup.button.callback(`❌ Отклонить (${users[userId].fullName})`, `reject_${userId}`)]
             ]));
+
+            console.log(`Заявка отправлена администратору для userId ${userId}`);
 
             ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
         } else if (state.step === 'customOrgEditInput') {
