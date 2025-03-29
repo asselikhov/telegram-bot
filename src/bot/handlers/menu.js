@@ -8,6 +8,11 @@ async function showMainMenu(ctx) {
     const user = users[userId] || {};
 
     await clearPreviousMessages(ctx, userId);
+    // Очищаем messageIds после полного возврата в главное меню
+    if (ctx.state.userStates[userId]) {
+        ctx.state.userStates[userId].messageIds = [];
+        console.log(`messageIds очищен для userId ${userId} при возврате в главное меню`);
+    }
 
     const menuText = `
 🚀 Главное меню  

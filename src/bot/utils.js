@@ -12,8 +12,8 @@ async function clearPreviousMessages(ctx, userId) {
                 console.log(`Не удалось удалить сообщение ${messageId}:`, e.message);
             }
         }
-        state.messageIds = [];
-        console.log(`messageIds очищен для userId ${userId}`);
+        // Не очищаем messageIds здесь, чтобы сохранить историю сообщений
+        // state.messageIds = [];
     } else {
         console.log(`Нет сообщений для удаления для userId ${userId}. State:`, state);
     }

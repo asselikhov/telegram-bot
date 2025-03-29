@@ -53,7 +53,9 @@ module.exports = (bot) => {
         const users = await loadUsers();
         users[userId].selectedObjects = state.selectedObjects;
         await saveUser(userId, users[userId]);
-        delete ctx.state.userStates[userId];
+        // Сохраняем messageIds, сбрасываем только step и selectedObjects
+        ctx.state.userStates[userId] = { step: null, selectedObjects: [], messageIds: state.messageIds };
+        console.log(`Состояние обновлено после confirm_objects для userId ${userId}:`, ctx.state.userStates[userId]);
         await require('../handlers/menu').showProfile(ctx);
     });
 
