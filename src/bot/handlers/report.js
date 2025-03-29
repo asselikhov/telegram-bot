@@ -135,13 +135,14 @@ module.exports = (bot) => {
         } else if (state.step === 'materials') {
             state.report.materials = ctx.message.text.trim();
             await handleReportText(ctx, userId, state);
-            delete ctx.state.userStates[userId];
+            state.step = null; // Сбрасываем только step
+            state.report = {}; // Очищаем report
         } else if (state.step === 'editFullName') {
             const users = await loadUsers();
             users[userId].fullName = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
             await ctx.reply(`ФИО обновлено на "${users[userId].fullName}".`);
-            delete ctx.state.userStates[userId];
+            state.step = null; // Сбрасываем только step, сохраняем messageIds
             await require('./menu').showProfile(ctx);
         }
     });
