@@ -102,10 +102,11 @@ module.exports = (bot) => {
         ctx.state.userStates[userId] = { step: 'workDone', report: { objectName: selectedObject } };
         await ctx.reply('Введите наименование проделанных работ (или "работы не производились"):');
     });
+
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        if (!state || !state.step.includes('workDone') && !state.step.includes('materials')) return;
+        if (!state || (!state.step.includes('workDone') && !state.step.includes('materials') && !state.step.includes('editFullName'))) return;
 
         if (state.step === 'workDone') {
             state.report.workDone = ctx.message.text.trim();
@@ -115,6 +116,40 @@ module.exports = (bot) => {
             state.report.materials = ctx.message.text.trim();
             await handleReportText(ctx, userId, state);
             delete ctx.state.userStates[userId];
+        } else if (state.step === 'editFullName') {
+            const users = await loadUsers();
+            users[userId].fullName = ctx.message.text.trim();
+            await saveUser(userId, users[userId]);
+            await ctx.reply(`ФИО обновлено на "${users[userId].fullName}".`);
+            delete ctx.state.userStates[userId];
+            await require('./menu').showProfile(ctx); // Возвращаемся в профиль
         }
+    });
+
+    // Добавляем обработчик для edit_fullName
+    bot.action('edit_fullName', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        ctx.state.userStates[userId] = { step: 'editFullName' };
+        await ctx.reply('Введите ваше новое ФИО:');
+    });
+
+    // Добавляем обработчик для view_reports
+    bot.action('view_reports', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const users = await loadUsers();
+        const reports = await loadUserReports(userId);
+
+        if (Object.keys(reports).length === 0) {
+            await ctx.reply('У вас пока нет отчетов.');
+            return;
+        }
+
+        const reportList = Object.values(reports).map(r => {
+            return `📅 ${r.date} - ${r.objectName}\n🔧 ${r.workDone}\n📦 ${r.materials}`;
+        }).join('\n\n');
+
+        await ctx.reply(`Ваши отчеты:\n\n${reportList}`, Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'profile')]
+        ]));
     });
 };

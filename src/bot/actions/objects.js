@@ -8,6 +8,7 @@ async function showObjectSelection(ctx, userId, selected = []) {
         return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${obj}`, `toggle_object_${index}`)];
     });
     buttons.push([Markup.button.callback('Готово', 'confirm_objects')]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'profile')]); // Добавляем кнопку "Назад"
     await ctx.reply('Выберите объекты:', Markup.inlineKeyboard(buttons));
 }
 
@@ -18,7 +19,7 @@ module.exports = (bot) => {
         const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
         const state = ctx.state.userStates[userId];
 
-        if (!state || state.step !== 'selectObjects') return;
+        if (!state || (state.step !== 'selectObjects' && state.step !== 'editObjects')) return;
 
         const selectedObjects = state.selectedObjects;
         const index = selectedObjects.indexOf(objectName);
@@ -27,19 +28,30 @@ module.exports = (bot) => {
 
         await showObjectSelection(ctx, userId, selectedObjects);
     });
+
     bot.action('confirm_objects', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
         const users = await loadUsers();
 
-        if (state.selectedObjects.length === 0) {
+        if (!state || state.selectedObjects.length === 0) {
             await ctx.reply('Выберите хотя бы один объект.');
             return;
         }
 
         users[userId].selectedObjects = state.selectedObjects;
         await saveUser(userId, users[userId]);
-        await ctx.reply('Объекты выбраны.');
+        await ctx.reply('Объекты обновлены.');
         delete ctx.state.userStates[userId];
+        await require('../handlers/menu').showProfile(ctx); // Возвращаемся в профиль
+    });
+
+    // Добавляем обработчик для edit_object
+    bot.action('edit_object', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const users = await loadUsers();
+        const currentObjects = users[userId].selectedObjects || [];
+        ctx.state.userStates[userId] = { step: 'editObjects', selectedObjects: [...currentObjects] };
+        await showObjectSelection(ctx, userId, currentObjects);
     });
 };
