@@ -46,7 +46,7 @@ async function showRequests(ctx) {
     ]);
     buttons.push([Markup.button.callback('↩️ Назад в админ-панель', 'admin_panel')]);
 
-    const message = await ctx.reply(`📝 СПИСОК ЗАЯВОК${requestsText}`, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(`📝 СПИСОК ЗАЯВОК\n\n${requestsText}`, Markup.inlineKeyboard(buttons));
     ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
