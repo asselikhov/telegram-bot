@@ -1,15 +1,21 @@
 async function clearPreviousMessages(ctx, userId) {
     const state = ctx.state.userStates[userId];
-    // Проверяем, что state существует и имеет messageIds
+    console.log(`clearPreviousMessages вызван для userId ${userId}. State:`, state);
+
     if (state && Array.isArray(state.messageIds) && state.messageIds.length > 0) {
+        console.log(`Найдено ${state.messageIds.length} сообщений для удаления:`, state.messageIds);
         for (const messageId of state.messageIds) {
             try {
                 await ctx.telegram.deleteMessage(ctx.chat.id, messageId);
+                console.log(`Сообщение ${messageId} успешно удалено`);
             } catch (e) {
                 console.log(`Не удалось удалить сообщение ${messageId}:`, e.message);
             }
         }
-        state.messageIds = []; // Очищаем массив после удаления
+        state.messageIds = [];
+        console.log(`messageIds очищен для userId ${userId}`);
+    } else {
+        console.log(`Нет сообщений для удаления для userId ${userId}. State:`, state);
     }
 }
 

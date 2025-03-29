@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const { loadUsers } = require('../../database/userModel');
-const { clearPreviousMessages } = require('../utils'); // Новый импорт
+const { clearPreviousMessages } = require('../utils');
 
 async function showMainMenu(ctx) {
     const userId = ctx.from.id.toString();

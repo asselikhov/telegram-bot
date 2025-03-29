@@ -23,7 +23,7 @@ bot.use((ctx, next) => {
       step: null,
       selectedObjects: [],
       report: {},
-      messageIds: [] // Массив для хранения ID сообщений бота
+      messageIds: []
     };
   }
   ctx.state.userStates = userStates;
@@ -37,6 +37,9 @@ bot.telegram.sendMessage = async (chatId, text, extra) => {
   const userId = chatId.toString();
   if (userStates[userId]) {
     userStates[userId].messageIds.push(message.message_id);
+    console.log(`Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Текущий массив:`, userStates[userId].messageIds);
+  } else {
+    console.log(`Ошибка: userStates для ${userId} не инициализировано при отправке сообщения`);
   }
   return message;
 };
