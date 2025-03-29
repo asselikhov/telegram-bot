@@ -2,7 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { OBJECTS_LIST_CYRILLIC } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
-const { showPositionSelection } = require('./position'); // Импортируем для перехода
+const { showPositionSelection } = require('./position'); // Импортируем для перехода при регистрации
 
 async function showObjectSelection(ctx, userId, selected = [], messageId = null) {
     const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) => {
@@ -69,12 +69,22 @@ module.exports = (bot) => {
         users[userId].selectedObjects = state.selectedObjects;
         await saveUser(userId, users[userId]);
 
-        // Переход к выбору должности
-        state.step = 'selectPosition';
-        state.selectedObjects = []; // Очищаем временное хранилище
-        console.log(`Состояние обновлено после confirm_objects для userId ${userId}:`, ctx.state.userStates[userId]);
         await clearPreviousMessages(ctx, userId);
-        await showPositionSelection(ctx, userId);
+
+        if (state.step === 'editObjects') {
+            // Если это редактирование из личного кабинета, возвращаемся в профиль
+            state.step = null;
+            state.selectedObjects = []; // Очищаем временное хранилище
+            console.log(`Редактирование объектов завершено для userId ${userId}. State:`, ctx.state.userStates[userId]);
+            await ctx.reply('Объекты успешно обновлены.');
+            await require('../handlers/menu').showProfile(ctx);
+        } else if (state.step === 'selectObjects') {
+            // Если это регистрация, переходим к выбору должности
+            state.step = 'selectPosition';
+            state.selectedObjects = []; // Очищаем временное хранилище
+            console.log(`Состояние обновлено после confirm_objects для userId ${userId}:`, ctx.state.userStates[userId]);
+            await showPositionSelection(ctx, userId);
+        }
     });
 
     bot.action('edit_object', async (ctx) => {
