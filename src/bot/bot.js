@@ -79,9 +79,8 @@ bot.on('text', async (ctx) => {
       state.messageIds = [message.message_id];
       console.log(`Новый пользователь ${userId} начал регистрацию с выбора объектов`);
     } else if (users[userId].isApproved) {
-      // Заглушка вместо showMainMenu
-      await ctx.reply('Вы подтверждены! Главное меню скоро будет доступно.');
-      console.log(`Подтверждённый пользователь ${userId} получил заглушку меню`);
+      await require('./menu').showMainMenu(ctx);
+      console.log(`Подтверждённый пользователь ${userId} получил главное меню`);
     } else {
       const user = users[userId];
       state.messageIds = [];
