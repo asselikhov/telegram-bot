@@ -13,6 +13,7 @@ async function showObjectSelection(ctx, userId, selected = []) {
     buttons.push([Markup.button.callback('Готово', 'confirm_objects')]);
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
     await ctx.reply('Выберите объекты:', Markup.inlineKeyboard(buttons));
+    console.log(`Показан выбор объектов для userId ${userId}. Выбрано:`, selected);
 }
 
 module.exports = (bot) => {
@@ -22,7 +23,12 @@ module.exports = (bot) => {
         const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
         const state = ctx.state.userStates[userId];
 
-        if (!state || (state.step !== 'selectObjects' && state.step !== 'editObjects')) return;
+        console.log(`toggle_object_${objectIndex} вызван для userId ${userId}. State:`, state);
+
+        if (!state || (state.step !== 'selectObjects' && state.step !== 'editObjects')) {
+            console.log(`Ошибка: Неверное состояние для userId ${userId}. State:`, state);
+            return;
+        }
 
         const selectedObjects = state.selectedObjects;
         const index = selectedObjects.indexOf(objectName);
@@ -35,7 +41,8 @@ module.exports = (bot) => {
     bot.action('confirm_objects', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        const users = await loadUsers();
+
+        console.log(`confirm_objects вызван для userId ${userId}. State:`, state);
 
         if (!state || state.selectedObjects.length === 0) {
             await clearPreviousMessages(ctx, userId);
@@ -43,6 +50,7 @@ module.exports = (bot) => {
             return;
         }
 
+        const users = await loadUsers();
         users[userId].selectedObjects = state.selectedObjects;
         await saveUser(userId, users[userId]);
         delete ctx.state.userStates[userId];
@@ -53,7 +61,8 @@ module.exports = (bot) => {
         const userId = ctx.from.id.toString();
         const users = await loadUsers();
         const currentObjects = users[userId].selectedObjects || [];
-        ctx.state.userStates[userId] = { step: 'editObjects', selectedObjects: [...currentObjects] };
+        ctx.state.userStates[userId] = { step: 'editObjects', selectedObjects: [...currentObjects], messageIds: ctx.state.userStates[userId].messageIds };
+        console.log(`edit_object вызван для userId ${userId}. State:`, ctx.state.userStates[userId]);
         await showObjectSelection(ctx, userId, currentObjects);
     });
 };
