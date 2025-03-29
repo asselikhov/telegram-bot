@@ -76,17 +76,20 @@ module.exports = (bot) => {
 
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
+        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}"`);
+
         const state = ctx.state.userStates[userId];
-        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". State:`, state);
+        console.log(`Состояние для userId ${userId}:`, state);
 
         if (!state) {
             console.log(`Нет состояния для userId ${userId}, пропускаем обработку`);
             return;
         }
 
-        console.log(`Проверяем шаг для userId ${userId}: ${state.step}`);
+        console.log(`Текущий шаг для userId ${userId}: ${state.step}`);
 
         if (state.step === 'customOrganizationInput') {
+            console.log(`Обработка шага customOrganizationInput для userId ${userId}`);
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
@@ -109,6 +112,7 @@ module.exports = (bot) => {
         }
 
         if (state.step === 'customOrgEditInput') {
+            console.log(`Обработка шага customOrgEditInput для userId ${userId}`);
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
