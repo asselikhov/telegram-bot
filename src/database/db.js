@@ -37,11 +37,10 @@ async function initializeDatabase() {
                 materials TEXT,
                 groupMessageId TEXT,
                 generalMessageId TEXT,
-                fullName TEXT,  -- Новый столбец
+                fullName TEXT,
                 FOREIGN KEY (userId) REFERENCES users(userId)
             );
         `);
-        // Добавляем столбец fullName, если он еще не существует
         await client.query(`
             DO $$
             BEGIN

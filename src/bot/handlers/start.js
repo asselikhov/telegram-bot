@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { showPositionSelection } = require('../actions/position');
-const { showMainMenu } = require('./menu'); // Импорт showMainMenu
+const { showObjectSelection } = require('../actions/objects'); // Импортируем функцию выбора объектов
+const { ADMIN_ID } = require('../../config/config');
 
 module.exports = (bot) => {
     bot.start(async (ctx) => {
@@ -15,6 +15,7 @@ module.exports = (bot) => {
         const users = await loadUsers();
 
         if (!users[userId]) {
+            // Новый пользователь: инициализируем данные и начинаем с выбора объектов
             users[userId] = {
                 fullName: '',
                 position: '',
@@ -26,11 +27,17 @@ module.exports = (bot) => {
                 reports: {}
             };
             await saveUser(userId, users[userId]);
-            await showPositionSelection(ctx, userId);
+            ctx.state.userStates[userId] = {
+                step: 'selectObjects',
+                selectedObjects: [],
+                report: {},
+                messageIds: []
+            };
+            await showObjectSelection(ctx, userId, []); // Начинаем с выбора объектов
         } else if (!users[userId].isApproved) {
             await ctx.reply('Ваша заявка на рассмотрении.');
         } else {
-            await showMainMenu(ctx); // Вызов функции
+            await require('./menu').showMainMenu(ctx); // Для подтвержденных пользователей
         }
     });
 };

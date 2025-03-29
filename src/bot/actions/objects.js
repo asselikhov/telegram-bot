@@ -2,6 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { OBJECTS_LIST_CYRILLIC } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
+const { showPositionSelection } = require('./position'); // Импортируем для перехода
 
 async function showObjectSelection(ctx, userId, selected = [], messageId = null) {
     const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) => {
@@ -9,23 +10,20 @@ async function showObjectSelection(ctx, userId, selected = [], messageId = null)
         return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${obj}`, `toggle_object_${index}`)];
     });
     buttons.push([Markup.button.callback('Готово', 'confirm_objects')]);
-    buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
     const keyboard = Markup.inlineKeyboard(buttons);
     const text = 'Выберите объекты (можно выбрать несколько):';
 
     if (messageId) {
-        // Редактируем существующее сообщение
         try {
             await ctx.telegram.editMessageText(ctx.chat.id, messageId, null, text, keyboard);
             console.log(`Сообщение ${messageId} отредактировано для userId ${userId}. Выбрано:`, selected);
         } catch (e) {
             console.log(`Не удалось отредактировать сообщение ${messageId}:`, e.message);
-            await ctx.reply(text, keyboard); // Если редактирование не удалось, отправляем новое
+            await ctx.reply(text, keyboard);
         }
     } else {
-        // Отправляем новое сообщение и сохраняем его ID
-        await clearPreviousMessages(ctx, userId); // Очищаем предыдущие сообщения только при первом вызове
+        await clearPreviousMessages(ctx, userId);
         const message = await ctx.reply(text, keyboard);
         ctx.state.userStates[userId].messageIds.push(message.message_id);
         console.log(`Новое сообщение ${message.message_id} отправлено для userId ${userId}. Выбрано:`, selected);
@@ -48,10 +46,9 @@ module.exports = (bot) => {
 
         const selectedObjects = state.selectedObjects;
         const index = selectedObjects.indexOf(objectName);
-        if (index === -1) selectedObjects.push(objectName); // Добавляем объект
-        else selectedObjects.splice(index, 1); // Удаляем объект
+        if (index === -1) selectedObjects.push(objectName);
+        else selectedObjects.splice(index, 1);
 
-        // Редактируем текущее сообщение
         const lastMessageId = state.messageIds[state.messageIds.length - 1];
         await showObjectSelection(ctx, userId, selectedObjects, lastMessageId);
     });
@@ -71,18 +68,23 @@ module.exports = (bot) => {
         const users = await loadUsers();
         users[userId].selectedObjects = state.selectedObjects;
         await saveUser(userId, users[userId]);
-        ctx.state.userStates[userId] = { step: null, selectedObjects: [], messageIds: state.messageIds };
+
+        // Переход к выбору должности
+        state.step = 'selectPosition';
+        state.selectedObjects = []; // Очищаем временное хранилище
         console.log(`Состояние обновлено после confirm_objects для userId ${userId}:`, ctx.state.userStates[userId]);
         await clearPreviousMessages(ctx, userId);
-        await require('../handlers/menu').showProfile(ctx);
+        await showPositionSelection(ctx, userId);
     });
 
     bot.action('edit_object', async (ctx) => {
         const userId = ctx.from.id.toString();
         const users = await loadUsers();
         const currentObjects = users[userId].selectedObjects || [];
-        ctx.state.userStates[userId] = { step: 'editObjects', selectedObjects: [...currentObjects], messageIds: ctx.state.userStates[userId].messageIds };
+        ctx.state.userStates[userId] = { step: 'editObjects', selectedObjects: [...currentObjects], messageIds: ctx.state.userStates[userId].messageIds || [] };
         console.log(`edit_object вызван для userId ${userId}. State:`, ctx.state.userStates[userId]);
-        await showObjectSelection(ctx, userId, currentObjects); // Первоначальный вызов без messageId
+        await showObjectSelection(ctx, userId, currentObjects);
     });
 };
+
+module.exports.showObjectSelection = showObjectSelection;
