@@ -1,5 +1,14 @@
 const { Markup } = require('telegraf');
 
+async function showOrganizationSelection(ctx, userId) {
+    const buttons = [
+        [Markup.button.callback('Тестовая организация', 'select_organization_0')],
+        [Markup.button.callback('Ввести свою', 'custom_organization')]
+    ];
+    const message = await ctx.reply('Выберите вашу организацию:', Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds = [message.message_id];
+}
+
 module.exports = (bot) => {
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
@@ -12,7 +21,7 @@ module.exports = (bot) => {
             const fullName = ctx.message.text.trim();
             await ctx.reply(`Ваше ФИО: ${fullName}`);
             console.log(`Ответ отправлен для userId ${userId}: ${fullName}`);
-            state.step = null; // Сбрасываем шаг
+            state.step = null;
         } else {
             console.log(`Шаг не enterFullName или state отсутствует для userId ${userId}`);
         }
@@ -26,3 +35,6 @@ module.exports = (bot) => {
         console.log(`Шаг enterFullName установлен для userId ${userId}. State:`, ctx.state.userStates[userId]);
     });
 };
+
+// Экспортируем функцию отдельно
+module.exports.showOrganizationSelection = showOrganizationSelection;
