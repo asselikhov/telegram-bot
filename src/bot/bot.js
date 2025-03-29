@@ -32,15 +32,12 @@ bot.use((ctx, next) => {
   }
   ctx.state.userStates = userStates;
 
-  // Сохраняем оригинальный ctx.reply
   const originalReply = ctx.reply.bind(ctx);
   ctx.reply = async (text, extra) => {
     const message = await originalReply(text, extra);
     if (userStates[userId]) {
       userStates[userId].messageIds.push(message.message_id);
       console.log(`[ctx.reply] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
-    } else {
-      console.log(`Ошибка: userStates для ${userId} не инициализировано при ctx.reply`);
     }
     return message;
   };
@@ -48,20 +45,17 @@ bot.use((ctx, next) => {
   return next();
 });
 
-// Перехват ctx.telegram.sendMessage
-const originalSendMessage = bot.telegram.sendMessage.bind(bot.telegram);
-bot.telegram.sendMessage = async (chatId, text, extra) => {
-  const message = await originalSendMessage(chatId, text, extra);
-  const userId = chatId.toString();
-  if (userStates[userId]) {
-    userStates[userId].messageIds.push(message.message_id);
-    console.log(`[sendMessage] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
-  } else {
-    console.log(`Ошибка: userStates для ${userId} не инициализировано при sendMessage`);
-  }
-  return message;
-};
+// Глобальный обработчик текста для диагностики
+bot.on('text', async (ctx) => {
+  const userId = ctx.from.id.toString();
+  console.log(`[Глобальный] Получен текст от userId ${userId}: "${ctx.message.text}"`);
+  const state = ctx.state.userStates[userId];
+  console.log(`[Глобальный] Состояние для userId ${userId}:`, state);
+  await ctx.reply(`Эхо: ${ctx.message.text}`);
+  console.log(`[Глобальный] Ответ отправлен для userId ${userId}`);
+});
 
+// Подключение остальных обработчиков
 startHandler(bot);
 menuHandler(bot);
 reportHandler(bot);
