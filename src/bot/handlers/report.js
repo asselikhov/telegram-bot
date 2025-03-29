@@ -142,22 +142,18 @@ async function showReportDates(ctx, objectIndex) {
 async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
-    console.log(`[showReportTimestamps] Отчёты для userId ${userId}:`, reports);
-
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const objectName = uniqueObjects[objectIndex];
-    const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
-    const uniqueDates = [...new Set(objectReports.map(r => r.date))];
+    const objectReports = Object.entries(reports).filter(([key, r]) => r.objectName === objectName);
+    const uniqueDates = [...new Set(objectReports.map(([key, r]) => r.date))];
     const selectedDate = uniqueDates[dateIndex];
 
     await clearPreviousMessages(ctx, userId);
 
-    const dateReports = objectReports.filter(r => r.date === selectedDate);
-    console.log(`[showReportTimestamps] Отчёты для "${objectName}" за ${selectedDate}:`, dateReports);
-
-    const buttons = dateReports.map((report) => {
+    const dateReports = objectReports.filter(([key, r]) => r.date === selectedDate);
+    const buttons = dateReports.map(([reportId, report]) => {
         const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
-        return [Markup.button.callback(time, `select_report_time_${report.reportId}`)];
+        return [Markup.button.callback(time, `select_report_time_${reportId}`)];
     });
     buttons.push([Markup.button.callback('↩️ Назад', `select_report_object_${objectIndex}`)]);
 
