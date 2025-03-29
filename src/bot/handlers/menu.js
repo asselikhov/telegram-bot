@@ -52,7 +52,7 @@ async function showProfile(ctx) {
 ➖➖➖➖➖➖➖➖➖➖➖  
 ${user.position || 'Не указана'}  
 ${user.organization || 'Не указана'}  
-ИТР: ${user.fullName || 'Не указано'}  
+${user.fullName || 'Не указано'}  
 
 ${objectsList}  
 

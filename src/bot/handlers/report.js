@@ -76,10 +76,12 @@ async function handleReportText(ctx, userId, state) {
 📅 ОТЧЕТ ЗА ${date}  
 🏢 ${state.report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ИТР: ${users[userId].fullName} 
-🔧 ВЫПОЛНЕННЫЕ РАБОТЫ:  
+👷 ${users[userId].fullName} 
+
+ВЫПОЛНЕННЫЕ РАБОТЫ:  
 ${state.report.workDone}  
-📦 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 ${state.report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
     `.trim();
