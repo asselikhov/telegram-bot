@@ -32,7 +32,8 @@ async function showMainMenu(ctx) {
         buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);
     }
 
-    await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 async function showProfile(ctx) {
@@ -70,7 +71,8 @@ ${statusEmoji} ${user.status || 'Не указан'}
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ];
 
-    await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 module.exports = (bot) => {

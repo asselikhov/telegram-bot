@@ -8,7 +8,8 @@ async function showOrganizationSelection(ctx, userId) {
 
     const buttons = ORGANIZATIONS_LIST.map((org, index) => [Markup.button.callback(org, `select_organization_${index}`)]);
     buttons.push([Markup.button.callback('Ввести свою организацию', 'custom_organization')]);
-    await ctx.reply('Выберите вашу организацию:', Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply('Выберите вашу организацию:', Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 module.exports = (bot) => {
@@ -25,14 +26,16 @@ module.exports = (bot) => {
         await saveUser(userId, users[userId]);
 
         ctx.state.userStates[userId].step = 'enterFullName';
-        await ctx.reply('Введите ваше ФИО:');
+        const message = await ctx.reply('Введите ваше ФИО:');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
     bot.action('custom_organization', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].step = 'customOrganizationInput';
-        await ctx.reply('Введите название вашей организации:');
+        const message = await ctx.reply('Введите название вашей организации:');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
     bot.action('edit_organization', async (ctx) => {
@@ -41,7 +44,8 @@ module.exports = (bot) => {
         const buttons = ORGANIZATIONS_LIST.map((org, index) => [Markup.button.callback(org, `select_org_edit_${index}`)]);
         buttons.push([Markup.button.callback('Ввести свою организацию', 'custom_org_edit')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
-        await ctx.reply('Выберите новую организацию:', Markup.inlineKeyboard(buttons));
+        const message = await ctx.reply('Выберите новую организацию:', Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
     bot.action(/select_org_edit_(\d+)/, async (ctx) => {
@@ -56,52 +60,55 @@ module.exports = (bot) => {
         users[userId].organization = selectedOrganization;
         await saveUser(userId, users[userId]);
         ctx.state.userStates[userId].step = null;
-        await ctx.reply(`Организация обновлена на "${selectedOrganization}".`);
-        await require('../handlers/menu').showProfile(ctx);
+        const message = await ctx.reply(`Организация обновлена на "${selectedOrganization}".`, Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'profile')]]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
     bot.action('custom_org_edit', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].step = 'customOrgEditInput';
-        await ctx.reply('Введите новое название организации:');
+        const message = await ctx.reply('Введите новое название организации:');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        if (!state || (!state.step.includes('customOrganizationInput') && state.step !== 'enterFullName' && !state.step.includes('customOrgEditInput'))) return;
+        if (!state) return;
 
-        await clearPreviousMessages(ctx, userId);
-
-        const users = await loadUsers();
         if (state.step === 'customOrganizationInput') {
+            await clearPreviousMessages(ctx, userId);
+            const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
             state.step = 'enterFullName';
-            await ctx.reply('Введите ваше ФИО:');
+            const message = await ctx.reply('Введите ваше ФИО:');
+            state.messageIds.push(message.message_id);
         } else if (state.step === 'enterFullName') {
+            await clearPreviousMessages(ctx, userId);
+            const users = await loadUsers();
             users[userId].fullName = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
 
-            // Сообщение пользователю
-            await ctx.reply('Ваша профиль на рассмотрении, ожидайте');
+            const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
+            state.messageIds.push(message.message_id);
 
-            // Отправка заявки администратору
-            const adminText = `Новая заявка:\n${users[userId].fullName} - ${users[userId].position} (${users[userId].organization})\nОбъекты: ${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
-            await ctx.telegram.sendMessage(ADMIN_ID, adminText, Markup.inlineKeyboard([
+            const adminText = `\n${users[userId].fullName} - ${users[userId].position} (${users[userId].organization})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
+            await ctx.telegram.sendMessage(ADMIN_ID, `📝 СПИСОК ЗАЯВОК${adminText}`, Markup.inlineKeyboard([
                 [Markup.button.callback(`✅ Одобрить (${users[userId].fullName})`, `approve_${userId}`)],
                 [Markup.button.callback(`❌ Отклонить (${users[userId].fullName})`, `reject_${userId}`)]
             ]));
 
-            // Сброс состояния
             ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
         } else if (state.step === 'customOrgEditInput') {
+            await clearPreviousMessages(ctx, userId);
+            const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
             state.step = null;
-            await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
-            await require('../handlers/menu').showProfile(ctx);
+            const message = await ctx.reply(`Организация обновлена на "${users[userId].organization}".`, Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'profile')]]));
+            state.messageIds.push(message.message_id);
         }
     });
 };
