@@ -17,7 +17,7 @@ async function showMainMenu(ctx) {
 🚀 ГЛАВНОЕ МЕНЮ 
 ➖➖➖➖➖➖➖➖➖➖➖  
 Выберите действие ниже:  
-    `.trim();
+  `.trim();
 
     const buttons = [
         [Markup.button.callback('👤 Личный кабинет', 'profile')]
