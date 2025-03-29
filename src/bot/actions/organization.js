@@ -23,14 +23,14 @@ module.exports = (bot) => {
         const users = await loadUsers();
         users[userId].organization = selectedOrganization;
         await saveUser(userId, users[userId]);
-        ctx.state.userStates[userId] = { step: 'fullName' };
+        ctx.state.userStates[userId].step = 'fullName'; // Переход к вводу ФИО
         await ctx.reply('Введите ваше ФИО:');
     });
 
     bot.action('custom_organization', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId] = { step: 'customOrganizationInput' };
+        ctx.state.userStates[userId].step = 'customOrganizationInput'; // Устанавливаем step для ввода
         await ctx.reply('Введите название вашей организации:');
     });
 
@@ -54,6 +54,7 @@ module.exports = (bot) => {
         const users = await loadUsers();
         users[userId].organization = selectedOrganization;
         await saveUser(userId, users[userId]);
+        ctx.state.userStates[userId].step = null; // Сбрасываем только step
         await ctx.reply(`Организация обновлена на "${selectedOrganization}".`);
         await require('../handlers/menu').showProfile(ctx);
     });
@@ -61,7 +62,7 @@ module.exports = (bot) => {
     bot.action('custom_org_edit', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId] = { step: 'customOrgEditInput' };
+        ctx.state.userStates[userId].step = 'customOrgEditInput'; // Устанавливаем step для ввода
         await ctx.reply('Введите новое название организации:');
     });
 
@@ -76,13 +77,13 @@ module.exports = (bot) => {
         if (state.step === 'customOrganizationInput') {
             users[userId].organization = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
-            ctx.state.userStates[userId] = { step: 'fullName' };
+            ctx.state.userStates[userId].step = 'fullName'; // Переход к вводу ФИО
             await ctx.reply('Введите ваше ФИО:');
         } else if (state.step === 'customOrgEditInput') {
             users[userId].organization = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
+            ctx.state.userStates[userId].step = null; // Сбрасываем только step
             await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
-            delete ctx.state.userStates[userId];
             await require('../handlers/menu').showProfile(ctx);
         }
     });

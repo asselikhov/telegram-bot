@@ -30,14 +30,14 @@ module.exports = (bot) => {
         const users = await loadUsers();
         users[userId].position = selectedPosition;
         await saveUser(userId, users[userId]);
-        ctx.state.userStates[userId] = { step: 'selectOrganization' };
+        ctx.state.userStates[userId].step = 'selectOrganization'; // Переход к выбору организации
         await require('./organization').showOrganizationSelection(ctx, userId);
     });
 
     bot.action('custom_position', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId] = { step: 'customPositionInput' };
+        ctx.state.userStates[userId].step = 'customPositionInput'; // Устанавливаем step для ввода
         await ctx.reply('Введите название вашей должности:');
     });
 
@@ -54,22 +54,22 @@ module.exports = (bot) => {
     bot.action(/select_position_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
         const positionIndex = parseInt(ctx.match[1], 10);
-        const selectedPosition = getPositionsList(userId)[positionIndex];
+        const selectedPosition = getPositionsList(userId)[positionIndex]; // Используем getPositionsList вместо POSITIONS_LIST
         if (!selectedPosition) return;
 
         await clearPreviousMessages(ctx, userId);
-
         const users = await loadUsers();
         users[userId].position = selectedPosition;
         await saveUser(userId, users[userId]);
-        await ctx.reply(`Должность обновлена на "${selectedPosition}".`);
+        ctx.state.userStates[userId].step = null; // Сбрасываем только step
+        await ctx.reply(`Ваша должность изменена на "${selectedPosition}"`);
         await require('../handlers/menu').showProfile(ctx);
     });
 
     bot.action('custom_position_edit', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId] = { step: 'customPositionEditInput' };
+        ctx.state.userStates[userId].step = 'customPositionEditInput'; // Устанавливаем step для ввода
         await ctx.reply('Введите новое название должности:');
     });
 
@@ -84,13 +84,13 @@ module.exports = (bot) => {
         if (state.step === 'customPositionInput') {
             users[userId].position = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
-            ctx.state.userStates[userId] = { step: 'selectOrganization' };
+            ctx.state.userStates[userId].step = 'selectOrganization'; // Переход к выбору организации
             await require('./organization').showOrganizationSelection(ctx, userId);
         } else if (state.step === 'customPositionEditInput') {
             users[userId].position = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
+            ctx.state.userStates[userId].step = null; // Сбрасываем только step
             await ctx.reply(`Должность обновлена на "${users[userId].position}".`);
-            delete ctx.state.userStates[userId];
             await require('../handlers/menu').showProfile(ctx);
         }
     });
