@@ -1,24 +1,28 @@
-async function clearPreviousMessages(ctx, userId) {
-    const state = ctx.state.userStates[userId];
-    console.log(`clearPreviousMessages вызван для userId ${userId}. State:`, state);
+const { Markup } = require('telegraf');
 
-    if (state && Array.isArray(state.messageIds) && state.messageIds.length > 0) {
-        console.log(`Найдено ${state.messageIds.length} сообщений для удаления:`, state.messageIds);
-        const newMessageIds = [];
-        for (const messageId of state.messageIds) {
-            try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, messageId);
-                console.log(`Сообщение ${messageId} успешно удалено`);
-            } catch (e) {
-                console.log(`Не удалось удалить сообщение ${messageId}:`, e.message);
-                // Игнорируем ошибки удаления, чтобы не прерывать процесс
-            }
-        }
-        state.messageIds = newMessageIds; // Обновляем массив только с актуальными ID
-        console.log(`messageIds обновлён для userId ${userId}:`, state.messageIds);
-    } else {
-        console.log(`Нет сообщений для удаления для userId ${userId}. State:`, state);
-    }
+function escapeMarkdown(text) {
+    return text.replace(/([_*[\]()~`>#+\-.!])/g, '\\$1');
 }
 
-module.exports = { clearPreviousMessages };
+async function clearPreviousMessages(ctx, userId) {
+    const state = ctx.state;
+    if (!state || !state.messageIds.length) return;
+
+    await Promise.all(state.messageIds.map(async (messageId) => {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, messageId);
+            state.messageIds = state.messageIds.filter(id => id !== messageId);
+        } catch (e) {
+            console.error(`Не удалось удалить сообщение ${messageId}:`, e.message);
+        }
+    }));
+}
+
+async function sendMenu(ctx, userId, text, buttons) {
+    await clearPreviousMessages(ctx, userId);
+    const message = await ctx.reply(text, Markup.inlineKeyboard(buttons));
+    ctx.state.messageIds.push(message.message_id);
+    return message;
+}
+
+module.exports = { escapeMarkdown, clearPreviousMessages, sendMenu };

@@ -1,27 +1,19 @@
 const { Markup } = require('telegraf');
 const { loadUsers } = require('../../database/userModel');
-const { clearPreviousMessages } = require('../utils');
+const { sendMenu } = require('../utils');
 
 async function showMainMenu(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const user = users[userId] || {};
 
-    await clearPreviousMessages(ctx, userId);
-    if (ctx.state.userStates[userId]) {
-        ctx.state.userStates[userId].messageIds = [];
-        console.log(`messageIds очищен для userId ${userId} при возврате в главное меню`);
-    }
-
     const menuText = `
 🚀 ГЛАВНОЕ МЕНЮ 
 ➖➖➖➖➖➖➖➖➖➖➖  
 Выберите действие ниже:  
-  `.trim();
+    `.trim();
 
-    const buttons = [
-        [Markup.button.callback('👤 Личный кабинет', 'profile')]
-    ];
+    const buttons = [[Markup.button.callback('👤 Личный кабинет', 'profile')]];
     if (user.isApproved && user.position === 'Производитель работ') {
         buttons.splice(1, 0, [Markup.button.callback('📝 Создать отчет', 'create_report')]);
     }
@@ -32,20 +24,14 @@ async function showMainMenu(ctx) {
         buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);
     }
 
-    const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    await sendMenu(ctx, userId, menuText, buttons);
 }
 
 async function showProfile(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const user = users[userId] || {};
-    const objectsList = user.selectedObjects.length > 0
-        ? user.selectedObjects.map(obj => `· ${obj}`).join('\n')
-        : 'Не выбраны';
-
-    await clearPreviousMessages(ctx, userId);
-
+    const objectsList = user.selectedObjects.length > 0 ? user.selectedObjects.map(obj => `· ${obj}`).join('\n') : 'Не выбраны';
     const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
 
     const profileText = `
@@ -59,7 +45,7 @@ ${objectsList}
 
 ${statusEmoji} ${user.status || 'Не указан'}  
 ➖➖➖➖➖➖➖➖➖➖➖
-`.trim();
+    `.trim();
 
     const buttons = [
         [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
@@ -71,8 +57,7 @@ ${statusEmoji} ${user.status || 'Не указан'}
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ];
 
-    const message = await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    await sendMenu(ctx, userId, profileText, buttons);
 }
 
 module.exports = (bot) => {

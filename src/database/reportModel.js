@@ -14,10 +14,13 @@ async function loadUserReports(userId) {
                 materials: row.materials,
                 groupMessageId: row.groupmessageid,
                 generalMessageId: row.generalmessageid,
-                fullName: row.fullname // Добавляем fullName
+                fullName: row.fullname
             };
         });
         return reports;
+    } catch (error) {
+        console.error(`Ошибка загрузки отчетов для userId ${userId}:`, error.message);
+        throw error;
     } finally {
         client.release();
     }
@@ -33,6 +36,10 @@ async function saveReport(userId, report) {
             ON CONFLICT (reportId) DO UPDATE
             SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9, fullName = $10
         `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName]);
+        console.log(`Отчет ${reportId} сохранен`);
+    } catch (error) {
+        console.error(`Ошибка сохранения отчета ${reportId}:`, error.message);
+        throw error;
     } finally {
         client.release();
     }
@@ -50,6 +57,9 @@ async function getReportText(objectName) {
             const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
             return `${timestamp}\n${row.objectname}\n${row.position || 'Не указана'} ${row.organization || 'Не указана'} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n${row.materials}\n--------------------------\n`;
         }).join('');
+    } catch (error) {
+        console.error(`Ошибка получения текста отчета для ${objectName}:`, error.message);
+        throw error;
     } finally {
         client.release();
     }

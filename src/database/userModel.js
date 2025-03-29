@@ -5,7 +5,14 @@ function filterValidObjects(objects) {
     return [...new Set(objects)].filter(obj => OBJECTS_LIST_CYRILLIC.includes(obj));
 }
 
+let cachedUsers = null;
+let lastCacheTime = 0;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 минут
+
 async function loadUsers() {
+    if (cachedUsers && Date.now() - lastCacheTime < CACHE_DURATION) {
+        return cachedUsers;
+    }
     const client = await pool.connect();
     try {
         const res = await client.query('SELECT * FROM users');
@@ -15,7 +22,7 @@ async function loadUsers() {
             try {
                 selectedObjects = row.selectedobjects ? JSON.parse(row.selectedobjects) : [];
             } catch (e) {
-                console.error(`Ошибка при парсинге selectedObjects для userId ${row.userid}:`, e.message);
+                console.error(`Ошибка парсинга selectedObjects для userId ${row.userid}:`, e.message);
                 selectedObjects = [];
             }
             users[row.userid] = {
@@ -29,11 +36,13 @@ async function loadUsers() {
                 reports: {}
             };
         });
-        console.log('Пользователи успешно загружены из базы данных:', Object.keys(users));
+        cachedUsers = users;
+        lastCacheTime = Date.now();
+        console.log('Пользователи загружены:', Object.keys(users));
         return users;
     } catch (error) {
-        console.error('Ошибка при загрузке пользователей:', error.message);
-        throw error; // Передаем ошибку дальше
+        console.error('Ошибка загрузки пользователей:', error.message);
+        throw error;
     } finally {
         client.release();
     }
@@ -44,17 +53,17 @@ async function saveUser(userId, userData) {
     const filteredObjects = filterValidObjects(selectedObjects);
     const client = await pool.connect();
     try {
-        console.log(`Сохраняем данные для userId ${userId}:`, { fullName, position, organization, selectedObjects: filteredObjects, status, isApproved, nextReportId });
         await client.query(`
             INSERT INTO users (userId, fullName, position, organization, selectedObjects, status, isApproved, nextReportId)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (userId) DO UPDATE
             SET fullName = $2, position = $3, organization = $4, selectedObjects = $5, status = $6, isApproved = $7, nextReportId = $8
         `, [userId, fullName, position, organization, JSON.stringify(filteredObjects), status, isApproved ? 1 : 0, nextReportId]);
-        console.log(`Данные для userId ${userId} успешно сохранены в базе`);
+        cachedUsers = null; // Инвалидируем кэш
+        console.log(`Данные для userId ${userId} сохранены`);
     } catch (error) {
-        console.error(`Ошибка при сохранении пользователя userId ${userId}:`, error.message);
-        throw error; // Передаем ошибку вызывающему коду
+        console.error(`Ошибка сохранения пользователя ${userId}:`, error.message);
+        throw error;
     } finally {
         client.release();
     }
