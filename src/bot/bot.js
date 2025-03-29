@@ -41,21 +41,6 @@ bot.telegram.sendMessage = async (chatId, text, extra) => {
   return message;
 };
 
-// Функция для удаления всех предыдущих сообщений пользователя
-async function clearPreviousMessages(ctx, userId) {
-  const state = ctx.state.userStates[userId];
-  if (state && state.messageIds.length > 0) {
-    for (const messageId of state.messageIds) {
-      try {
-        await ctx.telegram.deleteMessage(ctx.chat.id, messageId);
-      } catch (e) {
-        console.log(`Не удалось удалить сообщение ${messageId}:`, e.message);
-      }
-    }
-    state.messageIds = []; // Очищаем массив после удаления
-  }
-}
-
 startHandler(bot);
 menuHandler(bot);
 reportHandler(bot);
@@ -67,4 +52,3 @@ objectsActions(bot);
 statusActions(bot);
 
 module.exports = bot;
-module.exports.clearPreviousMessages = clearPreviousMessages; // Экспортируем для использования в других модулях

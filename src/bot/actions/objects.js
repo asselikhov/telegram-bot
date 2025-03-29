@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { OBJECTS_LIST_CYRILLIC } = require('../../config/config');
-const { clearPreviousMessages } = require('../bot');
+const { clearPreviousMessages } = require('../utils');
 
 async function showObjectSelection(ctx, userId, selected = []) {
     await clearPreviousMessages(ctx, userId);

@@ -2,7 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, saveReport, getReportText } = require('../../database/reportModel');
 const { OBJECTS_LIST_CYRILLIC, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
-const { clearPreviousMessages } = require('../bot');
+const { clearPreviousMessages } = require('../utils'); // Новый импорт
 
 async function showDownloadReport(ctx) {
     const userId = ctx.from.id.toString();

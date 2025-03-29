@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { ORGANIZATIONS_LIST } = require('../../config/config');
-const { clearPreviousMessages } = require('../bot');
+const { clearPreviousMessages } = require('../utils');
 
 async function showOrganizationSelection(ctx, userId) {
     await clearPreviousMessages(ctx, userId);

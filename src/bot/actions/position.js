@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { BASE_POSITIONS_LIST, ADMIN_ID } = require('../../config/config');
-const { clearPreviousMessages } = require('../bot');
+const { clearPreviousMessages } = require('../utils');
 
 function getPositionsList(userId) {
     const positions = [...BASE_POSITIONS_LIST];
