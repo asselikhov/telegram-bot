@@ -151,27 +151,25 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     await clearPreviousMessages(ctx, userId);
 
     const dateReports = objectReports.filter(r => r.date === selectedDate);
-    const buttons = dateReports.map((report, index) => {
+    const buttons = dateReports.map((report) => {
         const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
-        return [Markup.button.callback(time, `select_report_time_${objectIndex}_${dateIndex}_${index}`)];
+        return [Markup.button.callback(time, `select_report_time_${report.reportId}`)];
     });
     buttons.push([Markup.button.callback('↩️ Назад', `select_report_object_${objectIndex}`)]);
 
     await ctx.reply(`Выберите время отчета для "${objectName}" за ${selectedDate}:`, Markup.inlineKeyboard(buttons));
 }
 
-async function showReportDetails(ctx, objectIndex, dateIndex, timeIndex) {
+async function showReportDetails(ctx, reportId) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
-    const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
-    const objectName = uniqueObjects[objectIndex];
-    const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
-    const uniqueDates = [...new Set(objectReports.map(r => r.date))];
-    const selectedDate = uniqueDates[dateIndex];
-    const dateReports = objectReports.filter(r => r.date === selectedDate);
-    const report = dateReports[timeIndex];
+    const report = reports[reportId];
 
     await clearPreviousMessages(ctx, userId);
+
+    if (!report) {
+        return ctx.reply('Ошибка: отчёт не найден.');
+    }
 
     const reportText = `
 📅 ОТЧЕТ ЗА ${report.date}  
@@ -188,53 +186,24 @@ ${report.materials}
 ➖➖➖➖➖➖➖➖➖➖➖
     `.trim();
 
+    const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
+    const uniqueDates = [...new Set(Object.values(reports).filter(r => r.objectName === report.objectName).map(r => r.date))];
     const buttons = [
-        [Markup.button.callback('✏️ Редактировать', `edit_report_${objectIndex}_${dateIndex}_${timeIndex}`)],
-        [Markup.button.callback('↩️ Назад', `select_report_date_${objectIndex}_${dateIndex}`)]
+        [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
+        [Markup.button.callback('↩️ Назад', `select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(report.date)}`)]
     ];
 
     await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
 }
 
-async function editReport(ctx, objectIndex, dateIndex, timeIndex) {
+async function editReport(ctx, reportId) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
-    console.log(`[editReport] Отчёты для userId ${userId}:`, reports);
-
-    const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
-    console.log(`[editReport] Уникальные объекты:`, uniqueObjects);
-
-    const objectName = uniqueObjects[objectIndex];
-    console.log(`[editReport] Выбранный объект (index ${objectIndex}):`, objectName);
-
-    if (!objectName) {
-        await clearPreviousMessages(ctx, userId);
-        return ctx.reply('Ошибка: объект не найден.');
-    }
-
-    const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
-    console.log(`[editReport] Отчёты для объекта "${objectName}":`, objectReports);
-
-    const uniqueDates = [...new Set(objectReports.map(r => r.date))];
-    console.log(`[editReport] Уникальные даты:`, uniqueDates);
-
-    const selectedDate = uniqueDates[dateIndex];
-    console.log(`[editReport] Выбранная дата (index ${dateIndex}):`, selectedDate);
-
-    if (!selectedDate) {
-        await clearPreviousMessages(ctx, userId);
-        return ctx.reply('Ошибка: дата не найдена.');
-    }
-
-    const dateReports = objectReports.filter(r => r.date === selectedDate);
-    console.log(`[editReport] Отчёты для даты "${selectedDate}":`, dateReports);
-
-    const report = dateReports[timeIndex];
-    console.log(`[editReport] Выбранный отчёт (index ${timeIndex}):`, report);
+    const report = reports[reportId];
 
     if (!report || !report.reportId) {
         await clearPreviousMessages(ctx, userId);
-        console.log(`[editReport] Ошибка: отчёт не найден или отсутствует reportId. Report:`, report);
+        console.log(`[editReport] Ошибка: отчёт с ID ${reportId} не найден или отсутствует reportId. Reports:`, reports);
         return ctx.reply('Ошибка: не удалось найти отчёт для редактирования.');
     }
 
@@ -245,7 +214,6 @@ async function editReport(ctx, objectIndex, dateIndex, timeIndex) {
         report: { ...report, originalReportId: report.reportId },
         messageIds: ctx.state.userStates[userId].messageIds
     };
-    console.log(`[editReport] Состояние установлено для userId ${userId}:`, ctx.state.userStates[userId]);
     await ctx.reply('💡 Введите новую информацию о выполненных работах:');
 }
 
@@ -289,7 +257,6 @@ ${newReport.materials}
 
     const groupChatId = OBJECT_GROUPS[newReport.objectName] || GENERAL_GROUP_CHAT_ID;
 
-    // Удаляем старые сообщения, если они есть
     if (originalReport) {
         if (originalReport.groupMessageId) {
             await ctx.telegram.deleteMessage(groupChatId, originalReport.groupMessageId)
@@ -300,7 +267,6 @@ ${newReport.materials}
                 .catch(e => console.log(`Не удалось удалить старое сообщение ${originalReport.generalMessageId}: ${e.message}`));
         }
 
-        // Удаляем старый отчёт из базы данных
         const client = await require('../../database/db').pool.connect();
         try {
             await client.query('DELETE FROM reports WHERE reportId = $1', [originalReportId]);
@@ -311,14 +277,12 @@ ${newReport.materials}
         console.log(`Предупреждение: старый отчёт с ID ${originalReportId} не найден для userId ${userId}`);
     }
 
-    // Публикуем новый отчёт
     const groupMessage = await ctx.telegram.sendMessage(groupChatId, reportText);
     const generalMessage = await ctx.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText);
 
     newReport.groupMessageId = groupMessage.message_id;
     newReport.generalMessageId = generalMessage.message_id;
 
-    // Сохраняем новый отчёт
     await saveReport(userId, newReport);
     await saveUser(userId, users[userId]);
 
@@ -349,8 +313,8 @@ module.exports = (bot) => {
     bot.action('view_reports', showReportObjects);
     bot.action(/select_report_object_(\d+)/, (ctx) => showReportDates(ctx, parseInt(ctx.match[1], 10)));
     bot.action(/select_report_date_(\d+)_(\d+)/, (ctx) => showReportTimestamps(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
-    bot.action(/select_report_time_(\d+)_(\d+)_(\d+)/, (ctx) => showReportDetails(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), parseInt(ctx.match[3], 10)));
-    bot.action(/edit_report_(\d+)_(\d+)_(\d+)/, (ctx) => editReport(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), parseInt(ctx.match[3], 10)));
+    bot.action(/select_report_time_(.+)/, (ctx) => showReportDetails(ctx, ctx.match[1]));
+    bot.action(/edit_report_(.+)/, (ctx) => editReport(ctx, ctx.match[1]));
 
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
