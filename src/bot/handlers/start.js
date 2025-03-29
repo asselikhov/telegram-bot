@@ -6,6 +6,7 @@ const { showOrganizationSelection } = require('../actions/organization');
 const { clearPreviousMessages } = require('../utils');
 
 module.exports = (bot) => {
+    console.log('[start.js] Регистрация обработчика bot.start');
     bot.start(async (ctx) => {
         const userId = ctx.from.id.toString();
         const chatType = ctx.chat.type;

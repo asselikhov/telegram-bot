@@ -7,6 +7,8 @@ async function loadUserReports(userId) {
         const reports = {};
         res.rows.forEach(row => {
             reports[row.reportid] = {
+                reportId: row.reportid,
+                userId: row.userid,
                 objectName: row.objectname,
                 date: row.date,
                 timestamp: row.timestamp,
@@ -14,7 +16,7 @@ async function loadUserReports(userId) {
                 materials: row.materials,
                 groupMessageId: row.groupmessageid,
                 generalMessageId: row.generalmessageid,
-                fullName: row.fullname // Добавляем fullName
+                fullName: row.fullname
             };
         });
         return reports;
@@ -24,15 +26,23 @@ async function loadUserReports(userId) {
 }
 
 async function saveReport(userId, report) {
-    const { reportId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName } = report;
     const client = await pool.connect();
     try {
         await client.query(`
             INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ON CONFLICT (reportId) DO UPDATE
-            SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9, fullName = $10
-        `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName]);
+        `, [
+            report.reportId,
+            userId,
+            report.objectName,
+            report.date,
+            report.timestamp,
+            report.workDone,
+            report.materials,
+            report.groupMessageId,
+            report.generalMessageId,
+            report.fullName
+        ]);
     } finally {
         client.release();
     }
@@ -41,15 +51,23 @@ async function saveReport(userId, report) {
 async function getReportText(objectName) {
     const client = await pool.connect();
     try {
-        const res = await client.query(
-            'SELECT r.*, u.fullName, u.position, u.organization FROM reports r JOIN users u ON r.userId = u.userId WHERE r.objectName = $1 ORDER BY r.timestamp',
-            [objectName]
-        );
-        if (res.rows.length === 0) return '';
-        return res.rows.map(row => {
-            const timestamp = new Date(row.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return `${timestamp}\n${row.objectname}\n${row.position || 'Не указана'} ${row.organization || 'Не указана'} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n${row.materials}\n--------------------------\n`;
-        }).join('');
+        const res = await client.query('SELECT * FROM reports WHERE objectName = $1 ORDER BY timestamp DESC', [objectName]);
+        if (res.rows.length === 0) return null;
+
+        const report = res.rows[0];
+        return `
+📅 ОТЧЕТ ЗА ${report.date}  
+🏢 ${report.objectname}  
+➖➖➖➖➖➖➖➖➖➖➖ 
+👷 ${report.fullname}  
+
+ВЫПОЛНЕННЫЕ РАБОТЫ:  
+${report.workdone}  
+
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+${report.materials}  
+➖➖➖➖➖➖➖➖➖➖➖
+        `.trim();
     } finally {
         client.release();
     }
