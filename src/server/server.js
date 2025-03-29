@@ -1,6 +1,6 @@
 const express = require('express');
-const { PORT } = require('../config/config');
-const bot = require('../bot/bot');
+const { PORT } = require('../../config/config'); // Исправлен путь
+const bot = require('../../bot/bot'); // Исправлен путь
 
 const app = express();
 

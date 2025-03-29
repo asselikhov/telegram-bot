@@ -1,7 +1,7 @@
 const { Telegraf, Markup } = require('telegraf');
-const { BOT_TOKEN, ADMIN_ID } = require('../config/config');
-const { loadUsers, saveUser } = require('../database/userModel');
-const { getState, resetState } = require('../stateManager');
+const { BOT_TOKEN, ADMIN_ID } = require('../../config/config'); // На два уровня вверх от src/bot/
+const { loadUsers, saveUser } = require('../../database/userModel'); // На два уровня вверх
+const { getState, resetState } = require('../../stateManager'); // На два уровня вверх
 
 const bot = new Telegraf(BOT_TOKEN);
 
@@ -44,20 +44,20 @@ bot.on('text', async (ctx) => {
       };
       await saveUser(userId, users[userId]);
       state.step = 'selectObjects';
-      await require('../actions/objects').showObjectSelection(ctx, userId);
+      await require('../../actions/objects').showObjectSelection(ctx, userId); // Исправлен путь
     } else if (users[userId].isApproved) {
-      await require('./handlers/menu').showMainMenu(ctx);
+      await require('../../handlers/menu').showMainMenu(ctx); // Исправлен путь
     } else {
       const user = users[userId];
       if (!user.selectedObjects.length) {
         state.step = 'selectObjects';
-        await require('../actions/objects').showObjectSelection(ctx, userId);
+        await require('../../actions/objects').showObjectSelection(ctx, userId); // Исправлен путь
       } else if (!user.position) {
         state.step = 'selectPosition';
-        await require('../actions/position').showPositionSelection(ctx, userId);
+        await require('../../actions/position').showPositionSelection(ctx, userId); // Исправлен путь
       } else if (!user.organization) {
         state.step = 'selectOrganization';
-        await require('../actions/organization').showOrganizationSelection(ctx, userId);
+        await require('../../actions/organization').showOrganizationSelection(ctx, userId); // Исправлен путь
       } else if (!user.fullName) {
         state.step = 'enterFullName';
         await ctx.reply('Введите ваше ФИО:');
@@ -80,13 +80,14 @@ bot.on('text', async (ctx) => {
   }
 });
 
-require('./handlers/commands')(bot);
-require('./handlers/menu')(bot);
-require('./handlers/report')(bot);
-require('./handlers/admin')(bot);
-require('./actions/position')(bot);
-require('./actions/organization')(bot);
-require('./actions/objects')(bot);
-require('./actions/status')(bot);
+// Исправленные пути для обработчиков и действий
+require('../../handlers/commands')(bot); // Исправлен путь
+require('../../handlers/menu')(bot); // Исправлен путь
+require('../../handlers/report')(bot); // Исправлен путь
+require('../../handlers/admin')(bot); // Исправлен путь
+require('../../actions/position')(bot); // Исправлен путь
+require('../../actions/organization')(bot); // Исправлен путь
+require('../../actions/objects')(bot); // Исправлен путь
+require('../../actions/status')(bot); // Исправлен путь
 
 module.exports = bot;

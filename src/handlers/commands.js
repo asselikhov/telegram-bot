@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
-const { loadUsers } = require('../../database/userModel');
-const { OBJECTS_LIST_CYRILLIC } = require('../../config/config');
+const { loadUsers } = require('../../database/userModel'); // Исправлен путь
+const { OBJECTS_LIST_CYRILLIC } = require('../../config/config'); // Исправлен путь
 
 module.exports = (bot) => {
     bot.command('test', (ctx) => ctx.reply('Бот работает!'));
