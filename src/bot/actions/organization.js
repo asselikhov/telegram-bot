@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { ORGANIZATIONS_LIST, ADMIN_ID } = require('../../config/config'); // Добавляем ADMIN_ID
+const { ORGANIZATIONS_LIST, ADMIN_ID } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
 
 async function showOrganizationSelection(ctx, userId) {
@@ -24,7 +24,6 @@ module.exports = (bot) => {
         users[userId].organization = selectedOrganization;
         await saveUser(userId, users[userId]);
 
-        // Переход к вводу ФИО
         ctx.state.userStates[userId].step = 'enterFullName';
         await ctx.reply('Введите ваше ФИО:');
     });
@@ -85,12 +84,14 @@ module.exports = (bot) => {
             users[userId].fullName = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
 
+            // Сообщение пользователю
+            await ctx.reply('Ваша профиль на рассмотрении, ожидайте');
+
             // Отправка заявки администратору
-            await ctx.reply('Ваша заявка отправлена на подтверждение.');
             const adminText = `Новая заявка:\n${users[userId].fullName} - ${users[userId].position} (${users[userId].organization})\nОбъекты: ${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
             await ctx.telegram.sendMessage(ADMIN_ID, adminText, Markup.inlineKeyboard([
-                [Markup.button.callback('✅ Одобрить', `approve_${userId}`)],
-                [Markup.button.callback('❌ Отклонить', `reject_${userId}`)]
+                [Markup.button.callback(`✅ Одобрить (${users[userId].fullName})`, `approve_${userId}`)],
+                [Markup.button.callback(`❌ Отклонить (${users[userId].fullName})`, `reject_${userId}`)]
             ]));
 
             // Сброс состояния

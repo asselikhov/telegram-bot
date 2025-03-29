@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { pool } = require('../../database/db'); // Импорт pool
+const { pool } = require('../../database/db');
 const { ADMIN_ID } = require('../../config/config');
 
 async function showAdminPanel(ctx) {
@@ -15,7 +15,7 @@ async function showAdminPanel(ctx) {
             fullName: user.fullName || 'Не указано',
             position: user.position || 'Не указана',
             organization: user.organization || 'Не указана',
-            objects: user.selectedObjects.length > 0 ? user.selectedObjects.join('\n') : 'Не выбраны'
+            objects: user.selectedObjects.length > 0 ? user.selectedObjects.join(', ') : 'Не выбраны'
         }));
 
     const adminText = pendingUsers.length === 0
@@ -23,8 +23,8 @@ async function showAdminPanel(ctx) {
         : pendingUsers.map(u => `ЗАЯВКА\n${u.fullName} - ${u.position} (${u.organization})\nОбъекты: ${u.objects}`).join('\n\n');
 
     const buttons = pendingUsers.map(u => [
-        Markup.button.callback(`✅ ${u.fullName}`, `approve_${u.userId}`),
-        Markup.button.callback(`❌ ${u.fullName}`, `reject_${u.userId}`)
+        Markup.button.callback(`✅ Одобрить (${u.fullName})`, `approve_${u.userId}`),
+        Markup.button.callback(`❌ Отклонить (${u.fullName})`, `reject_${u.userId}`)
     ]);
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
@@ -33,17 +33,21 @@ async function showAdminPanel(ctx) {
 
 module.exports = (bot) => {
     bot.action('admin_panel', showAdminPanel);
+
     bot.action(/approve_(.+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
         const targetUserId = ctx.match[1];
         if (userId !== ADMIN_ID) return;
 
         const users = await loadUsers();
+        if (!users[targetUserId]) return;
+
         users[targetUserId].isApproved = true;
         await saveUser(targetUserId, users[targetUserId]);
         await ctx.reply(`Пользователь ${users[targetUserId].fullName} одобрен.`);
         await bot.telegram.sendMessage(targetUserId, '✅ Ваш профиль подтвержден.');
     });
+
     bot.action(/reject_(.+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
         const targetUserId = ctx.match[1];
