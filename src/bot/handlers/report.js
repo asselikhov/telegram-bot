@@ -114,7 +114,7 @@ module.exports = (bot) => {
         await clearPreviousMessages(ctx, userId);
 
         ctx.state.userStates[userId] = { step: 'workDone', report: { objectName: selectedObject }, messageIds: ctx.state.userStates[userId].messageIds };
-        await ctx.reply('Введите наименование проделанных работ (или "работы не производились"):');
+        await ctx.reply('💡 Введите информацию о выполненных работ:');
     });
 
     bot.on('text', async (ctx) => {
@@ -133,7 +133,7 @@ module.exports = (bot) => {
         if (state.step === 'workDone') {
             state.report.workDone = ctx.message.text.trim();
             state.step = 'materials';
-            await ctx.reply('Введите информацию о поставленных материалах (или "доставки не было"):');
+            await ctx.reply('💡 Введите информацию о поставленных материалах:');
         } else if (state.step === 'materials') {
             state.report.materials = ctx.message.text.trim();
             await handleReportText(ctx, userId, state);
