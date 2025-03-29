@@ -130,7 +130,7 @@ async function showReportDetails(ctx, reportId) {
 
     if (!report) {
         console.log(`[showReportDetails] Отчёт с ID ${reportId} не найден`);
-        TOD        return ctx.reply('Ошибка: отчёт не найден.');
+        return ctx.reply('Ошибка: отчёт не найден.');
     }
 
     const reportText = `
