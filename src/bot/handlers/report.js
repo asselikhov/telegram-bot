@@ -101,7 +101,6 @@ ${state.report.materials}
     await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}`);
 }
 
-// Новый функционал для "Посмотреть мои отчеты"
 async function showReportObjects(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
@@ -208,6 +207,11 @@ async function editReport(ctx, objectIndex, dateIndex, timeIndex) {
     const dateReports = objectReports.filter(r => r.date === selectedDate);
     const report = dateReports[timeIndex];
 
+    if (!report || !report.reportId) {
+        await clearPreviousMessages(ctx, userId);
+        return ctx.reply('Ошибка: не удалось найти отчёт для редактирования.');
+    }
+
     await clearPreviousMessages(ctx, userId);
 
     ctx.state.userStates[userId] = {
@@ -220,7 +224,14 @@ async function editReport(ctx, objectIndex, dateIndex, timeIndex) {
 
 async function handleEditedReport(ctx, userId, state) {
     const users = await loadUsers();
-    const originalReport = await loadUserReports(userId)[state.report.originalReportId];
+    const originalReportId = state.report.originalReportId;
+    let originalReport = null;
+
+    if (originalReportId) {
+        const userReports = await loadUserReports(userId);
+        originalReport = userReports[originalReportId];
+    }
+
     const newTimestamp = new Date().toISOString();
     const newReportId = `${state.report.date}_${users[userId].nextReportId++}`;
     const newReport = {
@@ -251,12 +262,26 @@ ${newReport.materials}
 
     const groupChatId = OBJECT_GROUPS[newReport.objectName] || GENERAL_GROUP_CHAT_ID;
 
-    // Удаляем старые сообщения
-    if (originalReport.groupMessageId) {
-        await ctx.telegram.deleteMessage(groupChatId, originalReport.groupMessageId).catch(e => console.log(`Не удалось удалить старое сообщение ${originalReport.groupMessageId}: ${e.message}`));
-    }
-    if (originalReport.generalMessageId) {
-        await ctx.telegram.deleteMessage(GENERAL_GROUP_CHAT_ID, originalReport.generalMessageId).catch(e => console.log(`Не удалось удалить старое сообщение ${originalReport.generalMessageId}: ${e.message}`));
+    // Удаляем старые сообщения, если они есть
+    if (originalReport) {
+        if (originalReport.groupMessageId) {
+            await ctx.telegram.deleteMessage(groupChatId, originalReport.groupMessageId)
+                .catch(e => console.log(`Не удалось удалить старое сообщение ${originalReport.groupMessageId}: ${e.message}`));
+        }
+        if (originalReport.generalMessageId) {
+            await ctx.telegram.deleteMessage(GENERAL_GROUP_CHAT_ID, originalReport.generalMessageId)
+                .catch(e => console.log(`Не удалось удалить старое сообщение ${originalReport.generalMessageId}: ${e.message}`));
+        }
+
+        // Удаляем старый отчёт из базы данных
+        const client = await require('../../database/db').pool.connect();
+        try {
+            await client.query('DELETE FROM reports WHERE reportId = $1', [originalReportId]);
+        } finally {
+            client.release();
+        }
+    } else {
+        console.log(`Предупреждение: старый отчёт с ID ${originalReportId} не найден для userId ${userId}`);
     }
 
     // Публикуем новый отчёт
@@ -265,14 +290,6 @@ ${newReport.materials}
 
     newReport.groupMessageId = groupMessage.message_id;
     newReport.generalMessageId = generalMessage.message_id;
-
-    // Удаляем старый отчёт из базы данных
-    const client = await require('../../database/db').pool.connect();
-    try {
-        await client.query('DELETE FROM reports WHERE reportId = $1', [state.report.originalReportId]);
-    } finally {
-        client.release();
-    }
 
     // Сохраняем новый отчёт
     await saveReport(userId, newReport);
