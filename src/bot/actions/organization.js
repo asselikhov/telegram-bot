@@ -93,7 +93,10 @@ module.exports = (bot) => {
             const message = await ctx.reply('Введите ваше ФИО:');
             state.messageIds.push(message.message_id);
             console.log(`Переход к enterFullName для userId ${userId}. State:`, state);
-        } else if (state.step === 'enterFullName') {
+            return;
+        }
+
+        if (state.step === 'enterFullName') {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].fullName = ctx.message.text.trim();
@@ -113,7 +116,10 @@ module.exports = (bot) => {
             console.log(`Заявка отправлена администратору для userId ${userId}`);
 
             ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
-        } else if (state.step === 'customOrgEditInput') {
+            return; // Завершаем обработку
+        }
+
+        if (state.step === 'customOrgEditInput') {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
@@ -121,6 +127,7 @@ module.exports = (bot) => {
             state.step = null;
             const message = await ctx.reply(`Организация обновлена на "${users[userId].organization}".`, Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'profile')]]));
             state.messageIds.push(message.message_id);
+            return;
         }
     });
 };
