@@ -79,7 +79,7 @@ bot.on('text', async (ctx) => {
       state.messageIds = [message.message_id];
       console.log(`Новый пользователь ${userId} начал регистрацию с выбора объектов`);
     } else if (users[userId].isApproved) {
-      await require('./menu').showMainMenu(ctx);
+      await require('./handlers/menu').showMainMenu(ctx); // Исправлен путь
       console.log(`Подтверждённый пользователь ${userId} получил главное меню`);
     } else {
       const user = users[userId];
