@@ -35,8 +35,8 @@ async function showRequests(ctx) {
         : pendingUsers.map(u => `ЗАЯВКА\n${u.fullName} - ${u.position} (${u.organization})\nОбъекты: ${u.objects}`).join('\n\n');
 
     const buttons = pendingUsers.map(u => [
-        Markup.button.callback(`✅ Одобрить `approve_${u.userId}`),
-        Markup.button.callback(`❌ Отклонить `reject_${u.userId}`)
+        Markup.button.callback(`✅ Одобрить (${u.fullName})`, `approve_${u.userId}`),
+        Markup.button.callback(`❌ Отклонить (${u.fullName})`, `reject_${u.userId}`)
     ]);
     buttons.push([Markup.button.callback('↩️ Назад в админ-панель', 'admin_panel')]);
 
