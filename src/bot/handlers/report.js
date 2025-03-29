@@ -199,16 +199,42 @@ ${report.materials}
 async function editReport(ctx, objectIndex, dateIndex, timeIndex) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
+    console.log(`[editReport] Отчёты для userId ${userId}:`, reports);
+
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
+    console.log(`[editReport] Уникальные объекты:`, uniqueObjects);
+
     const objectName = uniqueObjects[objectIndex];
+    console.log(`[editReport] Выбранный объект (index ${objectIndex}):`, objectName);
+
+    if (!objectName) {
+        await clearPreviousMessages(ctx, userId);
+        return ctx.reply('Ошибка: объект не найден.');
+    }
+
     const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
+    console.log(`[editReport] Отчёты для объекта "${objectName}":`, objectReports);
+
     const uniqueDates = [...new Set(objectReports.map(r => r.date))];
+    console.log(`[editReport] Уникальные даты:`, uniqueDates);
+
     const selectedDate = uniqueDates[dateIndex];
+    console.log(`[editReport] Выбранная дата (index ${dateIndex}):`, selectedDate);
+
+    if (!selectedDate) {
+        await clearPreviousMessages(ctx, userId);
+        return ctx.reply('Ошибка: дата не найдена.');
+    }
+
     const dateReports = objectReports.filter(r => r.date === selectedDate);
+    console.log(`[editReport] Отчёты для даты "${selectedDate}":`, dateReports);
+
     const report = dateReports[timeIndex];
+    console.log(`[editReport] Выбранный отчёт (index ${timeIndex}):`, report);
 
     if (!report || !report.reportId) {
         await clearPreviousMessages(ctx, userId);
+        console.log(`[editReport] Ошибка: отчёт не найден или отсутствует reportId. Report:`, report);
         return ctx.reply('Ошибка: не удалось найти отчёт для редактирования.');
     }
 
@@ -219,6 +245,7 @@ async function editReport(ctx, objectIndex, dateIndex, timeIndex) {
         report: { ...report, originalReportId: report.reportId },
         messageIds: ctx.state.userStates[userId].messageIds
     };
+    console.log(`[editReport] Состояние установлено для userId ${userId}:`, ctx.state.userStates[userId]);
     await ctx.reply('💡 Введите новую информацию о выполненных работах:');
 }
 
