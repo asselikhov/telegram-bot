@@ -15,7 +15,6 @@ module.exports = (bot) => {
         const users = await loadUsers();
 
         if (!users[userId]) {
-            // Новый пользователь: инициализация данных
             users[userId] = {
                 fullName: '',
                 position: '',
@@ -28,23 +27,19 @@ module.exports = (bot) => {
             };
             await saveUser(userId, users[userId]);
 
-            // Установка начального состояния
             ctx.state.userStates[userId] = {
                 step: 'selectOrganization',
                 messageIds: []
             };
             await clearPreviousMessages(ctx, userId);
 
-            // Начало процесса с выбора организации
             const { showOrganizationSelection } = require('../actions/organization');
             await showOrganizationSelection(ctx, userId);
             console.log(`Новый пользователь ${userId} начал регистрацию с выбора организации`);
         } else if (users[userId].isApproved) {
-            // Одобренный пользователь: показываем главное меню
             const { showMainMenu } = require('./menu');
             await showMainMenu(ctx);
         } else {
-            // Пользователь в процессе регистрации или ожидает одобрения
             const user = users[userId];
             await clearPreviousMessages(ctx, userId);
 

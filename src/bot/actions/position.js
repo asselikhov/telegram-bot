@@ -109,4 +109,24 @@ module.exports = (bot) => {
             const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
             state.messageIds.push(message.message_id);
 
-            const adminText = `\n${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[user
+            const adminText = `\n${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
+            console.log(`Отправка заявки для userId ${userId}: ${adminText}`);
+
+            await ctx.telegram.sendMessage(ADMIN_ID, `📝 НОВАЯ ЗАЯВКА${adminText}`, Markup.inlineKeyboard([
+                [Markup.button.callback(`✅ Одобрить (${users[userId].fullName || 'Не указано'})`, `approve_${userId}`)],
+                [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Не указано'})`, `reject_${userId}`)]
+            ]));
+
+            ctx.state.userStates[userId] = { step: null, messageIds: [] };
+            console.log(`Заявка от userId ${userId} отправлена администратору`);
+        } else if (state.step === 'customPositionEditInput') {
+            users[userId].position = ctx.message.text.trim();
+            await saveUser(userId, users[userId]);
+            state.step = null;
+            await ctx.reply(`Должность обновлена на "${users[userId].position}".`);
+            await require('../handlers/menu').showProfile(ctx);
+        }
+    });
+};
+
+module.exports.showPositionSelection = showPositionSelection;
