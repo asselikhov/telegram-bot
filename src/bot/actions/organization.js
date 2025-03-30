@@ -2,6 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { ORGANIZATIONS_LIST, ADMIN_ID } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
+const { showProfile } = require('../handlers/menu'); // Импортируем showProfile для возврата в профиль
 
 async function showOrganizationSelection(ctx, userId) {
     await clearPreviousMessages(ctx, userId);
@@ -62,8 +63,8 @@ module.exports = (bot) => {
         users[userId].organization = selectedOrganization;
         await saveUser(userId, users[userId]);
         ctx.state.userStates[userId].step = null;
-        const message = await ctx.reply(`Организация обновлена на "${selectedOrganization}".`, Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'profile')]]));
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        await ctx.reply(`Организация обновлена на "${selectedOrganization}".`);
+        await showProfile(ctx); // Возвращаем пользователя в личный кабинет
     });
 
     bot.action('custom_org_edit', async (ctx) => {
@@ -125,8 +126,8 @@ module.exports = (bot) => {
             users[userId].organization = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
             state.step = null;
-            const message = await ctx.reply(`Организация обновлена на "${users[userId].organization}".`, Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'profile')]]));
-            state.messageIds.push(message.message_id);
+            await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
+            await showProfile(ctx); // Возвращаем пользователя в личный кабинет
             return;
         }
 
