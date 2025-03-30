@@ -1,5 +1,5 @@
 const { Markup } = require('telegraf');
-const ExcelJS = require('exceljs'); // Добавляем библиотеку для работы с Excel
+const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, saveReport, getReportText } = require('../../database/reportModel');
 const { OBJECTS_LIST_CYRILLIC, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
@@ -78,98 +78,88 @@ async function downloadReportFile(ctx, objectIndex) {
         return ctx.reply('Ошибка: объект не найден.');
     }
 
-    const reportText = await getReportText(objectName);
-    if (!reportText) {
-        console.log(`[downloadReportFile] Отчет для объекта "${objectName}" не найден`);
-        return ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
+    const allReports = await loadUserReports(); // Загружаем все отчеты
+    const objectReports = Object.values(allReports).filter(report => report.objectName === objectName);
+
+    if (objectReports.length === 0) {
+        console.log(`[downloadReportFile] Отчеты для объекта "${objectName}" не найдены`);
+        return ctx.reply(`Отчеты для объекта "${objectName}" не найдены.`);
     }
 
     await clearPreviousMessages(ctx, userId);
 
     // Создаем новый Excel-файл
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Отчет');
+    const worksheet = workbook.addWorksheet('Отчеты');
 
     // Настраиваем стили
     const headerStyle = {
-        font: { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } },
+        font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } },
         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } },
         alignment: { horizontal: 'center', vertical: 'middle' },
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 
     const cellStyle = {
-        font: { name: 'Arial', size: 11 },
+        font: { name: 'Arial', size: 9 },
         alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 
-    // Устанавливаем ширину колонок
+    // Устанавливаем ширину колонок для компактности
     worksheet.columns = [
-        { header: 'Поле', key: 'field', width: 30 },
-        { header: 'Значение', key: 'value', width: 50 }
+        { header: 'Объект', key: 'object', width: 20 },
+        { header: 'Дата', key: 'date', width: 12 },
+        { header: 'Должность', key: 'position', width: 15 },
+        { header: 'Организация', key: 'organization', width: 15 },
+        { header: 'ФИО', key: 'fullName', width: 20 },
+        { header: 'Выполненные работы', key: 'workDone', width: 30 },
+        { header: 'Поставленные материалы', key: 'materials', width: 30 }
     ];
 
-    // Добавляем заголовок
-    const titleRow = worksheet.addRow([`Отчет по объекту "${objectName}"`, '']);
-    titleRow.font = { name: 'Arial', size: 14, bold: true };
-    titleRow.alignment = { horizontal: 'center' };
-    worksheet.mergeCells('A1:B1');
-    titleRow.height = 30;
+    // Добавляем заголовки
+    worksheet.getRow(1).eachCell(cell => { cell.style = headerStyle; });
 
-    // Парсим данные из reportText
-    const lines = reportText.split('\n').map(line => line.trim());
-    const reportData = {
-        date: lines[0].replace('📅 ОТЧЕТ ЗА ', ''),
-        object: lines[1].replace('🏢 ', ''),
-        fullName: lines[3].replace('👷 ', ''),
-        workDone: [],
-        materials: []
-    };
+    // Загружаем данные пользователей для получения должности и организации
+    const users = await loadUsers();
 
-    let isWorkDone = false;
-    let isMaterials = false;
-    for (let i = 5; i < lines.length; i++) {
-        if (lines[i].startsWith('ВЫПОЛНЕННЫЕ РАБОТЫ:')) {
-            isWorkDone = true;
-            isMaterials = false;
-            continue;
-        } else if (lines[i].startsWith('ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:')) {
-            isWorkDone = false;
-            isMaterials = true;
-            continue;
-        } else if (lines[i].startsWith('➖')) {
-            continue;
-        }
-
-        if (isWorkDone && lines[i]) reportData.workDone.push(lines[i]);
-        if (isMaterials && lines[i]) reportData.materials.push(lines[i]);
-    }
-
-    // Добавляем данные в таблицу
-    worksheet.addRow(['Дата', reportData.date]).eachCell(cell => { cell.style = headerStyle; });
-    worksheet.addRow(['Объект', reportData.object]).eachCell(cell => { cell.style = cellStyle; });
-    worksheet.addRow(['Ответственный', reportData.fullName]).eachCell(cell => { cell.style = cellStyle; });
-    worksheet.addRow(['Выполненные работы', reportData.workDone.join('\n')]).eachCell(cell => { cell.style = cellStyle; });
-    worksheet.addRow(['Поставленные материалы', reportData.materials.join('\n')]).eachCell(cell => { cell.style = cellStyle; });
+    // Добавляем данные отчетов
+    objectReports.forEach((report, index) => {
+        const user = users[report.userId] || {};
+        worksheet.addRow({
+            object: report.objectName,
+            date: report.date,
+            position: user.position || 'Не указано',
+            organization: user.organization || 'Не указано',
+            fullName: report.fullName || user.fullName || 'Не указано',
+            workDone: report.workDone,
+            materials: report.materials
+        }).eachCell(cell => { cell.style = cellStyle; });
+    });
 
     // Устанавливаем высоту строк для читаемости
     worksheet.eachRow((row, rowNumber) => {
         if (rowNumber > 1) {
-            row.height = Math.max(20, row.getCell(2).value.split('\n').length * 15);
+            const maxLines = Math.max(
+                row.getCell('workDone').value.split('\n').length,
+                row.getCell('materials').value.split('\n').length
+            );
+            row.height = Math.max(15, maxLines * 12); // Компактная высота
+        } else {
+            row.height = 20; // Заголовок чуть выше
         }
     });
 
     // Генерируем файл
     const buffer = await workbook.xlsx.writeBuffer();
-    const filename = `${objectName}_report_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const filename = `${objectName}_reports_${new Date().toISOString().split('T')[0]}.xlsx`;
 
     // Отправляем файл пользователю
     await ctx.replyWithDocument({
         source: buffer,
         filename: filename
     });
-    console.log(`[downloadReportFile] Excel-файл отчета для "${objectName}" отправлен пользователю ${userId}`);
+    console.log(`[downloadReportFile] Excel-файл с отчетами для "${objectName}" отправлен пользователю ${userId}, отчетов: ${objectReports.length}`);
 }
 
 async function createReport(ctx) {
@@ -192,7 +182,7 @@ async function createReport(ctx) {
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    ctx.state.userStates/lua/userId].messageIds.push(message.message_id);
 }
 
 async function handleReportText(ctx, userId, state) {
@@ -259,7 +249,7 @@ async function showReportObjects(ctx) {
     );
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
-    await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
+    await ctx.reply('Выберите объектдля просмотра отчетов:', Markup.inlineKeyboard(buttons));
 }
 
 async function showReportDates(ctx, objectIndex) {
