@@ -76,6 +76,31 @@ module.exports = (bot) => {
         const message = await ctx.reply('Введите новое название организации:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
+
+    bot.on('text', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state) return;
+
+        await clearPreviousMessages(ctx, userId);
+        const users = await loadUsers();
+
+        if (state.step === 'customOrganizationInput') {
+            users[userId].organization = ctx.message.text.trim();
+            users[userId].selectedObjects = [];
+            await saveUser(userId, users[userId]);
+            state.step = 'selectObjects';
+            await showObjectSelection(ctx, userId, []);
+            console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
+        } else if (state.step === 'customOrgEditInput') {
+            users[userId].organization = ctx.message.text.trim();
+            users[userId].selectedObjects = [];
+            await saveUser(userId, users[userId]);
+            state.step = null;
+            await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
+            await showProfile(ctx);
+        }
+    });
 };
 
 module.exports.showOrganizationSelection = showOrganizationSelection;
