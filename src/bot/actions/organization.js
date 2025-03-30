@@ -1,7 +1,7 @@
 // src/bot/actions/organization.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { ORGANIZATIONS_LIST, ADMIN_ID, ORGANIZATION_OBJECTS } = require('../../config/config');
+const { ORGANIZATIONS_LIST, ORGANIZATION_OBJECTS } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
 const { showProfile } = require('../handlers/menu');
 const { showObjectSelection } = require('./objects');
@@ -92,26 +92,6 @@ module.exports = (bot) => {
             state.step = 'selectObjects';
             await showObjectSelection(ctx, userId, []);
             console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
-        } else if (state.step === 'enterFullName') {
-            const fullName = ctx.message.text.trim();
-            users[userId].fullName = fullName;
-            await saveUser(userId, users[userId]);
-            console.log(`Сохранено ФИО для userId ${userId}: ${fullName}`);
-
-            const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
-            state.messageIds.push(message.message_id);
-
-            // Проверяем данные перед отправкой
-            const adminText = `\n${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
-            console.log(`Отправка заявки для userId ${userId}: ${adminText}`);
-
-            await ctx.telegram.sendMessage(ADMIN_ID, `📝 НОВАЯ ЗАЯВКА${adminText}`, Markup.inlineKeyboard([
-                [Markup.button.callback(`✅ Одобрить (${users[userId].fullName || 'Не указано'})`, `approve_${userId}`)],
-                [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Не указано'})`, `reject_${userId}`)]
-            ]));
-
-            ctx.state.userStates[userId] = { step: null, messageIds: [] };
-            console.log(`Заявка от userId ${userId} отправлена администратору`);
         } else if (state.step === 'customOrgEditInput') {
             users[userId].organization = ctx.message.text.trim();
             users[userId].selectedObjects = [];

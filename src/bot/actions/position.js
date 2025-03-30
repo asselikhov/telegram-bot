@@ -85,7 +85,7 @@ module.exports = (bot) => {
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        if (!state || (!state.step.includes('customPositionInput') && !state.step.includes('customPositionEditInput'))) return;
+        if (!state) return;
 
         await clearPreviousMessages(ctx, userId);
         const users = await loadUsers();
@@ -100,14 +100,13 @@ module.exports = (bot) => {
             const message = await ctx.reply('Введите ваше ФИО:');
             ctx.state.userStates[userId].messageIds.push(message.message_id);
             console.log(`Переход к вводу ФИО для userId ${userId} после ввода своей должности`);
-        } else if (state.step === 'customPositionEditInput') {
-            users[userId].position = ctx.message.text.trim();
+        } else if (state.step === 'enterFullName') {
+            const fullName = ctx.message.text.trim();
+            users[userId].fullName = fullName;
             await saveUser(userId, users[userId]);
-            state.step = null;
-            await ctx.reply(`Должность обновлена на "${users[userId].position}".`);
-            await require('../handlers/menu').showProfile(ctx);
-        }
-    });
-};
+            console.log(`Сохранено ФИО для userId ${userId}: ${fullName}`);
 
-module.exports.showPositionSelection = showPositionSelection;
+            const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
+            state.messageIds.push(message.message_id);
+
+            const adminText = `\n${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[user
