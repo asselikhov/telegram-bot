@@ -25,7 +25,7 @@ module.exports = (bot) => {
 
         const users = await loadUsers();
         users[userId].organization = selectedOrganization;
-        users[userId].selectedObjects = []; // Сбрасываем объекты
+        users[userId].selectedObjects = [];
         await saveUser(userId, users[userId]);
 
         ctx.state.userStates[userId].step = 'selectObjects';
@@ -61,7 +61,7 @@ module.exports = (bot) => {
 
         const users = await loadUsers();
         users[userId].organization = selectedOrganization;
-        users[userId].selectedObjects = []; // Сбрасываем объекты при изменении организации
+        users[userId].selectedObjects = [];
         await saveUser(userId, users[userId]);
         ctx.state.userStates[userId].step = 'selectObjects';
         await showObjectSelection(ctx, userId, []);
@@ -85,7 +85,7 @@ module.exports = (bot) => {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
-            users[userId].selectedObjects = []; // Сбрасываем объекты
+            users[userId].selectedObjects = [];
             await saveUser(userId, users[userId]);
             state.step = 'selectObjects';
             await showObjectSelection(ctx, userId, []);
@@ -116,7 +116,7 @@ module.exports = (bot) => {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
-            users[userId].selectedObjects = []; // Сбрасываем объекты
+            users[userId].selectedObjects = [];
             await saveUser(userId, users[userId]);
             state.step = 'selectObjects';
             await showObjectSelection(ctx, userId, []);

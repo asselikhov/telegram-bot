@@ -3,7 +3,6 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
-const { showPositionSelection } = require('./position');
 
 async function showObjectSelection(ctx, userId, selected = [], messageId = null) {
     const users = await loadUsers();
@@ -84,6 +83,7 @@ module.exports = (bot) => {
         } else if (state.step === 'selectObjects') {
             state.step = 'selectPosition';
             state.selectedObjects = [];
+            const { showPositionSelection } = require('./position'); // Импорт внутрь
             await showPositionSelection(ctx, userId);
         }
     });

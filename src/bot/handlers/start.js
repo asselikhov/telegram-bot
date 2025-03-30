@@ -15,7 +15,6 @@ module.exports = (bot) => {
         const users = await loadUsers();
 
         if (!users[userId]) {
-            // Новый пользователь: инициализируем данные и начинаем с выбора организации
             users[userId] = {
                 fullName: '',
                 position: '',
@@ -34,17 +33,13 @@ module.exports = (bot) => {
                 messageIds: []
             };
             await clearPreviousMessages(ctx, userId);
-            // Импорт перенесён внутрь функции для избежания циклической зависимости
             const { showOrganizationSelection } = require('../actions/organization');
             await showOrganizationSelection(ctx, userId);
             console.log(`Новый пользователь ${userId} начал регистрацию с выбора организации`);
         } else if (users[userId].isApproved) {
-            // Подтвержденный пользователь: показываем главное меню
-            // Импорт перенесён внутрь для согласованности
             const { showMainMenu } = require('./menu');
             await showMainMenu(ctx);
         } else {
-            // Неподтвержденный пользователь: проверяем, завершена ли заявка
             const user = users[userId];
             await clearPreviousMessages(ctx, userId);
 
@@ -89,7 +84,6 @@ module.exports = (bot) => {
                 ctx.state.userStates[userId].messageIds.push(message.message_id);
                 console.log(`Пользователь ${userId} возобновил регистрацию с ввода ФИО`);
             } else {
-                // Все поля заполнены, заявка на рассмотрении
                 const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
                 ctx.state.userStates[userId].messageIds.push(message.message_id);
                 console.log(`Пользователь ${userId} уже заполнил заявку и ожидает подтверждения`);
