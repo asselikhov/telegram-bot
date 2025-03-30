@@ -1,6 +1,8 @@
+// menu.js
 const { Markup } = require('telegraf');
 const { loadUsers } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
+const { ORGANIZATION_OBJECTS } = require('../../config/config'); // Добавляем импорт
 
 async function showMainMenu(ctx) {
     const userId = ctx.from.id.toString();
@@ -40,8 +42,12 @@ async function showProfile(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const user = users[userId] || {};
-    const objectsList = user.selectedObjects.length > 0
-        ? user.selectedObjects.map(obj => `· ${obj}`).join('\n')
+
+    // Фильтруем объекты пользователя, оставляя только те, что доступны для его организации
+    const availableObjects = ORGANIZATION_OBJECTS[user.organization] || [];
+    const filteredObjects = user.selectedObjects.filter(obj => availableObjects.includes(obj));
+    const objectsList = filteredObjects.length > 0
+        ? filteredObjects.map(obj => `· ${obj}`).join('\n')
         : 'Не выбраны';
 
     await clearPreviousMessages(ctx, userId);
