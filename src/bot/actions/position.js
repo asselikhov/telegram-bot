@@ -14,15 +14,16 @@ async function showPositionSelection(ctx, userId) {
     await clearPreviousMessages(ctx, userId);
 
     const positions = getPositionsList(userId);
-    const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_initial_position_${index}`)]);
-    buttons.push([Markup.button.callback('Ввести свою должность', 'custom_position')]);
-    await ctx.reply('Выберите вашу должность:', Markup.inlineKeyboard(buttons));
+    const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_initial_position_${index}_${userId}`)]);
+    buttons.push([Markup.button.callback('Ввести свою должность', `custom_position_${userId}`)]);
+    const message = await ctx.reply('Выберите вашу должность:', Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 module.exports = (bot) => {
-    bot.action(/select_initial_position_(\d+)/, async (ctx) => {
-        const userId = ctx.from.id.toString();
+    bot.action(/select_initial_position_(\d+)_(\d+)/, async (ctx) => {
         const positionIndex = parseInt(ctx.match[1], 10);
+        const userId = ctx.match[2];
         const selectedPosition = getPositionsList(userId)[positionIndex];
         if (!selectedPosition) return;
 
@@ -31,8 +32,7 @@ module.exports = (bot) => {
         const users = await loadUsers();
         users[userId].position = selectedPosition;
         await saveUser(userId, users[userId]);
-
-        console.log(`Сохранена должность для userId ${userId}: ${users[userId].position}`); // Отладка
+        console.log(`Сохранена должность для userId ${userId}: ${selectedPosition}`);
 
         ctx.state.userStates[userId].step = 'enterFullName';
         const message = await ctx.reply('Введите ваше ФИО:');
@@ -40,11 +40,12 @@ module.exports = (bot) => {
         console.log(`Переход к вводу ФИО для userId ${userId} после выбора должности`);
     });
 
-    bot.action('custom_position', async (ctx) => {
-        const userId = ctx.from.id.toString();
+    bot.action(/custom_position_(\d+)/, async (ctx) => {
+        const userId = ctx.match[1];
         await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].step = 'customPositionInput';
-        await ctx.reply('Введите название вашей должности:');
+        const message = await ctx.reply('Введите название вашей должности:');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
     bot.action('edit_position', async (ctx) => {
@@ -54,7 +55,8 @@ module.exports = (bot) => {
         const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_position_${index}`)]);
         buttons.push([Markup.button.callback('Ввести свою должность', 'custom_position_edit')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
-        await ctx.reply('Выберите новую должность:', Markup.inlineKeyboard(buttons));
+        const message = await ctx.reply('Выберите новую должность:', Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
     bot.action(/select_position_(\d+)/, async (ctx) => {
@@ -76,7 +78,8 @@ module.exports = (bot) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].step = 'customPositionEditInput';
-        await ctx.reply('Введите новое название должности:');
+        const message = await ctx.reply('Введите новое название должности:');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
     bot.on('text', async (ctx) => {
@@ -85,13 +88,13 @@ module.exports = (bot) => {
         if (!state || (!state.step.includes('customPositionInput') && !state.step.includes('customPositionEditInput'))) return;
 
         await clearPreviousMessages(ctx, userId);
-
         const users = await loadUsers();
-        if (state.step === 'customPositionInput') {
-            users[userId].position = ctx.message.text.trim();
-            await saveUser(userId, users[userId]);
 
-            console.log(`Сохранена пользовательская должность для userId ${userId}: ${users[userId].position}`); // Отладка
+        if (state.step === 'customPositionInput') {
+            const position = ctx.message.text.trim();
+            users[userId].position = position;
+            await saveUser(userId, users[userId]);
+            console.log(`Сохранена пользовательская должность для userId ${userId}: ${position}`);
 
             state.step = 'enterFullName';
             const message = await ctx.reply('Введите ваше ФИО:');

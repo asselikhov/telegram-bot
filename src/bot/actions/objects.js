@@ -17,9 +17,9 @@ async function showObjectSelection(ctx, userId, selected = [], messageId = null)
 
     const buttons = availableObjects.map((obj, index) => {
         const isSelected = selected.includes(obj);
-        return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${obj}`, `toggle_object_${index}`)];
+        return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${obj}`, `toggle_object_${index}_${userId}`)];
     });
-    buttons.push([Markup.button.callback('Готово', 'confirm_objects')]);
+    buttons.push([Markup.button.callback('Готово', `confirm_objects_${userId}`)]);
 
     const keyboard = Markup.inlineKeyboard(buttons);
     const text = 'Выберите объекты (можно выбрать несколько):';
@@ -39,9 +39,9 @@ async function showObjectSelection(ctx, userId, selected = [], messageId = null)
 }
 
 module.exports = (bot) => {
-    bot.action(/toggle_object_(\d+)/, async (ctx) => {
-        const userId = ctx.from.id.toString();
+    bot.action(/toggle_object_(\d+)_(\d+)/, async (ctx) => {
         const objectIndex = parseInt(ctx.match[1], 10);
+        const userId = ctx.match[2];
         const users = await loadUsers();
         const userOrganization = users[userId].organization;
         const availableObjects = ORGANIZATION_OBJECTS[userOrganization] || [];
@@ -50,20 +50,21 @@ module.exports = (bot) => {
 
         if (!state || (state.step !== 'selectObjects' && state.step !== 'editObjects')) return;
 
-        const selectedObjects = state.selectedObjects;
+        let selectedObjects = state.selectedObjects || [];
         const index = selectedObjects.indexOf(objectName);
         if (index === -1) selectedObjects.push(objectName);
         else selectedObjects.splice(index, 1);
 
+        state.selectedObjects = selectedObjects;
         const lastMessageId = state.messageIds[state.messageIds.length - 1];
         await showObjectSelection(ctx, userId, selectedObjects, lastMessageId);
     });
 
-    bot.action('confirm_objects', async (ctx) => {
-        const userId = ctx.from.id.toString();
+    bot.action(/confirm_objects_(\d+)/, async (ctx) => {
+        const userId = ctx.match[1];
         const state = ctx.state.userStates[userId];
 
-        if (!state || state.selectedObjects.length === 0) {
+        if (!state || !state.selectedObjects || state.selectedObjects.length === 0) {
             await clearPreviousMessages(ctx, userId);
             await ctx.reply('Выберите хотя бы один объект.');
             return;
