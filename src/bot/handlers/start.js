@@ -1,7 +1,6 @@
 // start.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { showOrganizationSelection } = require('../actions/organization');
 const { clearPreviousMessages } = require('../utils');
 
 module.exports = (bot) => {
@@ -35,11 +34,15 @@ module.exports = (bot) => {
                 messageIds: []
             };
             await clearPreviousMessages(ctx, userId);
+            // Импорт перенесён внутрь функции для избежания циклической зависимости
+            const { showOrganizationSelection } = require('../actions/organization');
             await showOrganizationSelection(ctx, userId);
             console.log(`Новый пользователь ${userId} начал регистрацию с выбора организации`);
         } else if (users[userId].isApproved) {
             // Подтвержденный пользователь: показываем главное меню
-            await require('./menu').showMainMenu(ctx);
+            // Импорт перенесён внутрь для согласованности
+            const { showMainMenu } = require('./menu');
+            await showMainMenu(ctx);
         } else {
             // Неподтвержденный пользователь: проверяем, завершена ли заявка
             const user = users[userId];
@@ -52,6 +55,7 @@ module.exports = (bot) => {
                     report: {},
                     messageIds: ctx.state.userStates[userId]?.messageIds || []
                 };
+                const { showOrganizationSelection } = require('../actions/organization');
                 await showOrganizationSelection(ctx, userId);
                 console.log(`Пользователь ${userId} возобновил регистрацию с выбора организации`);
             } else if (!user.selectedObjects.length) {
@@ -61,7 +65,8 @@ module.exports = (bot) => {
                     report: {},
                     messageIds: ctx.state.userStates[userId]?.messageIds || []
                 };
-                await require('../actions/objects').showObjectSelection(ctx, userId, []);
+                const { showObjectSelection } = require('../actions/objects');
+                await showObjectSelection(ctx, userId, []);
                 console.log(`Пользователь ${userId} возобновил регистрацию с выбора объектов`);
             } else if (!user.position) {
                 ctx.state.userStates[userId] = {
@@ -70,7 +75,8 @@ module.exports = (bot) => {
                     report: {},
                     messageIds: ctx.state.userStates[userId]?.messageIds || []
                 };
-                await require('../actions/position').showPositionSelection(ctx, userId);
+                const { showPositionSelection } = require('../actions/position');
+                await showPositionSelection(ctx, userId);
                 console.log(`Пользователь ${userId} возобновил регистрацию с выбора должности`);
             } else if (!user.fullName) {
                 ctx.state.userStates[userId] = {
