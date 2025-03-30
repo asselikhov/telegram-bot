@@ -39,26 +39,35 @@ bot.use((ctx, next) => {
   ctx.reply = async (text, extra) => {
     const message = await originalReply(text, extra);
     if (userStates[userId]) {
-      userStates[userId].messageIds.push(message.message_id);
-      console.log(`[ctx.reply] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
+      // Добавляем ID только если его ещё нет в массиве
+      if (!userStates[userId].messageIds.includes(message.message_id)) {
+        userStates[userId].messageIds.push(message.message_id);
+        console.log(`[ctx.reply] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
+      } else {
+        console.log(`[ctx.reply] Сообщение ${message.message_id} уже есть в messageIds для userId ${userId}, пропускаем`);
+      }
+    }
+    return message;
+  };
+
+  const originalSendMessage = bot.telegram.sendMessage.bind(bot.telegram);
+  bot.telegram.sendMessage = async (chatId, text, extra) => {
+    const message = await originalSendMessage(chatId, text, extra);
+    const targetUserId = chatId.toString();
+    if (userStates[targetUserId]) {
+      // Аналогичная проверка для sendMessage
+      if (!userStates[targetUserId].messageIds.includes(message.message_id)) {
+        userStates[targetUserId].messageIds.push(message.message_id);
+        console.log(`[sendMessage] Сообщение ${message.message_id} добавлено в messageIds для userId ${targetUserId}. Массив:`, userStates[targetUserId].messageIds);
+      } else {
+        console.log(`[sendMessage] Сообщение ${message.message_id} уже есть в messageIds для userId ${targetUserId}, пропускаем`);
+      }
     }
     return message;
   };
 
   return next();
 });
-
-// Перехват ctx.telegram.sendMessage
-const originalSendMessage = bot.telegram.sendMessage.bind(bot.telegram);
-bot.telegram.sendMessage = async (chatId, text, extra) => {
-  const message = await originalSendMessage(chatId, text, extra);
-  const userId = chatId.toString();
-  if (userStates[userId]) {
-    userStates[userId].messageIds.push(message.message_id);
-    console.log(`[sendMessage] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
-  }
-  return message;
-};
 
 // Функция проверки отчетов и отправки напоминаний
 async function sendReportReminders() {
@@ -107,6 +116,7 @@ cron.schedule('0 19 * * *', () => {
   timezone: "Europe/Moscow"
 });
 
+// Подключение обработчиков
 startHandler(bot);
 menuHandler(bot);
 reportHandler(bot);
