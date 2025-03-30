@@ -1,7 +1,6 @@
+// start.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { showObjectSelection } = require('../actions/objects');
-const { showPositionSelection } = require('../actions/position');
 const { showOrganizationSelection } = require('../actions/organization');
 const { clearPreviousMessages } = require('../utils');
 
@@ -17,7 +16,7 @@ module.exports = (bot) => {
         const users = await loadUsers();
 
         if (!users[userId]) {
-            // Новый пользователь: инициализируем данные и начинаем с выбора объектов
+            // Новый пользователь: инициализируем данные и начинаем с выбора организации
             users[userId] = {
                 fullName: '',
                 position: '',
@@ -30,14 +29,14 @@ module.exports = (bot) => {
             };
             await saveUser(userId, users[userId]);
             ctx.state.userStates[userId] = {
-                step: 'selectObjects',
+                step: 'selectOrganization',
                 selectedObjects: [],
                 report: {},
                 messageIds: []
             };
             await clearPreviousMessages(ctx, userId);
-            await showObjectSelection(ctx, userId, []);
-            console.log(`Новый пользователь ${userId} начал регистрацию с выбора объектов`);
+            await showOrganizationSelection(ctx, userId);
+            console.log(`Новый пользователь ${userId} начал регистрацию с выбора организации`);
         } else if (users[userId].isApproved) {
             // Подтвержденный пользователь: показываем главное меню
             await require('./menu').showMainMenu(ctx);
@@ -46,25 +45,7 @@ module.exports = (bot) => {
             const user = users[userId];
             await clearPreviousMessages(ctx, userId);
 
-            if (!user.selectedObjects.length) {
-                ctx.state.userStates[userId] = {
-                    step: 'selectObjects',
-                    selectedObjects: [],
-                    report: {},
-                    messageIds: ctx.state.userStates[userId]?.messageIds || []
-                };
-                await showObjectSelection(ctx, userId, []);
-                console.log(`Пользователь ${userId} возобновил регистрацию с выбора объектов`);
-            } else if (!user.position) {
-                ctx.state.userStates[userId] = {
-                    step: 'selectPosition',
-                    selectedObjects: [],
-                    report: {},
-                    messageIds: ctx.state.userStates[userId]?.messageIds || []
-                };
-                await showPositionSelection(ctx, userId);
-                console.log(`Пользователь ${userId} возобновил регистрацию с выбора должности`);
-            } else if (!user.organization) {
+            if (!user.organization) {
                 ctx.state.userStates[userId] = {
                     step: 'selectOrganization',
                     selectedObjects: [],
@@ -73,6 +54,24 @@ module.exports = (bot) => {
                 };
                 await showOrganizationSelection(ctx, userId);
                 console.log(`Пользователь ${userId} возобновил регистрацию с выбора организации`);
+            } else if (!user.selectedObjects.length) {
+                ctx.state.userStates[userId] = {
+                    step: 'selectObjects',
+                    selectedObjects: [],
+                    report: {},
+                    messageIds: ctx.state.userStates[userId]?.messageIds || []
+                };
+                await require('../actions/objects').showObjectSelection(ctx, userId, []);
+                console.log(`Пользователь ${userId} возобновил регистрацию с выбора объектов`);
+            } else if (!user.position) {
+                ctx.state.userStates[userId] = {
+                    step: 'selectPosition',
+                    selectedObjects: [],
+                    report: {},
+                    messageIds: ctx.state.userStates[userId]?.messageIds || []
+                };
+                await require('../actions/position').showPositionSelection(ctx, userId);
+                console.log(`Пользователь ${userId} возобновил регистрацию с выбора должности`);
             } else if (!user.fullName) {
                 ctx.state.userStates[userId] = {
                     step: 'enterFullName',
