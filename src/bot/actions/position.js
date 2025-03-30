@@ -94,11 +94,28 @@ module.exports = (bot) => {
             return;
         }
 
-        console.log(`Очистка предыдущих сообщений для userId ${userId}`);
-        await clearPreviousMessages(ctx, userId);
-        console.log(`Загрузка пользователей для userId ${userId}`);
-        const users = await loadUsers();
-        console.log(`Пользователи загружены для userId ${userId}`);
+        console.log(`Перед очисткой предыдущих сообщений для userId ${userId}`);
+        try {
+            await clearPreviousMessages(ctx, userId);
+            console.log(`Очистка предыдущих сообщений завершена для userId ${userId}`);
+        } catch (error) {
+            console.error(`Ошибка в clearPreviousMessages для userId ${userId}: ${error.message}`);
+            console.error(error.stack);
+            await ctx.reply('Произошла ошибка при очистке сообщений. Попробуйте снова или обратитесь к администратору.');
+            return;
+        }
+
+        console.log(`Перед загрузкой пользователей для userId ${userId}`);
+        let users;
+        try {
+            users = await loadUsers();
+            console.log(`Пользователи загружены для userId ${userId}`);
+        } catch (error) {
+            console.error(`Ошибка в loadUsers для userId ${userId}: ${error.message}`);
+            console.error(error.stack);
+            await ctx.reply('Произошла ошибка при загрузке данных. Попробуйте снова или обратитесь к администратору.');
+            return;
+        }
 
         try {
             if (state.step === 'customPositionInput') {
