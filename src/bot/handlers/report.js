@@ -101,7 +101,7 @@ async function downloadReportFile(ctx, objectIndex) {
     };
     const cellStyle = {
         font: { name: 'Arial', size: 9 },
-        alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
+        alignment: { horizontal: 'left', vertical: 'top', wrapText: true }, // Левый край, перенос текста
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 
@@ -109,13 +109,14 @@ async function downloadReportFile(ctx, objectIndex) {
     worksheet.getCell('A1').value = objectName;
     worksheet.getCell('A1').style = titleStyle;
 
-    worksheet.getRow(2).values = ['Дата', 'ИТР', 'Выполненные работы', 'Поставленные материалы'];
+    // Перемещаем "ИТР" в конец
+    worksheet.getRow(2).values = ['Дата', 'Выполненные работы', 'Поставленные материалы', 'ИТР'];
     worksheet.getRow(2).eachCell(cell => { cell.style = headerStyle; });
     worksheet.columns = [
         { key: 'date', width: 12 },
-        { key: 'itr', width: 30 },
         { key: 'workDone', width: 40 },
-        { key: 'materials', width: 40 }
+        { key: 'materials', width: 40 },
+        { key: 'itr', width: 30 }
     ];
 
     objectReports.sort((a, b) => {
@@ -135,11 +136,12 @@ async function downloadReportFile(ctx, objectIndex) {
         const user = users[report.userId] || {};
         const itrText = `${user.position || 'Не указано'} ${user.organization || 'Не указано'} ${report.fullName || user.fullName || 'Не указано'}`;
 
+        // Перемещаем itr в конец
         worksheet.getRow(currentRow).values = [
             report.date,
-            itrText,
             report.workDone,
-            report.materials
+            report.materials,
+            itrText
         ];
         worksheet.getRow(currentRow).eachCell(cell => { cell.style = cellStyle; });
 
@@ -156,7 +158,7 @@ async function downloadReportFile(ctx, objectIndex) {
 
         if (lastUserId !== report.userId || lastDate !== report.date) {
             if (itrCount > 1) {
-                worksheet.mergeCells(`B${itrStartRow}:B${currentRow - 1}`);
+                worksheet.mergeCells(`D${itrStartRow}:D${currentRow - 1}`); // Обновляем столбец для ИТР
             }
             lastUserId = report.userId;
             itrStartRow = currentRow;
@@ -167,9 +169,10 @@ async function downloadReportFile(ctx, objectIndex) {
 
         const maxLines = Math.max(
             report.workDone.split('\n').length,
-            report.materials.split('\n').length
+            report.materials.split('\n').length,
+            itrText.split('\n').length
         );
-        worksheet.getRow(currentRow).height = Math.max(15, maxLines * 12);
+        worksheet.getRow(currentRow).height = Math.max(15, maxLines * 15); // Увеличиваем высоту для читаемости
 
         currentRow++;
     });
@@ -178,7 +181,7 @@ async function downloadReportFile(ctx, objectIndex) {
         worksheet.mergeCells(`A${dateStartRow}:A${currentRow - 1}`);
     }
     if (itrCount > 1) {
-        worksheet.mergeCells(`B${itrStartRow}:B${currentRow - 1}`);
+        worksheet.mergeCells(`D${itrStartRow}:D${currentRow - 1}`); // Обновляем столбец для ИТР
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
