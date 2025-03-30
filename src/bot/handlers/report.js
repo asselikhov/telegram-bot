@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, saveReport, getReportText } = require('../../database/reportModel');
-const { OBJECTS_LIST_CYRILLIC, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
+const { OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
 
 async function showDownloadReport(ctx) {
@@ -14,7 +14,13 @@ async function showDownloadReport(ctx) {
 
     await clearPreviousMessages(ctx, userId);
 
-    const buttons = OBJECTS_LIST_CYRILLIC.map((obj, index) =>
+    // Отображаем только объекты из личного кабинета пользователя
+    const userObjects = users[userId].selectedObjects;
+    if (!userObjects || userObjects.length === 0) {
+        return ctx.reply('У вас не выбрано ни одного объекта в личном кабинете.');
+    }
+
+    const buttons = userObjects.map((obj, index) =>
         [Markup.button.callback(obj, `download_report_file_${index}`)]
     );
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
@@ -24,7 +30,8 @@ async function showDownloadReport(ctx) {
 
 async function downloadReportFile(ctx, objectIndex) {
     const userId = ctx.from.id.toString();
-    const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
+    const users = await loadUsers();
+    const objectName = users[userId].selectedObjects[objectIndex];
     if (!objectName) return ctx.reply('Ошибка: объект не найден.');
 
     const reportText = await getReportText(objectName);
@@ -49,10 +56,18 @@ async function createReport(ctx) {
 
     await clearPreviousMessages(ctx, userId);
 
-    const buttons = users[userId].selectedObjects.map((obj, index) =>
+    const userObjects = users[userId].selectedObjects;
+    if (!userObjects || userObjects.length === 0) {
+        return ctx.reply('У вас не выбрано ни одного объекта в личном кабинете.');
+    }
+
+    const buttons = userObjects.map((obj, index) =>
         [Markup.button.callback(obj, `select_object_${index}`)]
     );
-    await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
+    buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
+
+    const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 async function handleReportText(ctx, userId, state) {
@@ -70,7 +85,7 @@ async function handleReportText(ctx, userId, state) {
         materials: state.report.materials,
         groupMessageId: null,
         generalMessageId: null,
-        fullName: users[userId].fullName // Добавляем fullName
+        fullName: users[userId].fullName
     };
 
     const reportText = `
@@ -252,7 +267,7 @@ async function handleEditedReport(ctx, userId, state) {
         materials: state.report.materials,
         groupMessageId: null,
         generalMessageId: null,
-        fullName: users[userId].fullName // Добавляем fullName
+        fullName: users[userId].fullName
     };
 
     const reportText = `
@@ -320,8 +335,12 @@ module.exports = (bot) => {
 
         await clearPreviousMessages(ctx, userId);
 
-        ctx.state.userStates[userId] = { step: 'workDone', report: { objectName: selectedObject }, messageIds: ctx.state.userStates[userId].messageIds || [] };
-        await ctx.reply('💡 Введите информацию о выполненных работ:');
+        ctx.state.userStates[userId] = {
+            step: 'workDone',
+            report: { objectName: selectedObject },
+            messageIds: ctx.state.userStates[userId].messageIds || []
+        };
+        await ctx.reply('💡 Введите информацию о выполненных работах:');
     });
 
     bot.action('view_reports', showReportObjects);
@@ -335,9 +354,8 @@ module.exports = (bot) => {
         const state = ctx.state.userStates[userId];
         console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". Текущее состояние:`, state);
 
-        // Обрабатываем только определенные шаги, связанные с отчетами
         if (!state || !['workDone', 'materials', 'editWorkDone', 'editMaterials', 'editFullName'].includes(state.step)) {
-            return; // Пропускаем обработку, если шаг не связан с отчетами или редактированием ФИО
+            return;
         }
 
         await clearPreviousMessages(ctx, userId);
