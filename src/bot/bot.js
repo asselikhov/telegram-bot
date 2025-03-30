@@ -1,4 +1,3 @@
-// src/bot/bot.js
 const { Telegraf } = require('telegraf');
 const cron = require('node-cron');
 const { BOT_TOKEN, OBJECT_GROUPS } = require('../config/config');
@@ -66,11 +65,6 @@ bot.use((ctx, next) => {
   };
 
   return next();
-});
-
-// Временная отладка для проверки всех bot.on('text')
-bot.on('text', (ctx) => {
-  console.log(`Глобальный bot.on('text') перехватил сообщение от ${ctx.from.id}: "${ctx.message.text}" перед основными обработчиками`);
 });
 
 // Подключение обработчиков
