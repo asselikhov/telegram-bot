@@ -94,8 +94,11 @@ module.exports = (bot) => {
             return;
         }
 
+        console.log(`Очистка предыдущих сообщений для userId ${userId}`);
         await clearPreviousMessages(ctx, userId);
+        console.log(`Загрузка пользователей для userId ${userId}`);
         const users = await loadUsers();
+        console.log(`Пользователи загружены для userId ${userId}`);
 
         try {
             if (state.step === 'customPositionInput') {
