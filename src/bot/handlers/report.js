@@ -1,10 +1,10 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, saveReport, getReportText } = require('../../database/reportModel');
-const { OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
+const { OBJECTS_LIST_CYRILLIC, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
 
-async function showDownloadReport(ctx) {
+async function showDownloadReport(ctx, page = 0) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
 
@@ -14,24 +14,45 @@ async function showDownloadReport(ctx) {
 
     await clearPreviousMessages(ctx, userId);
 
-    // Отображаем только объекты из личного кабинета пользователя
-    const userObjects = users[userId].selectedObjects;
-    if (!userObjects || userObjects.length === 0) {
-        return ctx.reply('У вас не выбрано ни одного объекта в личном кабинете.');
-    }
+    const itemsPerPage = 10;
+    const totalObjects = OBJECTS_LIST_CYRILLIC.length;
+    const totalPages = Math.ceil(totalObjects / itemsPerPage);
 
-    const buttons = userObjects.map((obj, index) =>
-        [Markup.button.callback(obj, `download_report_file_${index}`)]
+    // Вычисляем объекты для текущей страницы
+    const startIndex = page * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, totalObjects);
+    const currentObjects = OBJECTS_LIST_CYRILLIC.slice(startIndex, endIndex);
+
+    // Создаем кнопки для объектов текущей страницы
+    const buttons = currentObjects.map((obj, index) =>
+        [Markup.button.callback(obj, `download_report_file_${startIndex + index}`)]
     );
+
+    // Добавляем кнопки пагинации
+    const paginationButtons = [];
+    if (totalPages > 1) {
+        if (page > 0) {
+            paginationButtons.push(Markup.button.callback('⬅️ Назад', `download_report_page_${page - 1}`));
+        }
+        if (page < totalPages - 1) {
+            paginationButtons.push(Markup.button.callback('Вперед ➡️', `download_report_page_${page + 1}`));
+        }
+    }
+    if (paginationButtons.length > 0) {
+        buttons.push(paginationButtons);
+    }
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
-    await ctx.reply('Выберите объект для выгрузки отчета:', Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(
+        `Выберите объект для выгрузки отчета (Страница ${page + 1} из ${totalPages}):`,
+        Markup.inlineKeyboard(buttons)
+    );
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 async function downloadReportFile(ctx, objectIndex) {
     const userId = ctx.from.id.toString();
-    const users = await loadUsers();
-    const objectName = users[userId].selectedObjects[objectIndex];
+    const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
     if (!objectName) return ctx.reply('Ошибка: объект не найден.');
 
     const reportText = await getReportText(objectName);
@@ -324,6 +345,10 @@ ${newReport.materials}
 
 module.exports = (bot) => {
     bot.action('download_report', showDownloadReport);
+    bot.action(/download_report_page_(\d+)/, async (ctx) => {
+        const page = parseInt(ctx.match[1], 10);
+        await showDownloadReport(ctx, page);
+    });
     bot.action(/download_report_file_(\d+)/, (ctx) => downloadReportFile(ctx, parseInt(ctx.match[1], 10)));
     bot.action('create_report', createReport);
     bot.action(/select_object_(\d+)/, async (ctx) => {
