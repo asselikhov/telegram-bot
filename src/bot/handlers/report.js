@@ -3,7 +3,7 @@ const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, saveReport, getReportText, loadAllReports } = require('../../database/reportModel');
-const { ORGANIZATION_OBJECTS, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
+const { ORGANIZATION_OBJECTS, ORGANIZATIONS_LIST, GENERAL_GROUP_CHAT_IDS, OBJECT_GROUPS } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
 
 async function showDownloadReport(ctx, page = 0) {
@@ -219,6 +219,8 @@ async function handleReportText(ctx, userId, state) {
     const date = new Date().toISOString().split('T')[0];
     const timestamp = new Date().toISOString();
     const reportId = `${date}_${users[userId].nextReportId++}`;
+    const userOrganization = users[userId].organization;
+
     const report = {
         reportId,
         userId,
@@ -227,8 +229,7 @@ async function handleReportText(ctx, userId, state) {
         timestamp,
         workDone: state.report.workDone,
         materials: state.report.materials,
-        groupMessageId: null,
-        generalMessageId: null,
+        groupMessageIds: {}, // Храним ID сообщений для разных чатов
         fullName: users[userId].fullName
     };
 
@@ -246,12 +247,29 @@ ${state.report.materials}
 ➖➖➖➖➖➖➖➖➖➖➖
     `.trim();
 
-    const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_ID;
+    // Отправка в чат объекта (OBJECT_GROUPS)
+    const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
     const groupMessage = await ctx.telegram.sendMessage(groupChatId, reportText);
-    const generalMessage = await ctx.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText);
+    report.groupMessageIds[groupChatId] = groupMessage.message_id;
 
-    report.groupMessageId = groupMessage.message_id;
-    report.generalMessageId = generalMessage.message_id;
+    // Отправка в чат текущей организации и заинтересованных организаций
+    const targetOrganizations = [
+        userOrganization,
+        ...ORGANIZATIONS_LIST.filter(org =>
+            GENERAL_GROUP_CHAT_IDS[org]?.reportSources.includes(userOrganization)
+        )
+    ];
+
+    for (const org of targetOrganizations) {
+        const chatConfig = GENERAL_GROUP_CHAT_IDS[org] || GENERAL_GROUP_CHAT_IDS['default'];
+        const generalChatId = chatConfig.chatId;
+        try {
+            const generalMessage = await ctx.telegram.sendMessage(generalChatId, reportText);
+            report.groupMessageIds[generalChatId] = generalMessage.message_id;
+        } catch (e) {
+            console.log(`Не удалось отправить отчёт в чат ${generalChatId} для организации ${org}: ${e.message}`);
+        }
+    }
 
     await saveReport(userId, report);
     await saveUser(userId, users[userId]);
@@ -393,6 +411,7 @@ async function handleEditedReport(ctx, userId, state) {
     const users = await loadUsers();
     const originalReportId = state.report.originalReportId;
     let originalReport = null;
+    const userOrganization = users[userId].organization;
 
     if (originalReportId) {
         const userReports = await loadUserReports(userId);
@@ -409,8 +428,7 @@ async function handleEditedReport(ctx, userId, state) {
         timestamp: newTimestamp,
         workDone: state.report.workDone,
         materials: state.report.materials,
-        groupMessageId: null,
-        generalMessageId: null,
+        groupMessageIds: {}, // Храним ID сообщений для разных чатов
         fullName: users[userId].fullName
     };
 
@@ -428,16 +446,11 @@ ${newReport.materials}
 ➖➖➖➖➖➖➖➖➖➖➖
     `.trim();
 
-    const groupChatId = OBJECT_GROUPS[newReport.objectName] || GENERAL_GROUP_CHAT_ID;
-
-    if (originalReport) {
-        if (originalReport.groupMessageId) {
-            await ctx.telegram.deleteMessage(groupChatId, originalReport.groupMessageId)
-                .catch(e => console.log(`Не удалось удалить старое сообщение ${originalReport.groupMessageId}: ${e.message}`));
-        }
-        if (originalReport.generalMessageId) {
-            await ctx.telegram.deleteMessage(GENERAL_GROUP_CHAT_ID, originalReport.generalMessageId)
-                .catch(e => console.log(`Не удалось удалить старое сообщение ${originalReport.generalMessageId}: ${e.message}`));
+    // Удаление старых сообщений
+    if (originalReport && originalReport.groupMessageIds) {
+        for (const [chatId, messageId] of Object.entries(originalReport.groupMessageIds)) {
+            await ctx.telegram.deleteMessage(chatId, messageId)
+                .catch(e => console.log(`Не удалось удалить старое сообщение ${messageId} в чате ${chatId}: ${e.message}`));
         }
 
         const client = await require('../../database/db').pool.connect();
@@ -446,15 +459,33 @@ ${newReport.materials}
         } finally {
             client.release();
         }
-    } else {
+    } else if (originalReportId) {
         console.log(`Предупреждение: старый отчёт с ID ${originalReportId} не найден для userId ${userId}`);
     }
 
+    // Отправка в чат объекта (OBJECT_GROUPS)
+    const groupChatId = OBJECT_GROUPS[newReport.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
     const groupMessage = await ctx.telegram.sendMessage(groupChatId, reportText);
-    const generalMessage = await ctx.telegram.sendMessage(GENERAL_GROUP_CHAT_ID, reportText);
+    newReport.groupMessageIds[groupChatId] = groupMessage.message_id;
 
-    newReport.groupMessageId = groupMessage.message_id;
-    newReport.generalMessageId = generalMessage.message_id;
+    // Отправка в чат текущей организации и заинтересованных организаций
+    const targetOrganizations = [
+        userOrganization,
+        ...ORGANIZATIONS_LIST.filter(org =>
+            GENERAL_GROUP_CHAT_IDS[org]?.reportSources.includes(userOrganization)
+        )
+    ];
+
+    for (const org of targetOrganizations) {
+        const chatConfig = GENERAL_GROUP_CHAT_IDS[org] || GENERAL_GROUP_CHAT_IDS['default'];
+        const generalChatId = chatConfig.chatId;
+        try {
+            const generalMessage = await ctx.telegram.sendMessage(generalChatId, reportText);
+            newReport.groupMessageIds[generalChatId] = generalMessage.message_id;
+        } catch (e) {
+            console.log(`Не удалось отправить отчёт в чат ${generalChatId} для организации ${org}: ${e.message}`);
+        }
+    }
 
     await saveReport(userId, newReport);
     await saveUser(userId, users[userId]);
