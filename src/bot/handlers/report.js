@@ -81,13 +81,7 @@ async function downloadReportFile(ctx, objectIndex) {
     const allReports = await loadAllReports();
     console.log(`[downloadReportFile] Все отчеты из базы данных:`, allReports);
 
-    const objectReports = Object.values(allReports).filter(report => {
-        const matches = report.objectName === objectName;
-        if (!matches) {
-            console.log(`[downloadReportFile] Отчет ${report.reportId} не соответствует: ${report.objectName} !== ${objectName}`);
-        }
-        return matches;
-    });
+    const objectReports = Object.values(allReports).filter(report => report.objectName === objectName);
     console.log(`[downloadReportFile] Найдено отчетов для объекта "${objectName}": ${objectReports.length}`, objectReports);
 
     if (objectReports.length === 0) {
@@ -100,56 +94,107 @@ async function downloadReportFile(ctx, objectIndex) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Отчеты');
 
+    // Стили
+    const titleStyle = {
+        font: { name: 'Arial', size: 12, bold: true },
+        alignment: { horizontal: 'center' }
+    };
     const headerStyle = {
         font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } },
         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } },
         alignment: { horizontal: 'center', vertical: 'middle' },
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
-
     const cellStyle = {
         font: { name: 'Arial', size: 9 },
         alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 
+    // Заголовок с наименованием объекта
+    worksheet.mergeCells('A1:D1');
+    worksheet.getCell('A1').value = objectName;
+    worksheet.getCell('A1').style = titleStyle;
+
+    // Заголовки столбцов (начиная со второй строки)
+    worksheet.getRow(2).values = ['Дата', 'ИТР', 'Выполненные работы', 'Поставленные материалы'];
+    worksheet.getRow(2).eachCell(cell => { cell.style = headerStyle; });
     worksheet.columns = [
-        { header: 'Объект', key: 'object', width: 20 },
-        { header: 'Дата', key: 'date', width: 12 },
-        { header: 'Должность', key: 'position', width: 15 },
-        { header: 'Организация', key: 'organization', width: 15 },
-        { header: 'ФИО', key: 'fullName', width: 20 },
-        { header: 'Выполненные работы', key: 'workDone', width: 30 },
-        { header: 'Поставленные материалы', key: 'materials', width: 30 }
+        { key: 'date', width: 12 },
+        { key: 'itr', width: 30 },
+        { key: 'workDone', width: 40 },
+        { key: 'materials', width: 40 }
     ];
 
-    worksheet.getRow(1).eachCell(cell => { cell.style = headerStyle; });
+    // Сортировка отчетов по дате и userId для правильного объединения
+    objectReports.sort((a, b) => {
+        if (a.date === b.date) return a.userId.localeCompare(b.userId);
+        return a.date.localeCompare(b.date);
+    });
 
     const users = await loadUsers();
+    let currentRow = 3; // Начинаем с 3-й строки после заголовков
+    let lastDate = null;
+    let lastUserId = null;
+    let dateStartRow = null;
+    let itrStartRow = null;
+    let dateCount = 0;
+    let itrCount = 0;
+
     objectReports.forEach((report, index) => {
         const user = users[report.userId] || {};
-        worksheet.addRow({
-            object: report.objectName,
-            date: report.date,
-            position: user.position || 'Не указано',
-            organization: user.organization || 'Не указано',
-            fullName: report.fullName || user.fullName || 'Не указано',
-            workDone: report.workDone,
-            materials: report.materials
-        }).eachCell(cell => { cell.style = cellStyle; });
+        const itrText = `${user.position || 'Не указано'} ${user.organization || 'Не указано'} ${report.fullName || user.fullName || 'Не указано'}`;
+
+        // Заполняем строку данными
+        worksheet.getRow(currentRow).values = [
+            report.date,
+            itrText,
+            report.workDone,
+            report.materials
+        ];
+        worksheet.getRow(currentRow).eachCell(cell => { cell.style = cellStyle; });
+
+        // Логика объединения ячеек для даты
+        if (lastDate !== report.date) {
+            if (dateCount > 1) {
+                worksheet.mergeCells(`A${dateStartRow}:A${currentRow - 1}`);
+            }
+            lastDate = report.date;
+            dateStartRow = currentRow;
+            dateCount = 1;
+        } else {
+            dateCount++;
+        }
+
+        // Логика объединения ячеек для ИТР
+        if (lastUserId !== report.userId || lastDate !== report.date) {
+            if (itrCount > 1) {
+                worksheet.mergeCells(`B${itrStartRow}:B${currentRow - 1}`);
+            }
+            lastUserId = report.userId;
+            itrStartRow = currentRow;
+            itrCount = 1;
+        } else {
+            itrCount++;
+        }
+
+        // Устанавливаем высоту строки
+        const maxLines = Math.max(
+            report.workDone.split('\n').length,
+            report.materials.split('\n').length
+        );
+        worksheet.getRow(currentRow).height = Math.max(15, maxLines * 12);
+
+        currentRow++;
     });
 
-    worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber > 1) {
-            const maxLines = Math.max(
-                row.getCell('workDone').value.split('\n').length,
-                row.getCell('materials').value.split('\n').length
-            );
-            row.height = Math.max(15, maxLines * 12);
-        } else {
-            row.height = 20;
-        }
-    });
+    // Объединяем последние группы, если они больше одной строки
+    if (dateCount > 1) {
+        worksheet.mergeCells(`A${dateStartRow}:A${currentRow - 1}`);
+    }
+    if (itrCount > 1) {
+        worksheet.mergeCells(`B${itrStartRow}:B${currentRow - 1}`);
+    }
 
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `${objectName}_reports_${new Date().toISOString().split('T')[0]}.xlsx`;
