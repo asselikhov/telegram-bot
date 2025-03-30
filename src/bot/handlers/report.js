@@ -16,6 +16,10 @@ async function showDownloadReport(ctx, page = 0) {
     console.log(`[showDownloadReport] Загружены пользователи для userId ${userId}:`, users[userId]);
     console.log(`[showDownloadReport] OBJECTS_LIST_CYRILLIC:`, OBJECTS_LIST_CYRILLIC);
 
+    // Проверяем, что page — это число
+    const pageNum = typeof page === 'number' ? page : 0;
+    console.log(`[showDownloadReport] Используемая страница: ${pageNum}`);
+
     await clearPreviousMessages(ctx, userId);
 
     if (!OBJECTS_LIST_CYRILLIC || OBJECTS_LIST_CYRILLIC.length === 0) {
@@ -27,14 +31,14 @@ async function showDownloadReport(ctx, page = 0) {
     const totalObjects = OBJECTS_LIST_CYRILLIC.length;
     const totalPages = Math.ceil(totalObjects / itemsPerPage);
 
-    const startIndex = page * itemsPerPage;
+    const startIndex = pageNum * itemsPerPage;
     const endIndex = Math.min(startIndex + itemsPerPage, totalObjects);
     const currentObjects = OBJECTS_LIST_CYRILLIC.slice(startIndex, endIndex);
 
-    console.log(`[showDownloadReport] Страница ${page}: startIndex=${startIndex}, endIndex=${endIndex}, currentObjects=`, currentObjects);
+    console.log(`[showDownloadReport] Страница ${pageNum}: startIndex=${startIndex}, endIndex=${endIndex}, currentObjects=`, currentObjects);
 
     if (currentObjects.length === 0) {
-        console.log(`[showDownloadReport] Нет объектов для отображения на странице ${page}`);
+        console.log(`[showDownloadReport] Нет объектов для отображения на странице ${pageNum}`);
         return ctx.reply('Ошибка: нет объектов для отображения.');
     }
 
@@ -44,11 +48,11 @@ async function showDownloadReport(ctx, page = 0) {
 
     const paginationButtons = [];
     if (totalPages > 1) {
-        if (page > 0) {
-            paginationButtons.push(Markup.button.callback('⬅️ Назад', `download_report_page_${page - 1}`));
+        if (pageNum > 0) {
+            paginationButtons.push(Markup.button.callback('⬅️ Назад', `download_report_page_${pageNum - 1}`));
         }
-        if (page < totalPages - 1) {
-            paginationButtons.push(Markup.button.callback('Вперед ➡️', `download_report_page_${page + 1}`));
+        if (pageNum < totalPages - 1) {
+            paginationButtons.push(Markup.button.callback('Вперед ➡️', `download_report_page_${pageNum + 1}`));
         }
     }
     if (paginationButtons.length > 0) {
@@ -56,10 +60,10 @@ async function showDownloadReport(ctx, page = 0) {
     }
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
-    console.log(`[showDownloadReport] Кнопки для страницы ${page}:`, buttons);
+    console.log(`[showDownloadReport] Кнопки для страницы ${pageNum}:`, buttons);
 
     const message = await ctx.reply(
-        `Выберите объект для выгрузки отчета (Страница ${page + 1} из ${totalPages}):`,
+        `Выберите объект для выгрузки отчета (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
     ctx.state.userStates[userId].messageIds.push(message.message_id);
@@ -365,7 +369,9 @@ ${newReport.materials}
 }
 
 module.exports = (bot) => {
-    bot.action('download_report', showDownloadReport);
+    bot.action('download_report', async (ctx) => {
+        await showDownloadReport(ctx, 0); // Явно указываем первую страницу
+    });
     bot.action(/download_report_page_(\d+)/, async (ctx) => {
         const page = parseInt(ctx.match[1], 10);
         await showDownloadReport(ctx, page);
