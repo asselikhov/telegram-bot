@@ -89,60 +89,71 @@ module.exports = (bot) => {
         const state = ctx.state.userStates[userId];
         console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". Текущее состояние: ${JSON.stringify(state)}`);
 
-        if (!state) return;
+        if (!state) {
+            console.log(`Нет состояния для userId ${userId}`);
+            return;
+        }
 
         await clearPreviousMessages(ctx, userId);
         const users = await loadUsers();
 
-        if (state.step === 'customPositionInput') {
-            const position = ctx.message.text.trim();
-            users[userId].position = position;
-            await saveUser(userId, users[userId]);
-            console.log(`Сохранена пользовательская должность для userId ${userId}: ${position}`);
+        try {
+            if (state.step === 'customPositionInput') {
+                const position = ctx.message.text.trim();
+                users[userId].position = position;
+                await saveUser(userId, users[userId]);
+                console.log(`Сохранена пользовательская должность для userId ${userId}: ${position}`);
 
-            state.step = 'enterFullName';
-            const message = await ctx.reply('Введите ваше ФИО:');
-            ctx.state.userStates[userId].messageIds.push(message.message_id);
-            console.log(`Переход к вводу ФИО для userId ${userId} после ввода своей должности`);
-        } else if (state.step === 'enterFullName') {
-            const fullName = ctx.message.text.trim();
-            users[userId].fullName = fullName;
-            await saveUser(userId, users[userId]);
-            console.log(`Сохранено ФИО для userId ${userId}: ${fullName}`);
+                state.step = 'enterFullName';
+                const message = await ctx.reply('Введите ваше ФИО:');
+                ctx.state.userStates[userId].messageIds.push(message.message_id);
+                console.log(`Переход к вводу ФИО для userId ${userId} после ввода своей должности`);
+            } else if (state.step === 'enterFullName') {
+                const fullName = ctx.message.text.trim();
+                console.log(`Попытка сохранить ФИО для userId ${userId}: ${fullName}`);
+                users[userId].fullName = fullName;
+                await saveUser(userId, users[userId]);
+                console.log(`Сохранено ФИО для userId ${userId}: ${fullName}`);
 
-            const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
-            state.messageIds.push(message.message_id);
+                const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
+                state.messageIds.push(message.message_id);
+                console.log(`Сообщение отправлено пользователю userId ${userId}`);
 
-            const adminText = `\n${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
-            console.log(`Отправка заявки для userId ${userId}: ${adminText}`);
+                const adminText = `\n${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
+                console.log(`Отправка заявки для userId ${userId}: ${adminText}`);
 
-            await ctx.telegram.sendMessage(ADMIN_ID, `📝 НОВАЯ ЗАЯВКА${adminText}`, Markup.inlineKeyboard([
-                [Markup.button.callback(`✅ Одобрить (${users[userId].fullName || 'Не указано'})`, `approve_${userId}`)],
-                [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Не указано'})`, `reject_${userId}`)]
-            ]));
+                await ctx.telegram.sendMessage(ADMIN_ID, `📝 НОВАЯ ЗАЯВКА${adminText}`, Markup.inlineKeyboard([
+                    [Markup.button.callback(`✅ Одобрить (${users[userId].fullName || 'Не указано'})`, `approve_${userId}`)],
+                    [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Не указано'})`, `reject_${userId}`)]
+                ]));
+                console.log(`Заявка от userId ${userId} отправлена администратору`);
 
-            ctx.state.userStates[userId] = { step: null, messageIds: [] };
-            console.log(`Заявка от userId ${userId} отправлена администратору`);
-        } else if (state.step === 'customPositionEditInput') {
-            users[userId].position = ctx.message.text.trim();
-            await saveUser(userId, users[userId]);
-            state.step = null;
-            await ctx.reply(`Должность обновлена на "${users[userId].position}".`);
-            await showProfile(ctx);
-        } else if (state.step === 'customOrganizationInput') {
-            users[userId].organization = ctx.message.text.trim();
-            users[userId].selectedObjects = [];
-            await saveUser(userId, users[userId]);
-            state.step = 'selectObjects';
-            await showObjectSelection(ctx, userId, []);
-            console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
-        } else if (state.step === 'customOrgEditInput') {
-            users[userId].organization = ctx.message.text.trim();
-            users[userId].selectedObjects = [];
-            await saveUser(userId, users[userId]);
-            state.step = null;
-            await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
-            await showProfile(ctx);
+                ctx.state.userStates[userId] = { step: null, messageIds: [] };
+            } else if (state.step === 'customPositionEditInput') {
+                users[userId].position = ctx.message.text.trim();
+                await saveUser(userId, users[userId]);
+                state.step = null;
+                await ctx.reply(`Должность обновлена на "${users[userId].position}".`);
+                await showProfile(ctx);
+            } else if (state.step === 'customOrganizationInput') {
+                users[userId].organization = ctx.message.text.trim();
+                users[userId].selectedObjects = [];
+                await saveUser(userId, users[userId]);
+                state.step = 'selectObjects';
+                await showObjectSelection(ctx, userId, []);
+                console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
+            } else if (state.step === 'customOrgEditInput') {
+                users[userId].organization = ctx.message.text.trim();
+                users[userId].selectedObjects = [];
+                await saveUser(userId, users[userId]);
+                state.step = null;
+                await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
+                await showProfile(ctx);
+            } else {
+                console.log(`Неизвестный шаг для userId ${userId}: ${state.step}`);
+            }
+        } catch (error) {
+            console.error(`Ошибка при обработке текста для userId ${userId}: ${error.message}`);
         }
     });
 };
