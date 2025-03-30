@@ -1,4 +1,4 @@
-// objects.js
+// src/bot/actions/objects.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
@@ -83,8 +83,9 @@ module.exports = (bot) => {
         } else if (state.step === 'selectObjects') {
             state.step = 'selectPosition';
             state.selectedObjects = [];
-            const { showPositionSelection } = require('./position'); // Импорт внутрь
+            const { showPositionSelection } = require('./position');
             await showPositionSelection(ctx, userId);
+            console.log(`Переход к выбору должности для userId ${userId} после выбора объектов`);
         }
     });
 
@@ -92,7 +93,11 @@ module.exports = (bot) => {
         const userId = ctx.from.id.toString();
         const users = await loadUsers();
         const currentObjects = users[userId].selectedObjects || [];
-        ctx.state.userStates[userId] = { step: 'editObjects', selectedObjects: [...currentObjects], messageIds: ctx.state.userStates[userId].messageIds || [] };
+        ctx.state.userStates[userId] = {
+            step: 'editObjects',
+            selectedObjects: [...currentObjects],
+            messageIds: ctx.state.userStates[userId].messageIds || []
+        };
         await showObjectSelection(ctx, userId, currentObjects);
     });
 };

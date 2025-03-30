@@ -1,4 +1,4 @@
-// position.js
+// src/bot/actions/position.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { BASE_POSITIONS_LIST, ADMIN_ID } = require('../../config/config');
@@ -32,9 +32,10 @@ module.exports = (bot) => {
         users[userId].position = selectedPosition;
         await saveUser(userId, users[userId]);
 
-        ctx.state.userStates[userId].step = 'selectOrganization';
-        const { showOrganizationSelection } = require('./organization'); // Импорт внутрь
-        await showOrganizationSelection(ctx, userId);
+        ctx.state.userStates[userId].step = 'enterFullName';
+        const message = await ctx.reply('Введите ваше ФИО:');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        console.log(`Переход к вводу ФИО для userId ${userId} после выбора должности`);
     });
 
     bot.action('custom_position', async (ctx) => {
@@ -87,9 +88,10 @@ module.exports = (bot) => {
         if (state.step === 'customPositionInput') {
             users[userId].position = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
-            state.step = 'selectOrganization';
-            const { showOrganizationSelection } = require('./organization'); // Импорт внутрь
-            await showOrganizationSelection(ctx, userId);
+            state.step = 'enterFullName';
+            const message = await ctx.reply('Введите ваше ФИО:');
+            ctx.state.userStates[userId].messageIds.push(message.message_id);
+            console.log(`Переход к вводу ФИО для userId ${userId} после ввода своей должности`);
         } else if (state.step === 'customPositionEditInput') {
             users[userId].position = ctx.message.text.trim();
             await saveUser(userId, users[userId]);

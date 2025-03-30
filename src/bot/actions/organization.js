@@ -1,4 +1,4 @@
-// organization.js
+// src/bot/actions/organization.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { ORGANIZATIONS_LIST, ADMIN_ID, ORGANIZATION_OBJECTS } = require('../../config/config');
@@ -64,7 +64,6 @@ module.exports = (bot) => {
         users[userId].selectedObjects = []; // Сбрасываем объекты при изменении организации
         await saveUser(userId, users[userId]);
 
-        // Убираем перенаправление на выбор объектов и возвращаем в профиль
         ctx.state.userStates[userId].step = null; // Сбрасываем шаг
         await ctx.reply(`Организация обновлена на "${selectedOrganization}".`);
         await showProfile(ctx);
@@ -92,10 +91,7 @@ module.exports = (bot) => {
             state.step = 'selectObjects';
             await showObjectSelection(ctx, userId, []);
             console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
-            return;
-        }
-
-        if (state.step === 'enterFullName') {
+        } else if (state.step === 'enterFullName') {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].fullName = ctx.message.text.trim();
@@ -105,27 +101,23 @@ module.exports = (bot) => {
             state.messageIds.push(message.message_id);
 
             const adminText = `\n${users[userId].fullName} - ${users[userId].position} (${users[userId].organization})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
-            await ctx.telegram.sendMessage(ADMIN_ID, `📝 СПИСОК ЗАЯВОК${adminText}`, Markup.inlineKeyboard([
+            await ctx.telegram.sendMessage(ADMIN_ID, `📝 НОВАЯ ЗАЯВКА${adminText}`, Markup.inlineKeyboard([
                 [Markup.button.callback(`✅ Одобрить (${users[userId].fullName})`, `approve_${userId}`)],
                 [Markup.button.callback(`❌ Отклонить (${users[userId].fullName})`, `reject_${userId}`)]
             ]));
 
             ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
-            return;
-        }
-
-        if (state.step === 'customOrgEditInput') {
+            console.log(`Заявка от userId ${userId} отправлена администратору`);
+        } else if (state.step === 'customOrgEditInput') {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
             users[userId].selectedObjects = []; // Сбрасываем объекты
             await saveUser(userId, users[userId]);
 
-            // Убираем перенаправление на выбор объектов и возвращаем в профиль
             state.step = null; // Сбрасываем шаг
             await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
             await showProfile(ctx);
-            return;
         }
     });
 };
