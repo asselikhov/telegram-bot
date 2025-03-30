@@ -1,8 +1,9 @@
+// report.js
 const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, saveReport, getReportText, loadAllReports } = require('../../database/reportModel');
-const { OBJECTS_LIST_CYRILLIC, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
+const { ORGANIZATION_OBJECTS, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
 
 async function showDownloadReport(ctx, page = 0) {
@@ -14,28 +15,24 @@ async function showDownloadReport(ctx, page = 0) {
         return ctx.reply('У вас нет прав для выгрузки отчетов.');
     }
 
-    console.log(`[showDownloadReport] Загружены пользователи для userId ${userId}:`, users[userId]);
-    console.log(`[showDownloadReport] OBJECTS_LIST_CYRILLIC:`, OBJECTS_LIST_CYRILLIC);
+    const userOrganization = users[userId].organization;
+    const availableObjects = ORGANIZATION_OBJECTS[userOrganization] || [];
 
-    const pageNum = typeof page === 'number' ? page : 0;
-    console.log(`[showDownloadReport] Используемая страница: ${pageNum}`);
-
-    await clearPreviousMessages(ctx, userId);
-
-    if (!OBJECTS_LIST_CYRILLIC || OBJECTS_LIST_CYRILLIC.length === 0) {
-        console.log(`[showDownloadReport] OBJECTS_LIST_CYRILLIC пуст или не определён`);
-        return ctx.reply('Список объектов пуст. Обратитесь к администратору.');
+    if (!availableObjects.length) {
+        console.log(`[showDownloadReport] Для организации ${userOrganization} нет доступных объектов`);
+        return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
     }
 
+    const pageNum = typeof page === 'number' ? page : 0;
+    await clearPreviousMessages(ctx, userId);
+
     const itemsPerPage = 10;
-    const totalObjects = OBJECTS_LIST_CYRILLIC.length;
+    const totalObjects = availableObjects.length;
     const totalPages = Math.ceil(totalObjects / itemsPerPage);
 
     const startIndex = pageNum * itemsPerPage;
     const endIndex = Math.min(startIndex + itemsPerPage, totalObjects);
-    const currentObjects = OBJECTS_LIST_CYRILLIC.slice(startIndex, endIndex);
-
-    console.log(`[showDownloadReport] Страница ${pageNum}: startIndex=${startIndex}, endIndex=${endIndex}, currentObjects=`, currentObjects);
+    const currentObjects = availableObjects.slice(startIndex, endIndex);
 
     if (currentObjects.length === 0) {
         console.log(`[showDownloadReport] Нет объектов для отображения на странице ${pageNum}`);
@@ -43,7 +40,7 @@ async function showDownloadReport(ctx, page = 0) {
     }
 
     const buttons = currentObjects.map((obj, index) =>
-        [Markup.button.callback(obj, `download_report_file_${startIndex + index}`)]
+        [Markup.button.callback(obj, `download_report_file_${availableObjects.indexOf(obj)}`)]
     );
 
     const paginationButtons = [];
@@ -60,29 +57,27 @@ async function showDownloadReport(ctx, page = 0) {
     }
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
-    console.log(`[showDownloadReport] Кнопки для страницы ${pageNum}:`, buttons);
-
     const message = await ctx.reply(
         `Выберите объект для выгрузки отчета (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
     ctx.state.userStates[userId].messageIds.push(message.message_id);
-    console.log(`[showDownloadReport] Отправлено сообщение с ID ${message.message_id} для userId ${userId}`);
 }
 
 async function downloadReportFile(ctx, objectIndex) {
     const userId = ctx.from.id.toString();
-    const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
+    const users = await loadUsers();
+    const userOrganization = users[userId].organization;
+    const availableObjects = ORGANIZATION_OBJECTS[userOrganization] || [];
+    const objectName = availableObjects[objectIndex];
+
     if (!objectName) {
-        console.log(`[downloadReportFile] Объект с индексом ${objectIndex} не найден в OBJECTS_LIST_CYRILLIC`);
+        console.log(`[downloadReportFile] Объект с индексом ${objectIndex} не найден для организации ${userOrganization}`);
         return ctx.reply('Ошибка: объект не найден.');
     }
 
     const allReports = await loadAllReports();
-    console.log(`[downloadReportFile] Все отчеты из базы данных:`, allReports);
-
     const objectReports = Object.values(allReports).filter(report => report.objectName === objectName);
-    console.log(`[downloadReportFile] Найдено отчетов для объекта "${objectName}": ${objectReports.length}`, objectReports);
 
     if (objectReports.length === 0) {
         console.log(`[downloadReportFile] Отчеты для объекта "${objectName}" не найдены`);
@@ -94,7 +89,6 @@ async function downloadReportFile(ctx, objectIndex) {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Отчеты');
 
-    // Стили
     const titleStyle = {
         font: { name: 'Arial', size: 12, bold: true },
         alignment: { horizontal: 'center' }
@@ -111,12 +105,10 @@ async function downloadReportFile(ctx, objectIndex) {
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 
-    // Заголовок с наименованием объекта
     worksheet.mergeCells('A1:D1');
     worksheet.getCell('A1').value = objectName;
     worksheet.getCell('A1').style = titleStyle;
 
-    // Заголовки столбцов (начиная со второй строки)
     worksheet.getRow(2).values = ['Дата', 'ИТР', 'Выполненные работы', 'Поставленные материалы'];
     worksheet.getRow(2).eachCell(cell => { cell.style = headerStyle; });
     worksheet.columns = [
@@ -126,14 +118,12 @@ async function downloadReportFile(ctx, objectIndex) {
         { key: 'materials', width: 40 }
     ];
 
-    // Сортировка отчетов по дате и userId для правильного объединения
     objectReports.sort((a, b) => {
         if (a.date === b.date) return a.userId.localeCompare(b.userId);
         return a.date.localeCompare(b.date);
     });
 
-    const users = await loadUsers();
-    let currentRow = 3; // Начинаем с 3-й строки после заголовков
+    let currentRow = 3;
     let lastDate = null;
     let lastUserId = null;
     let dateStartRow = null;
@@ -141,11 +131,10 @@ async function downloadReportFile(ctx, objectIndex) {
     let dateCount = 0;
     let itrCount = 0;
 
-    objectReports.forEach((report, index) => {
+    objectReports.forEach((report) => {
         const user = users[report.userId] || {};
         const itrText = `${user.position || 'Не указано'} ${user.organization || 'Не указано'} ${report.fullName || user.fullName || 'Не указано'}`;
 
-        // Заполняем строку данными
         worksheet.getRow(currentRow).values = [
             report.date,
             itrText,
@@ -154,7 +143,6 @@ async function downloadReportFile(ctx, objectIndex) {
         ];
         worksheet.getRow(currentRow).eachCell(cell => { cell.style = cellStyle; });
 
-        // Логика объединения ячеек для даты
         if (lastDate !== report.date) {
             if (dateCount > 1) {
                 worksheet.mergeCells(`A${dateStartRow}:A${currentRow - 1}`);
@@ -166,7 +154,6 @@ async function downloadReportFile(ctx, objectIndex) {
             dateCount++;
         }
 
-        // Логика объединения ячеек для ИТР
         if (lastUserId !== report.userId || lastDate !== report.date) {
             if (itrCount > 1) {
                 worksheet.mergeCells(`B${itrStartRow}:B${currentRow - 1}`);
@@ -178,7 +165,6 @@ async function downloadReportFile(ctx, objectIndex) {
             itrCount++;
         }
 
-        // Устанавливаем высоту строки
         const maxLines = Math.max(
             report.workDone.split('\n').length,
             report.materials.split('\n').length
@@ -188,7 +174,6 @@ async function downloadReportFile(ctx, objectIndex) {
         currentRow++;
     });
 
-    // Объединяем последние группы, если они больше одной строки
     if (dateCount > 1) {
         worksheet.mergeCells(`A${dateStartRow}:A${currentRow - 1}`);
     }

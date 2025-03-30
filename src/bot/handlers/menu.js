@@ -2,7 +2,7 @@
 const { Markup } = require('telegraf');
 const { loadUsers } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
-const { ORGANIZATION_OBJECTS } = require('../../config/config'); // Добавляем импорт
+const { ORGANIZATION_OBJECTS } = require('../../config/config');
 
 async function showMainMenu(ctx) {
     const userId = ctx.from.id.toString();
@@ -43,7 +43,6 @@ async function showProfile(ctx) {
     const users = await loadUsers();
     const user = users[userId] || {};
 
-    // Фильтруем объекты пользователя, оставляя только те, что доступны для его организации
     const availableObjects = ORGANIZATION_OBJECTS[user.organization] || [];
     const filteredObjects = user.selectedObjects.filter(obj => availableObjects.includes(obj));
     const objectsList = filteredObjects.length > 0

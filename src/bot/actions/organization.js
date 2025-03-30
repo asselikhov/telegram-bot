@@ -1,12 +1,13 @@
+// organization.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { ORGANIZATIONS_LIST, ADMIN_ID } = require('../../config/config');
+const { ORGANIZATIONS_LIST, ADMIN_ID, ORGANIZATION_OBJECTS } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
-const { showProfile } = require('../handlers/menu'); // Импортируем showProfile для возврата в профиль
+const { showProfile } = require('../handlers/menu');
+const { showObjectSelection } = require('./objects');
 
 async function showOrganizationSelection(ctx, userId) {
     await clearPreviousMessages(ctx, userId);
-
     const buttons = ORGANIZATIONS_LIST.map((org, index) => [Markup.button.callback(org, `select_organization_${index}`)]);
     buttons.push([Markup.button.callback('Ввести свою организацию', 'custom_organization')]);
     const message = await ctx.reply('Выберите вашу организацию:', Markup.inlineKeyboard(buttons));
@@ -24,12 +25,12 @@ module.exports = (bot) => {
 
         const users = await loadUsers();
         users[userId].organization = selectedOrganization;
+        users[userId].selectedObjects = []; // Сбрасываем объекты
         await saveUser(userId, users[userId]);
 
-        ctx.state.userStates[userId].step = 'enterFullName';
-        const message = await ctx.reply('Введите ваше ФИО:');
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
-        console.log(`Шаг enterFullName установлен для userId ${userId}. State:`, ctx.state.userStates[userId]);
+        ctx.state.userStates[userId].step = 'selectObjects';
+        await showObjectSelection(ctx, userId, []);
+        console.log(`Переход к выбору объектов для userId ${userId} после выбора организации`);
     });
 
     bot.action('custom_organization', async (ctx) => {
@@ -38,7 +39,6 @@ module.exports = (bot) => {
         ctx.state.userStates[userId].step = 'customOrganizationInput';
         const message = await ctx.reply('Введите название вашей организации:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        console.log(`Шаг customOrganizationInput установлен для userId ${userId}. State:`, ctx.state.userStates[userId]);
     });
 
     bot.action('edit_organization', async (ctx) => {
@@ -61,10 +61,11 @@ module.exports = (bot) => {
 
         const users = await loadUsers();
         users[userId].organization = selectedOrganization;
+        users[userId].selectedObjects = []; // Сбрасываем объекты при изменении организации
         await saveUser(userId, users[userId]);
-        ctx.state.userStates[userId].step = null;
-        await ctx.reply(`Организация обновлена на "${selectedOrganization}".`);
-        await showProfile(ctx); // Возвращаем пользователя в личный кабинет
+        ctx.state.userStates[userId].step = 'selectObjects';
+        await showObjectSelection(ctx, userId, []);
+        await ctx.reply(`Организация обновлена на "${selectedOrganization}". Теперь выберите объекты:`);
     });
 
     bot.action('custom_org_edit', async (ctx) => {
@@ -78,22 +79,17 @@ module.exports = (bot) => {
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". State:`, state);
-
-        if (!state) {
-            console.log(`Нет состояния для userId ${userId}, пропускаем обработку`);
-            return;
-        }
+        if (!state) return;
 
         if (state.step === 'customOrganizationInput') {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
+            users[userId].selectedObjects = []; // Сбрасываем объекты
             await saveUser(userId, users[userId]);
-            state.step = 'enterFullName';
-            const message = await ctx.reply('Введите ваше ФИО:');
-            state.messageIds.push(message.message_id);
-            console.log(`Переход к enterFullName для userId ${userId}. State:`, state);
+            state.step = 'selectObjects';
+            await showObjectSelection(ctx, userId, []);
+            console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
             return;
         }
 
@@ -102,8 +98,6 @@ module.exports = (bot) => {
             const users = await loadUsers();
             users[userId].fullName = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
-
-            console.log(`ФИО сохранено для userId ${userId}: ${users[userId].fullName}`);
 
             const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
             state.messageIds.push(message.message_id);
@@ -114,8 +108,6 @@ module.exports = (bot) => {
                 [Markup.button.callback(`❌ Отклонить (${users[userId].fullName})`, `reject_${userId}`)]
             ]));
 
-            console.log(`Заявка отправлена администратору для userId ${userId}`);
-
             ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };
             return;
         }
@@ -124,14 +116,13 @@ module.exports = (bot) => {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
+            users[userId].selectedObjects = []; // Сбрасываем объекты
             await saveUser(userId, users[userId]);
-            state.step = null;
-            await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
-            await showProfile(ctx); // Возвращаем пользователя в личный кабинет
+            state.step = 'selectObjects';
+            await showObjectSelection(ctx, userId, []);
+            await ctx.reply(`Организация обновлена на "${users[userId].organization}". Теперь выберите объекты:`);
             return;
         }
-
-        console.log(`Текст от userId ${userId} не обработан, шаг: ${state.step}`);
     });
 };
 
