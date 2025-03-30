@@ -25,7 +25,7 @@ module.exports = (bot) => {
 
         const users = await loadUsers();
         users[userId].organization = selectedOrganization;
-        users[userId].selectedObjects = [];
+        users[userId].selectedObjects = []; // Сбрасываем объекты
         await saveUser(userId, users[userId]);
 
         ctx.state.userStates[userId].step = 'selectObjects';
@@ -61,11 +61,13 @@ module.exports = (bot) => {
 
         const users = await loadUsers();
         users[userId].organization = selectedOrganization;
-        users[userId].selectedObjects = [];
+        users[userId].selectedObjects = []; // Сбрасываем объекты при изменении организации
         await saveUser(userId, users[userId]);
-        ctx.state.userStates[userId].step = 'selectObjects';
-        await showObjectSelection(ctx, userId, []);
-        await ctx.reply(`Организация обновлена на "${selectedOrganization}". Теперь выберите объекты:`);
+
+        // Убираем перенаправление на выбор объектов и возвращаем в профиль
+        ctx.state.userStates[userId].step = null; // Сбрасываем шаг
+        await ctx.reply(`Организация обновлена на "${selectedOrganization}".`);
+        await showProfile(ctx);
     });
 
     bot.action('custom_org_edit', async (ctx) => {
@@ -85,7 +87,7 @@ module.exports = (bot) => {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
-            users[userId].selectedObjects = [];
+            users[userId].selectedObjects = []; // Сбрасываем объекты
             await saveUser(userId, users[userId]);
             state.step = 'selectObjects';
             await showObjectSelection(ctx, userId, []);
@@ -116,11 +118,13 @@ module.exports = (bot) => {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
             users[userId].organization = ctx.message.text.trim();
-            users[userId].selectedObjects = [];
+            users[userId].selectedObjects = []; // Сбрасываем объекты
             await saveUser(userId, users[userId]);
-            state.step = 'selectObjects';
-            await showObjectSelection(ctx, userId, []);
-            await ctx.reply(`Организация обновлена на "${users[userId].organization}". Теперь выберите объекты:`);
+
+            // Убираем перенаправление на выбор объектов и возвращаем в профиль
+            state.step = null; // Сбрасываем шаг
+            await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
+            await showProfile(ctx);
             return;
         }
     });
