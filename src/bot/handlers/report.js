@@ -358,7 +358,6 @@ async function showReportDetails(ctx, reportId) {
 📅 ОТЧЕТ ЗА ${report.date}  
 🏢 ${report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
-Время: ${new Date(report.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}  
 👷 ${report.fullName}  
 
 ВЫПОЛНЕННЫЕ РАБОТЫ:  
@@ -367,6 +366,7 @@ ${report.workDone}
 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 ${report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
+Время: ${new Date(report.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}  
     `.trim();
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];

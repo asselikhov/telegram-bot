@@ -57,8 +57,7 @@ ${user.fullName || 'Не указано'}
 
 ${objectsList}  
 
-${statusEmoji} ${user.status || 'Не указан'}  
-➖➖➖➖➖➖➖➖➖➖➖
+${statusEmoji} ${user.status || 'Не указан'}
 `.trim();
 
     const buttons = [
