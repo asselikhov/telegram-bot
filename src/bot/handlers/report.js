@@ -1,4 +1,5 @@
 const { Markup } = require('telegraf');
+const ExcelJS = require('exceljs'); // Добавляем библиотеку для работы с Excel
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, saveReport, getReportText } = require('../../database/reportModel');
 const { OBJECTS_LIST_CYRILLIC, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
@@ -16,7 +17,6 @@ async function showDownloadReport(ctx, page = 0) {
     console.log(`[showDownloadReport] Загружены пользователи для userId ${userId}:`, users[userId]);
     console.log(`[showDownloadReport] OBJECTS_LIST_CYRILLIC:`, OBJECTS_LIST_CYRILLIC);
 
-    // Проверяем, что page — это число
     const pageNum = typeof page === 'number' ? page : 0;
     console.log(`[showDownloadReport] Используемая страница: ${pageNum}`);
 
@@ -86,11 +86,90 @@ async function downloadReportFile(ctx, objectIndex) {
 
     await clearPreviousMessages(ctx, userId);
 
-    await ctx.replyWithDocument({
-        source: Buffer.from(reportText, 'utf-8'),
-        filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
+    // Создаем новый Excel-файл
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Отчет');
+
+    // Настраиваем стили
+    const headerStyle = {
+        font: { name: 'Arial', size: 12, bold: true, color: { argb: 'FFFFFFFF' } },
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+        border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+    };
+
+    const cellStyle = {
+        font: { name: 'Arial', size: 11 },
+        alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
+        border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+    };
+
+    // Устанавливаем ширину колонок
+    worksheet.columns = [
+        { header: 'Поле', key: 'field', width: 30 },
+        { header: 'Значение', key: 'value', width: 50 }
+    ];
+
+    // Добавляем заголовок
+    const titleRow = worksheet.addRow([`Отчет по объекту "${objectName}"`, '']);
+    titleRow.font = { name: 'Arial', size: 14, bold: true };
+    titleRow.alignment = { horizontal: 'center' };
+    worksheet.mergeCells('A1:B1');
+    titleRow.height = 30;
+
+    // Парсим данные из reportText
+    const lines = reportText.split('\n').map(line => line.trim());
+    const reportData = {
+        date: lines[0].replace('📅 ОТЧЕТ ЗА ', ''),
+        object: lines[1].replace('🏢 ', ''),
+        fullName: lines[3].replace('👷 ', ''),
+        workDone: [],
+        materials: []
+    };
+
+    let isWorkDone = false;
+    let isMaterials = false;
+    for (let i = 5; i < lines.length; i++) {
+        if (lines[i].startsWith('ВЫПОЛНЕННЫЕ РАБОТЫ:')) {
+            isWorkDone = true;
+            isMaterials = false;
+            continue;
+        } else if (lines[i].startsWith('ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:')) {
+            isWorkDone = false;
+            isMaterials = true;
+            continue;
+        } else if (lines[i].startsWith('➖')) {
+            continue;
+        }
+
+        if (isWorkDone && lines[i]) reportData.workDone.push(lines[i]);
+        if (isMaterials && lines[i]) reportData.materials.push(lines[i]);
+    }
+
+    // Добавляем данные в таблицу
+    worksheet.addRow(['Дата', reportData.date]).eachCell(cell => { cell.style = headerStyle; });
+    worksheet.addRow(['Объект', reportData.object]).eachCell(cell => { cell.style = cellStyle; });
+    worksheet.addRow(['Ответственный', reportData.fullName]).eachCell(cell => { cell.style = cellStyle; });
+    worksheet.addRow(['Выполненные работы', reportData.workDone.join('\n')]).eachCell(cell => { cell.style = cellStyle; });
+    worksheet.addRow(['Поставленные материалы', reportData.materials.join('\n')]).eachCell(cell => { cell.style = cellStyle; });
+
+    // Устанавливаем высоту строк для читаемости
+    worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) {
+            row.height = Math.max(20, row.getCell(2).value.split('\n').length * 15);
+        }
     });
-    console.log(`[downloadReportFile] Файл отчета для "${objectName}" отправлен пользователю ${userId}`);
+
+    // Генерируем файл
+    const buffer = await workbook.xlsx.writeBuffer();
+    const filename = `${objectName}_report_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    // Отправляем файл пользователю
+    await ctx.replyWithDocument({
+        source: buffer,
+        filename: filename
+    });
+    console.log(`[downloadReportFile] Excel-файл отчета для "${objectName}" отправлен пользователю ${userId}`);
 }
 
 async function createReport(ctx) {
@@ -370,7 +449,7 @@ ${newReport.materials}
 
 module.exports = (bot) => {
     bot.action('download_report', async (ctx) => {
-        await showDownloadReport(ctx, 0); // Явно указываем первую страницу
+        await showDownloadReport(ctx, 0);
     });
     bot.action(/download_report_page_(\d+)/, async (ctx) => {
         const page = parseInt(ctx.match[1], 10);
