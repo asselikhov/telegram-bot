@@ -99,9 +99,14 @@ async function downloadReportFile(ctx, objectIndex) {
         alignment: { horizontal: 'center', vertical: 'middle' },
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
-    const cellStyle = {
+    const centeredCellStyle = {
         font: { name: 'Arial', size: 9 },
-        alignment: { horizontal: 'left', vertical: 'middle', wrapText: true }, // Вертикальное выравнивание по центру
+        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }, // Центрирование
+        border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+    };
+    const paddedCellStyle = {
+        font: { name: 'Arial', size: 9 },
+        alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 }, // Отступ через indent
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 
@@ -134,7 +139,6 @@ async function downloadReportFile(ctx, objectIndex) {
 
     objectReports.forEach((report) => {
         const user = users[report.userId] || {};
-        // Разделяем должность, организацию и ФИО новой строкой
         const itrText = `${user.position || 'Не указано'}\n${user.organization || 'Не указано'}\n${report.fullName || user.fullName || 'Не указано'}`;
 
         worksheet.getRow(currentRow).values = [
@@ -143,7 +147,12 @@ async function downloadReportFile(ctx, objectIndex) {
             report.materials,
             itrText
         ];
-        worksheet.getRow(currentRow).eachCell(cell => { cell.style = cellStyle; });
+
+        // Применяем стили к ячейкам в зависимости от столбца
+        worksheet.getCell(`A${currentRow}`).style = centeredCellStyle; // Дата
+        worksheet.getCell(`B${currentRow}`).style = paddedCellStyle;   // Выполненные работы
+        worksheet.getCell(`C${currentRow}`).style = paddedCellStyle;   // Поставленные материалы
+        worksheet.getCell(`D${currentRow}`).style = centeredCellStyle; // ИТР
 
         if (lastDate !== report.date) {
             if (dateCount > 1) {
