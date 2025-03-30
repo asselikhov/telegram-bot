@@ -86,15 +86,27 @@ module.exports = (bot) => {
 
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
-        const state = ctx.state.userStates[userId];
-        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". Текущее состояние: ${JSON.stringify(state)}`);
+        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". Контекст: chatId=${ctx.chat?.id}, from=${JSON.stringify(ctx.from)}`);
 
+        if (!ctx.state || !ctx.state.userStates) {
+            console.error(`Ошибка: ctx.state.userStates отсутствует для userId ${userId}`);
+            await ctx.reply('Произошла ошибка состояния бота. Попробуйте снова или обратитесь к администратору.');
+            return;
+        }
+
+        const state = ctx.state.userStates[userId];
         if (!state) {
             console.log(`Нет состояния для userId ${userId}`);
             return;
         }
 
-        console.log(`Перед очисткой предыдущих сообщений для userId ${userId}`);
+        console.log(`Перед очисткой предыдущих сообщений для userId ${userId}. State: ${JSON.stringify(state)}`);
+        if (!ctx.chat || !ctx.chat.id) {
+            console.error(`Ошибка: ctx.chat.id отсутствует для userId ${userId}`);
+            await ctx.reply('Произошла ошибка доступа к чату. Попробуйте снова или обратитесь к администратору.');
+            return;
+        }
+
         try {
             await clearPreviousMessages(ctx, userId);
             console.log(`Очистка предыдущих сообщений завершена для userId ${userId}`);

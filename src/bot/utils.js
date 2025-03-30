@@ -24,6 +24,7 @@ async function clearPreviousMessages(ctx, userId) {
     } else {
         console.log(`Нет сообщений для удаления для userId ${userId}. State:`, state);
     }
+    console.log(`clearPreviousMessages завершён для userId ${userId}`);
 }
 
 module.exports = { clearPreviousMessages };
