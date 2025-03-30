@@ -3,6 +3,8 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { BASE_POSITIONS_LIST, ADMIN_ID } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
+const { showObjectSelection } = require('./objects');
+const { showProfile } = require('../handlers/menu');
 
 function getPositionsList(userId) {
     const positions = [...BASE_POSITIONS_LIST];
@@ -71,7 +73,7 @@ module.exports = (bot) => {
         await saveUser(userId, users[userId]);
         ctx.state.userStates[userId].step = null;
         await ctx.reply(`Ваша должность изменена на "${selectedPosition}"`);
-        await require('../handlers/menu').showProfile(ctx);
+        await showProfile(ctx);
     });
 
     bot.action('custom_position_edit', async (ctx) => {
@@ -85,6 +87,8 @@ module.exports = (bot) => {
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
+        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". Текущее состояние: ${JSON.stringify(state)}`);
+
         if (!state) return;
 
         await clearPreviousMessages(ctx, userId);
@@ -124,7 +128,21 @@ module.exports = (bot) => {
             await saveUser(userId, users[userId]);
             state.step = null;
             await ctx.reply(`Должность обновлена на "${users[userId].position}".`);
-            await require('../handlers/menu').showProfile(ctx);
+            await showProfile(ctx);
+        } else if (state.step === 'customOrganizationInput') {
+            users[userId].organization = ctx.message.text.trim();
+            users[userId].selectedObjects = [];
+            await saveUser(userId, users[userId]);
+            state.step = 'selectObjects';
+            await showObjectSelection(ctx, userId, []);
+            console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
+        } else if (state.step === 'customOrgEditInput') {
+            users[userId].organization = ctx.message.text.trim();
+            users[userId].selectedObjects = [];
+            await saveUser(userId, users[userId]);
+            state.step = null;
+            await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
+            await showProfile(ctx);
         }
     });
 };
