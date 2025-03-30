@@ -78,7 +78,7 @@ async function downloadReportFile(ctx, objectIndex) {
         return ctx.reply('Ошибка: объект не найден.');
     }
 
-    const allReports = await loadUserReports(); // Загружаем все отчеты
+    const allReports = await loadUserReports();
     const objectReports = Object.values(allReports).filter(report => report.objectName === objectName);
 
     if (objectReports.length === 0) {
@@ -88,11 +88,9 @@ async function downloadReportFile(ctx, objectIndex) {
 
     await clearPreviousMessages(ctx, userId);
 
-    // Создаем новый Excel-файл
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Отчеты');
 
-    // Настраиваем стили
     const headerStyle = {
         font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } },
         fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } },
@@ -106,7 +104,6 @@ async function downloadReportFile(ctx, objectIndex) {
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 
-    // Устанавливаем ширину колонок для компактности
     worksheet.columns = [
         { header: 'Объект', key: 'object', width: 20 },
         { header: 'Дата', key: 'date', width: 12 },
@@ -117,13 +114,9 @@ async function downloadReportFile(ctx, objectIndex) {
         { header: 'Поставленные материалы', key: 'materials', width: 30 }
     ];
 
-    // Добавляем заголовки
     worksheet.getRow(1).eachCell(cell => { cell.style = headerStyle; });
 
-    // Загружаем данные пользователей для получения должности и организации
     const users = await loadUsers();
-
-    // Добавляем данные отчетов
     objectReports.forEach((report, index) => {
         const user = users[report.userId] || {};
         worksheet.addRow({
@@ -137,24 +130,21 @@ async function downloadReportFile(ctx, objectIndex) {
         }).eachCell(cell => { cell.style = cellStyle; });
     });
 
-    // Устанавливаем высоту строк для читаемости
     worksheet.eachRow((row, rowNumber) => {
         if (rowNumber > 1) {
             const maxLines = Math.max(
                 row.getCell('workDone').value.split('\n').length,
                 row.getCell('materials').value.split('\n').length
             );
-            row.height = Math.max(15, maxLines * 12); // Компактная высота
+            row.height = Math.max(15, maxLines * 12);
         } else {
-            row.height = 20; // Заголовок чуть выше
+            row.height = 20;
         }
     });
 
-    // Генерируем файл
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `${objectName}_reports_${new Date().toISOString().split('T')[0]}.xlsx`;
 
-    // Отправляем файл пользователю
     await ctx.replyWithDocument({
         source: buffer,
         filename: filename
@@ -182,7 +172,7 @@ async function createReport(ctx) {
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
-    ctx.state.userStates/lua/userId].messageIds.push(message.message_id);
+    ctx.state.userStates[userId].messageIds.push(message.message_id); // Исправлена опечатка
 }
 
 async function handleReportText(ctx, userId, state) {
@@ -249,7 +239,7 @@ async function showReportObjects(ctx) {
     );
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
-    await ctx.reply('Выберите объектдля просмотра отчетов:', Markup.inlineKeyboard(buttons));
+    await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
 }
 
 async function showReportDates(ctx, objectIndex) {
