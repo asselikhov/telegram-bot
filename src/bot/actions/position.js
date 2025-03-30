@@ -98,7 +98,17 @@ module.exports = (bot) => {
         const users = await loadUsers();
 
         try {
-            if (state.step === 'enterFullName') {
+            if (state.step === 'customPositionInput') {
+                const position = ctx.message.text.trim();
+                users[userId].position = position;
+                await saveUser(userId, users[userId]);
+                console.log(`Сохранена пользовательская должность для userId ${userId}: ${position}`);
+
+                state.step = 'enterFullName';
+                const message = await ctx.reply('Введите ваше ФИО:');
+                ctx.state.userStates[userId].messageIds.push(message.message_id);
+                console.log(`Переход к вводу ФИО для userId ${userId} после ввода своей должности`);
+            } else if (state.step === 'enterFullName') {
                 const fullName = ctx.message.text.trim();
                 console.log(`Попытка сохранить ФИО для userId ${userId}: ${fullName}`);
                 users[userId].fullName = fullName;
@@ -121,11 +131,33 @@ module.exports = (bot) => {
                 console.log(`Заявка от userId ${userId} отправлена администратору`);
 
                 ctx.state.userStates[userId] = { step: null, messageIds: [] };
+            } else if (state.step === 'customPositionEditInput') {
+                users[userId].position = ctx.message.text.trim();
+                await saveUser(userId, users[userId]);
+                state.step = null;
+                await ctx.reply(`Должность обновлена на "${users[userId].position}".`);
+                await showProfile(ctx);
+            } else if (state.step === 'customOrganizationInput') {
+                users[userId].organization = ctx.message.text.trim();
+                users[userId].selectedObjects = [];
+                await saveUser(userId, users[userId]);
+                state.step = 'selectObjects';
+                await showObjectSelection(ctx, userId, []);
+                console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
+            } else if (state.step === 'customOrgEditInput') {
+                users[userId].organization = ctx.message.text.trim();
+                users[userId].selectedObjects = [];
+                await saveUser(userId, users[userId]);
+                state.step = null;
+                await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
+                await showProfile(ctx);
+            } else {
+                console.log(`Неизвестный шаг для userId ${userId}: ${state.step}`);
             }
-            // ... остальные условия ...
         } catch (error) {
             console.error(`Ошибка при обработке текста для userId ${userId}: ${error.message}`);
             console.error(error.stack);
+            await ctx.reply('Произошла ошибка при обработке вашего ввода. Попробуйте снова или обратитесь к администратору.');
         }
     });
 };
