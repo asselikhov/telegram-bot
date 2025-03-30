@@ -94,16 +94,22 @@ module.exports = (bot) => {
         } else if (state.step === 'enterFullName') {
             await clearPreviousMessages(ctx, userId);
             const users = await loadUsers();
-            users[userId].fullName = ctx.message.text.trim();
+            const fullName = ctx.message.text.trim();
+            users[userId].fullName = fullName; // Явно сохраняем ФИО
             await saveUser(userId, users[userId]);
+
+            console.log(`Сохранено ФИО для userId ${userId}: ${users[userId].fullName}`); // Отладка
 
             const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
             state.messageIds.push(message.message_id);
 
-            const adminText = `\n${users[userId].fullName} - ${users[userId].position} (${users[userId].organization})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
+            // Проверяем данные перед отправкой
+            console.log(`Перед отправкой заявки: fullName=${users[userId].fullName}, position=${users[userId].position}, organization=${users[userId].organization}, objects=${users[userId].selectedObjects}`);
+
+            const adminText = `\n${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
             await ctx.telegram.sendMessage(ADMIN_ID, `📝 НОВАЯ ЗАЯВКА${adminText}`, Markup.inlineKeyboard([
-                [Markup.button.callback(`✅ Одобрить (${users[userId].fullName})`, `approve_${userId}`)],
-                [Markup.button.callback(`❌ Отклонить (${users[userId].fullName})`, `reject_${userId}`)]
+                [Markup.button.callback(`✅ Одобрить (${users[userId].fullName || 'Не указано'})`, `approve_${userId}`)],
+                [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Не указано'})`, `reject_${userId}`)]
             ]));
 
             ctx.state.userStates[userId] = { step: null, selectedObjects: [], report: {}, messageIds: [] };

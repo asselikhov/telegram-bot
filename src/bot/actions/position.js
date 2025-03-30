@@ -32,6 +32,8 @@ module.exports = (bot) => {
         users[userId].position = selectedPosition;
         await saveUser(userId, users[userId]);
 
+        console.log(`Сохранена должность для userId ${userId}: ${users[userId].position}`); // Отладка
+
         ctx.state.userStates[userId].step = 'enterFullName';
         const message = await ctx.reply('Введите ваше ФИО:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
@@ -88,6 +90,9 @@ module.exports = (bot) => {
         if (state.step === 'customPositionInput') {
             users[userId].position = ctx.message.text.trim();
             await saveUser(userId, users[userId]);
+
+            console.log(`Сохранена пользовательская должность для userId ${userId}: ${users[userId].position}`); // Отладка
+
             state.step = 'enterFullName';
             const message = await ctx.reply('Введите ваше ФИО:');
             ctx.state.userStates[userId].messageIds.push(message.message_id);
