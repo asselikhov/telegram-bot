@@ -27,7 +27,6 @@ async function showDownloadReport(ctx, page = 0) {
     const totalObjects = OBJECTS_LIST_CYRILLIC.length;
     const totalPages = Math.ceil(totalObjects / itemsPerPage);
 
-    // Вычисляем объекты для текущей страницы
     const startIndex = page * itemsPerPage;
     const endIndex = Math.min(startIndex + itemsPerPage, totalObjects);
     const currentObjects = OBJECTS_LIST_CYRILLIC.slice(startIndex, endIndex);
@@ -39,12 +38,10 @@ async function showDownloadReport(ctx, page = 0) {
         return ctx.reply('Ошибка: нет объектов для отображения.');
     }
 
-    // Создаем кнопки для объектов текущей страницы
     const buttons = currentObjects.map((obj, index) =>
         [Markup.button.callback(obj, `download_report_file_${startIndex + index}`)]
     );
 
-    // Добавляем кнопки пагинации
     const paginationButtons = [];
     if (totalPages > 1) {
         if (page > 0) {
@@ -208,7 +205,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const objectName = uniqueObjects[objectIndex];
     const objectReports = Object.entries(reports).filter(([_, r]) => r.objectName === objectName);
-    const uniqueDates = [...new Set(objectReports.map([_, r]) => r.date))];
+    const uniqueDates = [...new Set(objectReports.map(([, r]) => r.date))];
     const selectedDate = uniqueDates[dateIndex];
 
     await clearPreviousMessages(ctx, userId);
