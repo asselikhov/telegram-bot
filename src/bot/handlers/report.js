@@ -9,10 +9,19 @@ async function showDownloadReport(ctx, page = 0) {
     const users = await loadUsers();
 
     if (!users[userId]?.isApproved) {
+        console.log(`[showDownloadReport] Пользователь ${userId} не одобрен`);
         return ctx.reply('У вас нет прав для выгрузки отчетов.');
     }
 
+    console.log(`[showDownloadReport] Загружены пользователи для userId ${userId}:`, users[userId]);
+    console.log(`[showDownloadReport] OBJECTS_LIST_CYRILLIC:`, OBJECTS_LIST_CYRILLIC);
+
     await clearPreviousMessages(ctx, userId);
+
+    if (!OBJECTS_LIST_CYRILLIC || OBJECTS_LIST_CYRILLIC.length === 0) {
+        console.log(`[showDownloadReport] OBJECTS_LIST_CYRILLIC пуст или не определён`);
+        return ctx.reply('Список объектов пуст. Обратитесь к администратору.');
+    }
 
     const itemsPerPage = 10;
     const totalObjects = OBJECTS_LIST_CYRILLIC.length;
@@ -22,6 +31,13 @@ async function showDownloadReport(ctx, page = 0) {
     const startIndex = page * itemsPerPage;
     const endIndex = Math.min(startIndex + itemsPerPage, totalObjects);
     const currentObjects = OBJECTS_LIST_CYRILLIC.slice(startIndex, endIndex);
+
+    console.log(`[showDownloadReport] Страница ${page}: startIndex=${startIndex}, endIndex=${endIndex}, currentObjects=`, currentObjects);
+
+    if (currentObjects.length === 0) {
+        console.log(`[showDownloadReport] Нет объектов для отображения на странице ${page}`);
+        return ctx.reply('Ошибка: нет объектов для отображения.');
+    }
 
     // Создаем кнопки для объектов текущей страницы
     const buttons = currentObjects.map((obj, index) =>
@@ -43,20 +59,27 @@ async function showDownloadReport(ctx, page = 0) {
     }
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
+    console.log(`[showDownloadReport] Кнопки для страницы ${page}:`, buttons);
+
     const message = await ctx.reply(
         `Выберите объект для выгрузки отчета (Страница ${page + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
     ctx.state.userStates[userId].messageIds.push(message.message_id);
+    console.log(`[showDownloadReport] Отправлено сообщение с ID ${message.message_id} для userId ${userId}`);
 }
 
 async function downloadReportFile(ctx, objectIndex) {
     const userId = ctx.from.id.toString();
     const objectName = OBJECTS_LIST_CYRILLIC[objectIndex];
-    if (!objectName) return ctx.reply('Ошибка: объект не найден.');
+    if (!objectName) {
+        console.log(`[downloadReportFile] Объект с индексом ${objectIndex} не найден в OBJECTS_LIST_CYRILLIC`);
+        return ctx.reply('Ошибка: объект не найден.');
+    }
 
     const reportText = await getReportText(objectName);
     if (!reportText) {
+        console.log(`[downloadReportFile] Отчет для объекта "${objectName}" не найден`);
         return ctx.reply(`Отчет для объекта "${objectName}" не найден.`);
     }
 
@@ -66,6 +89,7 @@ async function downloadReportFile(ctx, objectIndex) {
         source: Buffer.from(reportText, 'utf-8'),
         filename: `${objectName}_report_${new Date().toISOString().split('T')[0]}.txt`
     });
+    console.log(`[downloadReportFile] Файл отчета для "${objectName}" отправлен пользователю ${userId}`);
 }
 
 async function createReport(ctx) {
@@ -184,7 +208,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const objectName = uniqueObjects[objectIndex];
     const objectReports = Object.entries(reports).filter(([_, r]) => r.objectName === objectName);
-    const uniqueDates = [...new Set(objectReports.map(([_, r]) => r.date))];
+    const uniqueDates = [...new Set(objectReports.map([_, r]) => r.date))];
     const selectedDate = uniqueDates[dateIndex];
 
     await clearPreviousMessages(ctx, userId);
