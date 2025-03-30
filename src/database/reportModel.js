@@ -14,7 +14,8 @@ async function loadUserReports(userId) {
                 materials: row.materials,
                 groupMessageId: row.groupmessageid,
                 generalMessageId: row.generalmessageid,
-                fullName: row.fullname // Добавляем fullName
+                fullName: row.fullname,
+                userId: row.userid // Добавляем userId для использования в дальнейшем
             };
         });
         return reports;
@@ -55,4 +56,33 @@ async function getReportText(objectName) {
     }
 }
 
-module.exports = { loadUserReports, saveReport, getReportText };
+async function loadAllReports() {
+    const client = await pool.connect();
+    try {
+        const res = await client.query('SELECT * FROM reports');
+        const reports = {};
+        res.rows.forEach(row => {
+            reports[row.reportid] = {
+                reportId: row.reportid,
+                userId: row.userid,
+                objectName: row.objectname,
+                date: row.date,
+                timestamp: row.timestamp,
+                workDone: row.workdone,
+                materials: row.materials,
+                groupMessageId: row.groupmessageid,
+                generalMessageId: row.generalmessageid,
+                fullName: row.fullname
+            };
+        });
+        console.log(`[loadAllReports] Загружено ${Object.keys(reports).length} отчетов`);
+        return reports;
+    } catch (err) {
+        console.error(`[loadAllReports] Ошибка загрузки отчетов: ${err.message}`);
+        return {};
+    } finally {
+        client.release();
+    }
+}
+
+module.exports = { loadUserReports, saveReport, getReportText, loadAllReports };

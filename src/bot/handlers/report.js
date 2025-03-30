@@ -1,7 +1,7 @@
 const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { loadUserReports, saveReport, getReportText } = require('../../database/reportModel');
+const { loadUserReports, saveReport, getReportText, loadAllReports } = require('../../database/reportModel');
 const { OBJECTS_LIST_CYRILLIC, OBJECT_GROUPS, GENERAL_GROUP_CHAT_ID } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
 
@@ -78,8 +78,17 @@ async function downloadReportFile(ctx, objectIndex) {
         return ctx.reply('Ошибка: объект не найден.');
     }
 
-    const allReports = await loadUserReports();
-    const objectReports = Object.values(allReports).filter(report => report.objectName === objectName);
+    const allReports = await loadAllReports();
+    console.log(`[downloadReportFile] Все отчеты из базы данных:`, allReports);
+
+    const objectReports = Object.values(allReports).filter(report => {
+        const matches = report.objectName === objectName;
+        if (!matches) {
+            console.log(`[downloadReportFile] Отчет ${report.reportId} не соответствует: ${report.objectName} !== ${objectName}`);
+        }
+        return matches;
+    });
+    console.log(`[downloadReportFile] Найдено отчетов для объекта "${objectName}": ${objectReports.length}`, objectReports);
 
     if (objectReports.length === 0) {
         console.log(`[downloadReportFile] Отчеты для объекта "${objectName}" не найдены`);
@@ -172,7 +181,7 @@ async function createReport(ctx) {
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id); // Исправлена опечатка
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 async function handleReportText(ctx, userId, state) {
