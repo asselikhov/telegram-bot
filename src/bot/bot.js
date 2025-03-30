@@ -1,3 +1,4 @@
+// src/bot/bot.js
 const { Telegraf } = require('telegraf');
 const cron = require('node-cron');
 const { BOT_TOKEN, OBJECT_GROUPS } = require('../config/config');
@@ -39,7 +40,6 @@ bot.use((ctx, next) => {
   ctx.reply = async (text, extra) => {
     const message = await originalReply(text, extra);
     if (userStates[userId]) {
-      // Добавляем ID только если его ещё нет в массиве
       if (!userStates[userId].messageIds.includes(message.message_id)) {
         userStates[userId].messageIds.push(message.message_id);
         console.log(`[ctx.reply] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
@@ -55,7 +55,6 @@ bot.use((ctx, next) => {
     const message = await originalSendMessage(chatId, text, extra);
     const targetUserId = chatId.toString();
     if (userStates[targetUserId]) {
-      // Аналогичная проверка для sendMessage
       if (!userStates[targetUserId].messageIds.includes(message.message_id)) {
         userStates[targetUserId].messageIds.push(message.message_id);
         console.log(`[sendMessage] Сообщение ${message.message_id} добавлено в messageIds для userId ${targetUserId}. Массив:`, userStates[targetUserId].messageIds);
@@ -68,6 +67,22 @@ bot.use((ctx, next) => {
 
   return next();
 });
+
+// Временная отладка для проверки всех bot.on('text')
+bot.on('text', (ctx) => {
+  console.log(`Глобальный bot.on('text') перехватил сообщение от ${ctx.from.id}: "${ctx.message.text}" перед основными обработчиками`);
+});
+
+// Подключение обработчиков
+startHandler(bot);
+menuHandler(bot);
+reportHandler(bot);
+adminHandler(bot);
+commandsHandler(bot);
+positionActions(bot);
+organizationActions(bot);
+objectsActions(bot);
+statusActions(bot);
 
 // Функция проверки отчетов и отправки напоминаний
 async function sendReportReminders() {
@@ -115,16 +130,5 @@ cron.schedule('0 19 * * *', () => {
 }, {
   timezone: "Europe/Moscow"
 });
-
-// Подключение обработчиков
-startHandler(bot);
-menuHandler(bot);
-reportHandler(bot);
-adminHandler(bot);
-commandsHandler(bot);
-positionActions(bot);
-organizationActions(bot);
-objectsActions(bot);
-statusActions(bot);
 
 module.exports = bot;

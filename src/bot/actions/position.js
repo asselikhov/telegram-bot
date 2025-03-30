@@ -114,6 +114,8 @@ module.exports = (bot) => {
                 users[userId].fullName = fullName;
                 await saveUser(userId, users[userId]);
                 console.log(`Сохранено ФИО для userId ${userId}: ${fullName}`);
+                const updatedUsers = await loadUsers();
+                console.log(`Проверка после сохранения: ФИО в базе для userId ${userId}: ${updatedUsers[userId].fullName}`);
 
                 const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
                 state.messageIds.push(message.message_id);
@@ -154,6 +156,7 @@ module.exports = (bot) => {
             }
         } catch (error) {
             console.error(`Ошибка при обработке текста для userId ${userId}: ${error.message}`);
+            console.error(error.stack);
         }
     });
 };
