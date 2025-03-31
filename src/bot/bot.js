@@ -19,7 +19,7 @@ const bot = new Telegraf(BOT_TOKEN);
 const userStates = {};
 
 bot.use((ctx, next) => {
-  console.log('[middleware] Получен update:', ctx.update); // Добавляем логирование всех входящих обновлений
+  console.log('[middleware] Получен update:', ctx.update);
   const userId = ctx.from?.id.toString();
   if (!userId) {
     console.log('Ошибка: userId не определён в контексте:', ctx.from);
@@ -68,9 +68,9 @@ bot.use((ctx, next) => {
 });
 
 // Временный обработчик для отладки всех действий
-bot.action(/.*/, (ctx) => {
+bot.action(/.*/, (ctx, next) => {
   console.log('[DEBUG] Получено действие:', ctx.match[0], 'от userId:', ctx.from.id);
-  return next(); // Продолжаем обработку другими обработчиками
+  return next(); // Передаем управление следующему обработчику
 });
 
 async function sendReportReminders() {
