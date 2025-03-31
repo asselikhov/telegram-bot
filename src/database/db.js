@@ -39,6 +39,7 @@ async function initializeDatabase() {
                 groupMessageId TEXT,
                 generalMessageId TEXT,
                 fullName TEXT,
+                photos TEXT DEFAULT '[]', -- Добавляем новое поле для хранения JSON массива photoIds
                 FOREIGN KEY (userId) REFERENCES users(userId)
             );
         `);
@@ -66,6 +67,23 @@ async function initializeDatabase() {
                 ) THEN
                     ALTER TABLE invite_codes
                     ADD COLUMN usedBy TEXT;
+                END IF;
+            END;
+            $$;
+        `);
+
+        // Принудительная миграция: добавление столбца photos, если его нет
+        await client.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'reports' 
+                    AND column_name = 'photos'
+                ) THEN
+                    ALTER TABLE reports
+                    ADD COLUMN photos TEXT DEFAULT '[]';
                 END IF;
             END;
             $$;

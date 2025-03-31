@@ -109,26 +109,26 @@ async function downloadReportFile(ctx, objectIndex) {
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 
-    worksheet.mergeCells('A1:D1');
+    worksheet.mergeCells('A1:E1');
     worksheet.getCell('A1').value = objectName;
     worksheet.getCell('A1').style = titleStyle;
 
-    worksheet.getRow(2).values = ['Дата', 'Выполненные работы', 'Поставленные материалы', 'ИТР'];
+    worksheet.getRow(2).values = ['Дата', 'Выполненные работы', 'Поставленные материалы', 'ИТР', 'Изображения'];
     worksheet.getRow(2).eachCell(cell => { cell.style = headerStyle; });
     worksheet.columns = [
         { key: 'date', width: 12 },
         { key: 'workDone', width: 40 },
         { key: 'materials', width: 40 },
-        { key: 'itr', width: 30 }
+        { key: 'itr', width: 30 },
+        { key: 'photos', width: 20 }
     ];
 
-    // Сортировка по убыванию даты (свежие сверху)
     objectReports.sort((a, b) => {
         if (a.date === b.date) return a.userId.localeCompare(b.userId);
-        return b.date.localeCompare(a.date); // Убывание: новые даты раньше
+        return b.date.localeCompare(a.date);
     });
 
-    let currentRow = 3; // Начинаем после заголовков
+    let currentRow = 3;
     let lastDate = null;
     let lastUserId = null;
     let dateStartRow = null;
@@ -140,27 +140,30 @@ async function downloadReportFile(ctx, objectIndex) {
         const report = objectReports[i];
         const user = users[report.userId] || {};
         const itrText = `${user.position || 'Не указано'}\n${user.organization || 'Не указано'}\n${report.fullName || user.fullName || 'Не указано'}`;
+        const photosText = report.photos && report.photos.length > 0 ? `${report.photos.length} фото` : 'Нет';
 
         worksheet.getRow(currentRow).values = [
             report.date,
             report.workDone,
             report.materials,
-            itrText
+            itrText,
+            photosText
         ];
 
         worksheet.getCell(`A${currentRow}`).style = centeredCellStyle;
         worksheet.getCell(`B${currentRow}`).style = paddedCellStyle;
         worksheet.getCell(`C${currentRow}`).style = paddedCellStyle;
         worksheet.getCell(`D${currentRow}`).style = centeredCellStyle;
+        worksheet.getCell(`E${currentRow}`).style = centeredCellStyle;
 
         const maxLines = Math.max(
             report.workDone.split('\n').length,
             report.materials.split('\n').length,
-            itrText.split('\n').length
+            itrText.split('\n').length,
+            photosText.split('\n').length
         );
         worksheet.getRow(currentRow).height = Math.max(15, maxLines * 15);
 
-        // Логика объединения ячеек
         if (lastDate !== report.date && lastDate !== null && dateCount > 1) {
             worksheet.mergeCells(`A${dateStartRow}:A${currentRow - 1}`);
         }
@@ -184,7 +187,6 @@ async function downloadReportFile(ctx, objectIndex) {
             itrCount++;
         }
 
-        // Объединяем для последней строки
         if (i === objectReports.length - 1) {
             if (dateCount > 1) {
                 worksheet.mergeCells(`A${dateStartRow}:A${currentRow}`);
@@ -194,7 +196,7 @@ async function downloadReportFile(ctx, objectIndex) {
             }
         }
 
-        currentRow++; // Двигаемся вниз
+        currentRow++;
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -324,6 +326,9 @@ ${report.materials}
         [Markup.button.callback('↩️ Назад', `select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(report.date)}`)]
     ];
 
+    if (report.photos && report.photos.length > 0) {
+        await ctx.telegram.sendMediaGroup(ctx.chat.id, report.photos.map(photoId => ({ type: 'photo', media: photoId })));
+    }
     await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
 }
 
@@ -369,7 +374,7 @@ module.exports = (bot) => {
 
         ctx.state.userStates[userId] = {
             step: 'workDone',
-            report: { objectName: selectedObject },
+            report: { objectName: selectedObject, photos: [] },
             messageIds: ctx.state.userStates[userId].messageIds || []
         };
         await ctx.reply('💡 Введите информацию о выполненных работах:');

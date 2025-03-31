@@ -15,7 +15,8 @@ async function loadUserReports(userId) {
                 groupMessageId: row.groupmessageid,
                 generalMessageId: row.generalmessageid,
                 fullName: row.fullname,
-                userId: row.userid // Добавляем userId для использования в дальнейшем
+                userId: row.userid,
+                photos: row.photos ? JSON.parse(row.photos) : []
             };
         });
         return reports;
@@ -25,15 +26,15 @@ async function loadUserReports(userId) {
 }
 
 async function saveReport(userId, report) {
-    const { reportId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName } = report;
+    const { reportId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName, photos } = report;
     const client = await pool.connect();
     try {
         await client.query(`
-            INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName, photos)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (reportId) DO UPDATE
-            SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9, fullName = $10
-        `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName]);
+            SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9, fullName = $10, photos = $11
+        `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName, JSON.stringify(photos || [])]);
     } finally {
         client.release();
     }
@@ -72,7 +73,8 @@ async function loadAllReports() {
                 materials: row.materials,
                 groupMessageId: row.groupmessageid,
                 generalMessageId: row.generalmessageid,
-                fullName: row.fullname
+                fullName: row.fullname,
+                photos: row.photos ? JSON.parse(row.photos) : []
             };
         });
         console.log(`[loadAllReports] Загружено ${Object.keys(reports).length} отчетов`);
