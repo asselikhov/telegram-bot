@@ -66,8 +66,13 @@ module.exports = (bot) => {
         const creatorId = inviteCodeData?.createdBy;
         console.log('[review] ID создателя кода:', creatorId, 'для пользователя:', reviewUserId);
 
-        const creator = creatorId && users[creatorId] ? users[creatorId] : null;
-        const creatorFullName = creator ? creator.fullName : 'Неизвестный пользователь';
+        let creatorFullName;
+        if (!inviteCodeData || !creatorId) {
+            creatorFullName = 'Код не зарегистрирован';
+        } else {
+            const creator = users[creatorId];
+            creatorFullName = creator ? creator.fullName : 'Пользователь не найден';
+        }
         console.log('[review] Создатель:', creatorFullName);
 
         // Обработка selectedObjects
