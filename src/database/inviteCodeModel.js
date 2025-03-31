@@ -1,4 +1,4 @@
-const { pool } = require('./db'); // Исправляем на ./db
+const { pool } = require('./db'); // Корректный путь
 const { v4: uuidv4 } = require('uuid');
 
 async function generateInviteCode(userId, organization) {

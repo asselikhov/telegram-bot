@@ -1,4 +1,4 @@
-const { pool } = require('./db');
+const { pool } = require('./db'); // Корректный путь для src/database/, где находится db.js
 const { v4: uuidv4 } = require('uuid');
 
 async function generateInviteCode(userId, organization) {
