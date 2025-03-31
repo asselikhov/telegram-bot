@@ -16,10 +16,8 @@ const { loadUserReports } = require('../database/reportModel');
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Инициализация состояния пользователей
 const userStates = {};
 
-// Middleware для передачи состояния и перехвата ctx.reply
 bot.use((ctx, next) => {
   const userId = ctx.from?.id.toString();
   if (!userId) {
@@ -68,10 +66,9 @@ bot.use((ctx, next) => {
   return next();
 });
 
-// Функция проверки отчетов и отправки напоминаний
 async function sendReportReminders() {
   const moscowTime = new Date().toLocaleString('en-US', { timeZone: 'Europe/Moscow' });
-  const currentDate = moscowTime.split(',')[0].split('/').reverse().join('-'); // Формат YYYY-MM-DD
+  const currentDate = moscowTime.split(',')[0].split('/').reverse().join('-');
 
   const users = await loadUsers();
   const producers = Object.entries(users).filter(([_, user]) =>
@@ -107,7 +104,6 @@ ${user.fullName}, вы не предоставили отчет за ${currentDa
   }
 }
 
-// Запуск проверки строго в 19:00 по Москве
 cron.schedule('0 19 * * *', () => {
   console.log('Проверка отчетов на наличие в 19:00 по Москве:', new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }));
   sendReportReminders();
@@ -115,7 +111,6 @@ cron.schedule('0 19 * * *', () => {
   timezone: "Europe/Moscow"
 });
 
-// Подключение обработчиков
 startHandler(bot);
 menuHandler(bot);
 reportHandler(bot);

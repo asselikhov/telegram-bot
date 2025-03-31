@@ -31,14 +31,14 @@ async function validateInviteCode(code) {
     }
 }
 
-async function markInviteCodeAsUsed(code) {
+async function markInviteCodeAsUsed(code, userId) { // Добавляем userId как аргумент
     const client = await pool.connect();
     try {
         await client.query(`
             UPDATE invite_codes 
-            SET isUsed = TRUE 
-            WHERE code = $1
-        `, [code]);
+            SET isUsed = TRUE, usedBy = $1
+            WHERE code = $2
+        `, [userId, code]);
     } finally {
         client.release();
     }
@@ -64,4 +64,20 @@ async function getAllInviteCodes() {
     }
 }
 
-module.exports = { generateInviteCode, validateInviteCode, markInviteCodeAsUsed, getAllInviteCodes };
+async function loadInviteCode(userId) { // Новая функция для получения данных о последнем коде
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`
+            SELECT code, organization, createdBy, usedBy 
+            FROM invite_codes 
+            WHERE usedBy = $1 
+            ORDER BY createdAt DESC 
+            LIMIT 1
+        `, [userId]);
+        return res.rows.length > 0 ? res.rows[0] : null;
+    } finally {
+        client.release();
+    }
+}
+
+module.exports = { generateInviteCode, validateInviteCode, markInviteCodeAsUsed, getAllInviteCodes, loadInviteCode };

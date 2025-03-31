@@ -2,6 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { BASE_POSITIONS_LIST, ADMIN_ID } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
+const { loadInviteCode } = require('../../database/inviteCodeModel'); // Добавляем функцию для получения данных о коде
 
 function getPositionsList(userId) {
     const positions = [...BASE_POSITIONS_LIST];
@@ -108,10 +109,20 @@ module.exports = (bot) => {
             const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
             state.messageIds.push(message.message_id);
 
-            const adminText = `\n${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'})\n\n${users[userId].selectedObjects.join(', ') || 'Не выбраны'}`;
+            // Получаем данные о последнем использованном коде
+            const inviteCodeData = await loadInviteCode(userId);
+            const creatorId = inviteCodeData?.createdBy;
+            const creator = creatorId ? users[creatorId] : null;
+            const creatorFullName = creator ? creator.fullName : 'Неизвестно';
+
+            const adminText = `
+${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'})
+Объекты: ${users[userId].selectedObjects.join(', ') || 'Не выбраны'}
+Пригласительный код создан: ${creatorFullName}
+            `.trim();
             console.log(`Отправка заявки для userId ${userId}: ${adminText}`);
 
-            await ctx.telegram.sendMessage(ADMIN_ID, `📝 НОВАЯ ЗАЯВКА${adminText}`, Markup.inlineKeyboard([
+            await ctx.telegram.sendMessage(ADMIN_ID, `📝 НОВАЯ ЗАЯВКА\n${adminText}`, Markup.inlineKeyboard([
                 [Markup.button.callback(`✅ Одобрить (${users[userId].fullName || 'Не указано'})`, `approve_${userId}`)],
                 [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Не указано'})`, `reject_${userId}`)]
             ]));

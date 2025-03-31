@@ -90,7 +90,7 @@ module.exports = (bot) => {
         const users = await loadUsers();
         users[userId].organization = organization;
         await saveUser(userId, users[userId]);
-        await markInviteCodeAsUsed(code);
+        await markInviteCodeAsUsed(code, userId); // Передаем userId для сохранения в базе
 
         state.step = 'selectObjects';
         const { showObjectSelection } = require('../actions/objects');
