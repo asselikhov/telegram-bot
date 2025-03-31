@@ -19,13 +19,13 @@ async function validateInviteCode(code) {
     const client = await pool.connect();
     try {
         const res = await client.query(`
-            SELECT organization, isUsed 
+            SELECT organization, isUsed, createdBy 
             FROM invite_codes 
             WHERE code = $1
         `, [code]);
         if (res.rows.length === 0) return null;
-        const { organization, isused } = res.rows[0];
-        return isused ? null : organization;
+        const { organization, isused, createdby } = res.rows[0];
+        return isused ? null : { organization, createdBy: createdby };
     } finally {
         client.release();
     }
@@ -34,11 +34,13 @@ async function validateInviteCode(code) {
 async function markInviteCodeAsUsed(code, userId) {
     const client = await pool.connect();
     try {
-        await client.query(`
+        const res = await client.query(`
             UPDATE invite_codes 
             SET isUsed = TRUE, usedBy = $1
             WHERE code = $2
+            RETURNING organization, createdBy
         `, [userId, code]);
+        return res.rows[0]; // Возвращаем organization и createdBy
     } finally {
         client.release();
     }

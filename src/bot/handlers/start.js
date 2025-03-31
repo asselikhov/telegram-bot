@@ -77,22 +77,26 @@ module.exports = (bot) => {
         if (!state || state.step !== 'enterInviteCode') return;
 
         const code = ctx.message.text.trim();
-        const organization = await validateInviteCode(code);
+        const inviteData = await validateInviteCode(code);
 
         await clearPreviousMessages(ctx, userId);
 
-        if (!organization) {
+        if (!inviteData) {
             const message = await ctx.reply('Неверный или уже использованный код. Попробуйте снова:');
             ctx.state.userStates[userId].messageIds.push(message.message_id);
             return;
         }
 
+        const { organization, createdBy } = inviteData;
+        console.log(`[start] Пользователь ${userId} ввел код ${code}, созданный ${createdBy}, организация: ${organization}`);
+
         const users = await loadUsers();
         users[userId].organization = organization;
         await saveUser(userId, users[userId]);
-        await markInviteCodeAsUsed(code, userId);
+        const usedCodeData = await markInviteCodeAsUsed(code, userId);
 
         state.step = 'selectObjects';
+        state.createdBy = createdBy || usedCodeData.createdBy; // Сохраняем создателя в состоянии
         const { showObjectSelection } = require('../actions/objects');
         await showObjectSelection(ctx, userId, []);
         console.log(`Пользователь ${userId} перешел к выбору объектов после ввода кода`);
