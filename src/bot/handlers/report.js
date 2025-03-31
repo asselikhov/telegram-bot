@@ -282,10 +282,12 @@ async function showReportDates(ctx, objectIndex, page = 0) {
         return ctx.reply('Ошибка: нет дат для отображения.');
     }
 
-    const buttons = currentDates.map((date, index) =>
+    // Создаем кнопки в порядке возрастания, затем разворачиваем для отображения снизу вверх
+    const dateButtons = currentDates.map((date, index) =>
         [Markup.button.callback(date, `select_report_date_${objectIndex}_${startIndex + index}`)]
-    );
+    ).reverse();
 
+    const buttons = [];
     const paginationButtons = [];
     if (totalPages > 1) {
         if (pageNum > 0) {
@@ -298,7 +300,7 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     if (paginationButtons.length > 0) {
         buttons.push(paginationButtons);
     }
-    // Изменяем действие кнопки "Назад" на 'view_reports' для возврата к списку объектов
+    buttons.push(...dateButtons); // Даты добавляются после пагинации, чтобы быть ниже
     buttons.push([Markup.button.callback('↩️ Назад', 'view_reports')]);
 
     const message = await ctx.reply(
@@ -338,11 +340,13 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
         return ctx.reply('Ошибка: нет отчетов для отображения.');
     }
 
-    const buttons = currentReports.map(([reportId, report]) => {
+    // Создаем кнопки в порядке возрастания, затем разворачиваем для отображения снизу вверх
+    const timeButtons = currentReports.map(([reportId, report]) => {
         const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
         return [Markup.button.callback(time, `select_report_time_${reportId}`)];
-    });
+    }).reverse();
 
+    const buttons = [];
     const paginationButtons = [];
     if (totalPages > 1) {
         if (pageNum > 0) {
@@ -355,6 +359,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     if (paginationButtons.length > 0) {
         buttons.push(paginationButtons);
     }
+    buttons.push(...timeButtons); // Время добавляется после пагинации, чтобы быть ниже
     buttons.push([Markup.button.callback('↩️ Назад', `select_report_object_${objectIndex}`)]);
 
     const message = await ctx.reply(
