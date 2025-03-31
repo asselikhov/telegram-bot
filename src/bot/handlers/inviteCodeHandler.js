@@ -1,83 +1,27 @@
-const { pool } = require('./db'); // Корректный путь для src/database/, где находится db.js
-const { v4: uuidv4 } = require('uuid');
+const { Markup } = require('telegraf');
+const { pool } = require('../../database/db'); // Корректный путь из src/bot/handlers/ к src/database/db
+const { generateInviteCode } = require('../../database/inviteCodeModel');
+const { loadUsers } = require('../../database/userModel');
+const { clearPreviousMessages } = require('../utils');
 
-async function generateInviteCode(userId, organization) {
-    const client = await pool.connect();
-    try {
-        const code = uuidv4().slice(0, 8);
-        await client.query(`
-            INSERT INTO invite_codes (code, organization, createdBy)
-            VALUES ($1, $2, $3)
-        `, [code, organization, userId]);
-        return code;
-    } finally {
-        client.release();
-    }
-}
+module.exports = (bot) => {
+    bot.action('generate_code', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const users = await loadUsers();
 
-async function validateInviteCode(code) {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`
-            SELECT organization, isUsed 
-            FROM invite_codes 
-            WHERE code = $1
-        `, [code]);
-        if (res.rows.length === 0) return null;
-        const { organization, isused } = res.rows[0];
-        return isused ? null : organization;
-    } finally {
-        client.release();
-    }
-}
+        if (!users[userId] || !users[userId].isApproved) {
+            await ctx.reply('Только подтвержденные пользователи могут генерировать коды.');
+            return;
+        }
 
-async function markInviteCodeAsUsed(code, userId) {
-    const client = await pool.connect();
-    try {
-        await client.query(`
-            UPDATE invite_codes 
-            SET isUsed = TRUE, usedBy = $1
-            WHERE code = $2
-        `, [userId, code]);
-    } finally {
-        client.release();
-    }
-}
+        const organization = users[userId].organization;
+        const code = await generateInviteCode(userId, organization);
 
-async function getAllInviteCodes() {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`
-            SELECT code, organization, isUsed, createdBy, createdAt 
-            FROM invite_codes 
-            ORDER BY createdAt DESC
-        `);
-        return res.rows.map(row => ({
-            code: row.code,
-            organization: row.organization,
-            isUsed: row.isused,
-            createdBy: row.createdby,
-            createdAt: row.createdat
-        }));
-    } finally {
-        client.release();
-    }
-}
-
-async function loadInviteCode(userId) {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(`
-            SELECT code, organization, createdBy, usedBy 
-            FROM invite_codes 
-            WHERE usedBy = $1 
-            ORDER BY createdAt DESC 
-            LIMIT 1
-        `, [userId]);
-        return res.rows.length > 0 ? res.rows[0] : null;
-    } finally {
-        client.release();
-    }
-}
-
-module.exports = { generateInviteCode, validateInviteCode, markInviteCodeAsUsed, getAllInviteCodes, loadInviteCode };
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply(
+            `Ваш пригласительный код: \`${code}\`\nОтправьте его пользователю для регистрации.`,
+            { parse_mode: 'Markdown' }
+        );
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+};
