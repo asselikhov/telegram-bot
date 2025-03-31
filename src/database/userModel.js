@@ -1,4 +1,4 @@
-const { pool } = require('./db'); // Корректный путь
+const { pool } = require('./db');
 
 async function loadUsers() {
     const client = await pool.connect();
@@ -6,11 +6,22 @@ async function loadUsers() {
         const res = await client.query('SELECT * FROM users');
         const users = {};
         res.rows.forEach(row => {
+            // Преобразуем selectedObjects из строки в массив, если оно не null
+            let selectedObjects = [];
+            if (row.selectedobjects) {
+                try {
+                    selectedObjects = Array.isArray(row.selectedobjects)
+                        ? row.selectedobjects
+                        : JSON.parse(row.selectedobjects); // Если строка JSON
+                } catch (e) {
+                    selectedObjects = [row.selectedobjects]; // Если не JSON, считаем строкой
+                }
+            }
             users[row.userid] = {
                 fullName: row.fullname,
                 position: row.position,
                 organization: row.organization,
-                selectedObjects: row.selectedobjects || [],
+                selectedObjects: selectedObjects, // Гарантируем массив
                 status: row.status,
                 isApproved: row.isapproved,
                 nextReportId: row.nextreportid || 1,
@@ -44,7 +55,7 @@ async function saveUser(userId, userData) {
             userData.fullName,
             userData.position,
             userData.organization,
-            userData.selectedObjects,
+            JSON.stringify(userData.selectedObjects), // Сохраняем как JSON строку
             userData.status,
             userData.isApproved,
             userData.nextReportId,

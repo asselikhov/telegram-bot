@@ -67,11 +67,18 @@ module.exports = (bot) => {
         const creator = creatorId ? users[creatorId] : null;
         const creatorFullName = creator ? creator.fullName : 'Неизвестно';
 
+        // Обработка selectedObjects: преобразуем в массив, если это не массив
+        const selectedObjects = Array.isArray(user.selectedObjects)
+            ? user.selectedObjects
+            : user.selectedObjects
+                ? [user.selectedObjects] // Если строка или одиночное значение
+                : []; // Если undefined или null
+
         await clearPreviousMessages(ctx, userId);
         const userData = `
 Заявка на регистрацию:
 - Организация: ${user.organization}
-- Объекты: ${user.selectedObjects.join(', ')}
+- Объекты: ${selectedObjects.join(', ') || 'Не указаны'}
 - Должность: ${user.position}
 - ФИО: ${user.fullName}
 - Пригласительный код создан: ${creatorFullName}
