@@ -7,6 +7,7 @@ const reportHandler = require('./handlers/report');
 const adminHandler = require('./handlers/admin');
 const commandsHandler = require('./handlers/commands');
 const inviteCodeHandler = require('./handlers/inviteCodeHandler');
+const textHandler = require('./handlers/textHandler');
 const positionActions = require('./actions/position');
 const organizationActions = require('./actions/organization');
 const objectsActions = require('./actions/objects');
@@ -42,8 +43,6 @@ bot.use((ctx, next) => {
       if (!userStates[userId].messageIds.includes(message.message_id)) {
         userStates[userId].messageIds.push(message.message_id);
         console.log(`[ctx.reply] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
-      } else {
-        console.log(`[ctx.reply] Сообщение ${message.message_id} уже есть в messageIds для userId ${userId}, пропускаем`);
       }
     }
     return message;
@@ -57,8 +56,6 @@ bot.use((ctx, next) => {
       if (!userStates[targetUserId].messageIds.includes(message.message_id)) {
         userStates[targetUserId].messageIds.push(message.message_id);
         console.log(`[sendMessage] Сообщение ${message.message_id} добавлено в messageIds для userId ${targetUserId}. Массив:`, userStates[targetUserId].messageIds);
-      } else {
-        console.log(`[sendMessage] Сообщение ${message.message_id} уже есть в messageIds для userId ${targetUserId}, пропускаем`);
       }
     }
     return message;
@@ -67,10 +64,9 @@ bot.use((ctx, next) => {
   return next();
 });
 
-// Временный обработчик для отладки всех действий
 bot.action(/.*/, (ctx, next) => {
   console.log('[DEBUG] Получено действие:', ctx.match[0], 'от userId:', ctx.from.id);
-  return next(); // Передаем управление следующему обработчику
+  return next();
 });
 
 async function sendReportReminders() {
@@ -98,7 +94,7 @@ async function sendReportReminders() {
 ${user.fullName}, вы не предоставили отчет за ${currentDate}.
 
 Пожалуйста, внесите данные.
-                    `.trim();
+                 `.trim();
           try {
             await bot.telegram.sendMessage(groupChatId, reminderText);
             console.log(`Напоминание отправлено для ${user.fullName} в группу ${groupChatId} в 19:00 по Москве`);
@@ -124,6 +120,7 @@ reportHandler(bot);
 adminHandler(bot);
 commandsHandler(bot);
 inviteCodeHandler(bot);
+textHandler(bot);
 positionActions(bot);
 organizationActions(bot);
 objectsActions(bot);

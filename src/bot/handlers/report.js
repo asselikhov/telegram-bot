@@ -1,9 +1,8 @@
-// report.js
 const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { loadUserReports, saveReport, getReportText, loadAllReports } = require('../../database/reportModel');
-const { ORGANIZATION_OBJECTS, ORGANIZATIONS_LIST, GENERAL_GROUP_CHAT_IDS, OBJECT_GROUPS } = require('../../config/config');
+const { loadUserReports, loadAllReports } = require('../../database/reportModel');
+const { ORGANIZATION_OBJECTS } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
 
 async function showDownloadReport(ctx, page = 0) {
@@ -101,12 +100,12 @@ async function downloadReportFile(ctx, objectIndex) {
     };
     const centeredCellStyle = {
         font: { name: 'Arial', size: 9 },
-        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }, // Центрирование
+        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
     const paddedCellStyle = {
         font: { name: 'Arial', size: 9 },
-        alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 }, // Отступ через indent
+        alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 
@@ -114,7 +113,6 @@ async function downloadReportFile(ctx, objectIndex) {
     worksheet.getCell('A1').value = objectName;
     worksheet.getCell('A1').style = titleStyle;
 
-    // Порядок столбцов с "ИТР" в конце
     worksheet.getRow(2).values = ['Дата', 'Выполненные работы', 'Поставленные материалы', 'ИТР'];
     worksheet.getRow(2).eachCell(cell => { cell.style = headerStyle; });
     worksheet.columns = [
@@ -148,11 +146,10 @@ async function downloadReportFile(ctx, objectIndex) {
             itrText
         ];
 
-        // Применяем стили к ячейкам в зависимости от столбца
-        worksheet.getCell(`A${currentRow}`).style = centeredCellStyle; // Дата
-        worksheet.getCell(`B${currentRow}`).style = paddedCellStyle;   // Выполненные работы
-        worksheet.getCell(`C${currentRow}`).style = paddedCellStyle;   // Поставленные материалы
-        worksheet.getCell(`D${currentRow}`).style = centeredCellStyle; // ИТР
+        worksheet.getCell(`A${currentRow}`).style = centeredCellStyle;
+        worksheet.getCell(`B${currentRow}`).style = paddedCellStyle;
+        worksheet.getCell(`C${currentRow}`).style = paddedCellStyle;
+        worksheet.getCell(`D${currentRow}`).style = centeredCellStyle;
 
         if (lastDate !== report.date) {
             if (dateCount > 1) {
@@ -167,7 +164,7 @@ async function downloadReportFile(ctx, objectIndex) {
 
         if (lastUserId !== report.userId || lastDate !== report.date) {
             if (itrCount > 1) {
-                worksheet.mergeCells(`D${itrStartRow}:D${currentRow - 1}`); // Слияние для ИТР
+                worksheet.mergeCells(`D${itrStartRow}:D${currentRow - 1}`);
             }
             lastUserId = report.userId;
             itrStartRow = currentRow;
@@ -181,7 +178,7 @@ async function downloadReportFile(ctx, objectIndex) {
             report.materials.split('\n').length,
             itrText.split('\n').length
         );
-        worksheet.getRow(currentRow).height = Math.max(15, maxLines * 15); // Высота строки для читаемости
+        worksheet.getRow(currentRow).height = Math.max(15, maxLines * 15);
 
         currentRow++;
     });
@@ -226,71 +223,6 @@ async function createReport(ctx) {
     ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
-async function handleReportText(ctx, userId, state) {
-    const users = await loadUsers();
-    const date = new Date().toISOString().split('T')[0];
-    const timestamp = new Date().toISOString();
-    const reportId = `${date}_${users[userId].nextReportId++}`;
-    const userOrganization = users[userId].organization;
-
-    const report = {
-        reportId,
-        userId,
-        objectName: state.report.objectName,
-        date,
-        timestamp,
-        workDone: state.report.workDone,
-        materials: state.report.materials,
-        groupMessageIds: {}, // Храним ID сообщений для разных чатов
-        fullName: users[userId].fullName
-    };
-
-    const reportText = `
-📅 ОТЧЕТ ЗА ${date}  
-🏢 ${state.report.objectName}  
-➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ${users[userId].fullName} 
-
-ВЫПОЛНЕННЫЕ РАБОТЫ:  
-${state.report.workDone}  
-
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-${state.report.materials}  
-➖➖➖➖➖➖➖➖➖➖➖
-    `.trim();
-
-    // Отправка в чат объекта (OBJECT_GROUPS)
-    const groupChatId = OBJECT_GROUPS[state.report.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
-    const groupMessage = await ctx.telegram.sendMessage(groupChatId, reportText);
-    report.groupMessageIds[groupChatId] = groupMessage.message_id;
-
-    // Отправка в чат текущей организации и заинтересованных организаций
-    const targetOrganizations = [
-        userOrganization,
-        ...ORGANIZATIONS_LIST.filter(org =>
-            GENERAL_GROUP_CHAT_IDS[org]?.reportSources.includes(userOrganization)
-        )
-    ];
-
-    for (const org of targetOrganizations) {
-        const chatConfig = GENERAL_GROUP_CHAT_IDS[org] || GENERAL_GROUP_CHAT_IDS['default'];
-        const generalChatId = chatConfig.chatId;
-        try {
-            const generalMessage = await ctx.telegram.sendMessage(generalChatId, reportText);
-            report.groupMessageIds[generalChatId] = generalMessage.message_id;
-        } catch (e) {
-            console.log(`Не удалось отправить отчёт в чат ${generalChatId} для организации ${org}: ${e.message}`);
-        }
-    }
-
-    await saveReport(userId, report);
-    await saveUser(userId, users[userId]);
-
-    await clearPreviousMessages(ctx, userId);
-
-    await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}`);
-}
-
 async function showReportObjects(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
@@ -332,7 +264,6 @@ async function showReportDates(ctx, objectIndex) {
 async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
-    console.log(`[showReportTimestamps] Отчёты для userId ${userId}:`, reports);
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const objectName = uniqueObjects[objectIndex];
@@ -343,8 +274,6 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     await clearPreviousMessages(ctx, userId);
 
     const dateReports = objectReports.filter(([_, r]) => r.date === selectedDate);
-    console.log(`[showReportTimestamps] Отчёты для "${objectName}" за ${selectedDate}:`, dateReports);
-
     const buttons = dateReports.map(([reportId, report]) => {
         const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
         return [Markup.button.callback(time, `select_report_time_${reportId}`)];
@@ -357,9 +286,6 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex) {
 async function showReportDetails(ctx, reportId) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
-    console.log(`[showReportDetails] Отчёты для userId ${userId}:`, reports);
-    console.log(`[showReportDetails] Поиск отчёта с reportId ${reportId}`);
-
     const report = reports[reportId];
 
     await clearPreviousMessages(ctx, userId);
@@ -370,26 +296,32 @@ async function showReportDetails(ctx, reportId) {
     }
 
     const reportText = `
-📅 ОТЧЕТ ЗА ${report.date}  
-🏢 ${report.objectName}  
-➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ${report.fullName}  
+📅 ОТЧЕТ ЗА ${report.date}
 
-ВЫПОЛНЕННЫЕ РАБОТЫ:  
-${report.workDone}  
+🏢 ${report.objectName}
 
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-${report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
-Время: ${new Date(report.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}  
-    `.trim();
+👷 ${report.fullName}
+
+ВЫПОЛНЕННЫЕ РАБОТЫ:
+
+${report.workDone}
+
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
+
+${report.materials}
+
+➖➖➖➖➖➖➖➖➖➖➖
+Время: ${new Date(report.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
+
+`.trim();
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const uniqueDates = [...new Set(Object.values(reports).filter(r => r.objectName === report.objectName).map(r => r.date))];
     const buttons = [
-        [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
-        [Markup.button.callback('↩️ Назад', `select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(report.date)}`)]
-    ];
+        [Markup.button.callback('✏️ Редактировать', edit_report_${reportId})],
+    [Markup.button.callback('↩️ Назад', select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(report.date)})]
+];
 
     await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
 }
@@ -397,14 +329,11 @@ ${report.materials}
 async function editReport(ctx, reportId) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
-    console.log(`[editReport] Отчёты для userId ${userId}:`, reports);
-    console.log(`[editReport] Поиск отчёта с reportId ${reportId}:`, reports[reportId]);
-
     const report = reports[reportId];
 
     if (!report) {
         await clearPreviousMessages(ctx, userId);
-        console.log(`[editReport] Ошибка: отчёт с ID ${reportId} не найден`);
+        console.log([editReport] Ошибка: отчёт с ID ${reportId} не найден);
         return ctx.reply('Ошибка: не удалось найти отчёт для редактирования.');
     }
 
@@ -415,98 +344,7 @@ async function editReport(ctx, reportId) {
         report: { ...report, originalReportId: reportId },
         messageIds: ctx.state.userStates[userId].messageIds || []
     };
-    console.log(`[editReport] Состояние установлено для userId ${userId}:`, ctx.state.userStates[userId]);
     await ctx.reply('💡 Введите новую информацию о выполненных работах:');
-}
-
-async function handleEditedReport(ctx, userId, state) {
-    const users = await loadUsers();
-    const originalReportId = state.report.originalReportId;
-    let originalReport = null;
-    const userOrganization = users[userId].organization;
-
-    if (originalReportId) {
-        const userReports = await loadUserReports(userId);
-        originalReport = userReports[originalReportId];
-    }
-
-    const newTimestamp = new Date().toISOString();
-    const newReportId = `${state.report.date}_${users[userId].nextReportId++}`;
-    const newReport = {
-        reportId: newReportId,
-        userId,
-        objectName: state.report.objectName,
-        date: state.report.date,
-        timestamp: newTimestamp,
-        workDone: state.report.workDone,
-        materials: state.report.materials,
-        groupMessageIds: {}, // Храним ID сообщений для разных чатов
-        fullName: users[userId].fullName
-    };
-
-    const reportText = `
-📅 ОТЧЕТ ЗА ${newReport.date} (ОБНОВЛЁН)  
-🏢 ${newReport.objectName}  
-➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ${users[userId].fullName} 
-
-ВЫПОЛНЕННЫЕ РАБОТЫ:  
-${newReport.workDone}  
-
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-${newReport.materials}  
-➖➖➖➖➖➖➖➖➖➖➖
-    `.trim();
-
-    // Удаление старых сообщений
-    if (originalReport && originalReport.groupMessageIds) {
-        for (const [chatId, messageId] of Object.entries(originalReport.groupMessageIds)) {
-            await ctx.telegram.deleteMessage(chatId, messageId)
-                .catch(e => console.log(`Не удалось удалить старое сообщение ${messageId} в чате ${chatId}: ${e.message}`));
-        }
-
-        const client = await require('../../database/db').pool.connect();
-        try {
-            await client.query('DELETE FROM reports WHERE reportId = $1', [originalReportId]);
-        } finally {
-            client.release();
-        }
-    } else if (originalReportId) {
-        console.log(`Предупреждение: старый отчёт с ID ${originalReportId} не найден для userId ${userId}`);
-    }
-
-    // Отправка в чат объекта (OBJECT_GROUPS)
-    const groupChatId = OBJECT_GROUPS[newReport.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
-    const groupMessage = await ctx.telegram.sendMessage(groupChatId, reportText);
-    newReport.groupMessageIds[groupChatId] = groupMessage.message_id;
-
-    // Отправка в чат текущей организации и заинтересованных организаций
-    const targetOrganizations = [
-        userOrganization,
-        ...ORGANIZATIONS_LIST.filter(org =>
-            GENERAL_GROUP_CHAT_IDS[org]?.reportSources.includes(userOrganization)
-        )
-    ];
-
-    for (const org of targetOrganizations) {
-        const chatConfig = GENERAL_GROUP_CHAT_IDS[org] || GENERAL_GROUP_CHAT_IDS['default'];
-        const generalChatId = chatConfig.chatId;
-        try {
-            const generalMessage = await ctx.telegram.sendMessage(generalChatId, reportText);
-            newReport.groupMessageIds[generalChatId] = generalMessage.message_id;
-        } catch (e) {
-            console.log(`Не удалось отправить отчёт в чат ${generalChatId} для организации ${org}: ${e.message}`);
-        }
-    }
-
-    await saveReport(userId, newReport);
-    await saveUser(userId, users[userId]);
-
-    await clearPreviousMessages(ctx, userId);
-
-    await ctx.reply(`✅ Ваш отчёт обновлён:\n\n${reportText}`, Markup.inlineKeyboard([
-        [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
-    ]));
 }
 
 module.exports = (bot) => {
@@ -538,55 +376,7 @@ module.exports = (bot) => {
 
     bot.action('view_reports', showReportObjects);
     bot.action(/select_report_object_(\d+)/, (ctx) => showReportDates(ctx, parseInt(ctx.match[1], 10)));
-    bot.action(/select_report_date_(\d+)_(\d+)/, (ctx) => showReportTimestamps(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
-    bot.action(/select_report_time_(.+)/, (ctx) => showReportDetails(ctx, ctx.match[1]));
+    bot.action(/select_report_date_(\d+)(\d+)/, (ctx) => showReportTimestamps(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
+    bot.action(/select_report_time(.+)/, (ctx) => showReportDetails(ctx, ctx.match[1]));
     bot.action(/edit_report_(.+)/, (ctx) => editReport(ctx, ctx.match[1]));
-
-    bot.on('text', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        const state = ctx.state.userStates[userId];
-        console.log(`Получен текст от userId ${userId}: "${ctx.message.text}". Текущее состояние:`, state);
-
-        if (!state || !['workDone', 'materials', 'editWorkDone', 'editMaterials', 'editFullName'].includes(state.step)) {
-            return;
-        }
-
-        await clearPreviousMessages(ctx, userId);
-
-        if (state.step === 'workDone') {
-            state.report.workDone = ctx.message.text.trim();
-            state.step = 'materials';
-            await ctx.reply('💡 Введите информацию о поставленных материалах:');
-        } else if (state.step === 'materials') {
-            state.report.materials = ctx.message.text.trim();
-            await handleReportText(ctx, userId, state);
-            state.step = null;
-            state.report = {};
-        } else if (state.step === 'editFullName') {
-            const users = await loadUsers();
-            users[userId].fullName = ctx.message.text.trim();
-            await saveUser(userId, users[userId]);
-            await ctx.reply(`ФИО обновлено на "${users[userId].fullName}".`);
-            state.step = null;
-            await require('./menu').showProfile(ctx);
-        } else if (state.step === 'editWorkDone') {
-            state.report.workDone = ctx.message.text.trim();
-            state.step = 'editMaterials';
-            await ctx.reply('💡 Введите новую информацию о поставленных материалах:');
-        } else if (state.step === 'editMaterials') {
-            state.report.materials = ctx.message.text.trim();
-            await handleEditedReport(ctx, userId, state);
-            state.step = null;
-            state.report = {};
-        }
-    });
-
-    bot.action('edit_fullName', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        await clearPreviousMessages(ctx, userId);
-        const existingMessageIds = ctx.state.userStates[userId]?.messageIds || [];
-        ctx.state.userStates[userId] = { step: 'editFullName', messageIds: existingMessageIds };
-        console.log(`Установлено состояние editFullName для userId ${userId}. State:`, ctx.state.userStates[userId]);
-        await ctx.reply('Введите ваше новое ФИО:');
-    });
 };
