@@ -116,79 +116,11 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             case 'materials':
                 state.report.materials = ctx.message.text.trim();
                 state.step = 'photos';
-                await ctx.reply('📸 Прикрепите изображения к отчету (отправьте фото или введите "Готово" для завершения):');
-                break;
-
-            case 'photos':
-                if (ctx.message.text.toLowerCase() === 'готово') {
-                    const date = new Date().toISOString().split('T')[0];
-                    const timestamp = new Date().toISOString();
-                    const reportId = `${date}_${users[userId].nextReportId++}`;
-                    const report = {
-                        reportId,
-                        userId,
-                        objectName: state.report.objectName,
-                        date,
-                        timestamp,
-                        workDone: state.report.workDone,
-                        materials: state.report.materials,
-                        groupMessageIds: {},
-                        fullName: users[userId].fullName,
-                        photos: state.report.photos || []
-                    };
-                    const reportText = `
-📅 ОТЧЕТ ЗА ${date}  
-🏢 ${report.objectName}  
-➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ${users[userId].fullName} 
-
-ВЫПОЛНЕННЫЕ РАБОТЫ:  
-${report.workDone}  
-
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-${report.materials}  
-➖➖➖➖➖➖➖➖➖➖➖
-                    `.trim();
-
-                    const groupChatId = OBJECT_GROUPS[report.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
-                    const userOrg = users[userId].organization;
-                    const targetOrgs = [
-                        userOrg,
-                        ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
-                    ];
-                    const allChatIds = [groupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
-
-                    if (report.photos.length > 0) {
-                        const mediaGroup = report.photos.map((photoId, index) => ({
-                            type: 'photo',
-                            media: photoId,
-                            caption: index === 0 ? reportText.slice(0, 1024) : undefined // Текст только у первого фото
-                        }));
-                        for (const chatId of allChatIds) {
-                            try {
-                                const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
-                                report.groupMessageIds[chatId] = messages[0].message_id; // Сохраняем ID первого сообщения
-                            } catch (e) {
-                                console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
-                            }
-                        }
-                    } else {
-                        for (const chatId of allChatIds) {
-                            try {
-                                const message = await ctx.telegram.sendMessage(chatId, reportText);
-                                report.groupMessageIds[chatId] = message.message_id;
-                            } catch (e) {
-                                console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
-                            }
-                        }
-                    }
-
-                    await saveReport(userId, report);
-                    await saveUser(userId, users[userId]);
-                    await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`);
-                    state.step = null;
-                    state.report = {};
-                }
+                const message = await ctx.reply(
+                    '📸 Прикрепите изображения к отчету (отправьте фото или нажмите "Готово" для завершения)',
+                    Markup.inlineKeyboard([[Markup.button.callback('Готово', 'finish_report')]])
+                );
+                state.messageIds.push(message.message_id);
                 break;
 
             // Редактирование отчета
@@ -201,103 +133,14 @@ ${report.materials}
             case 'editMaterials':
                 state.report.materials = ctx.message.text.trim();
                 state.step = 'editPhotos';
-                state.report.photos = state.report.photos || [];
-                await ctx.reply('📸 Прикрепите новые изображения или удалите старые (отправьте фото, напишите "Удалить все фото" или "Готово" для завершения):');
-                break;
-
-            case 'editPhotos':
-                if (ctx.message.text.toLowerCase() === 'готово') {
-                    const newTimestamp = new Date().toISOString();
-                    const newReportId = `${state.report.date}_${users[userId].nextReportId++}`;
-                    const newReport = {
-                        reportId: newReportId,
-                        userId,
-                        objectName: state.report.objectName,
-                        date: state.report.date,
-                        timestamp: newTimestamp,
-                        workDone: state.report.workDone,
-                        materials: state.report.materials,
-                        groupMessageIds: {},
-                        fullName: users[userId].fullName,
-                        photos: state.report.photos
-                    };
-                    const newReportText = `
-📅 ОТЧЕТ ЗА ${newReport.date} (ОБНОВЛЁН)  
-🏢 ${newReport.objectName}  
-➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ${users[userId].fullName} 
-
-ВЫПОЛНЕННЫЕ РАБОТЫ:  
-${newReport.workDone}  
-
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-${newReport.materials}  
-➖➖➖➖➖➖➖➖➖➖➖
-                    `.trim();
-
-                    const oldReportId = state.report.originalReportId;
-                    if (oldReportId) {
-                        const userReports = await loadUserReports(userId);
-                        const oldReport = userReports[oldReportId];
-                        if (oldReport?.groupMessageIds) {
-                            for (const [chatId, msgId] of Object.entries(oldReport.groupMessageIds)) {
-                                await ctx.telegram.deleteMessage(chatId, msgId).catch(e =>
-                                    console.log(`Не удалось удалить сообщение ${msgId} в чате ${chatId}: ${e.message}`)
-                                );
-                            }
-                            const client = await require('../../database/db').pool.connect();
-                            try {
-                                await client.query('DELETE FROM reports WHERE reportId = $1', [oldReportId]);
-                            } finally {
-                                client.release();
-                            }
-                        }
-                    }
-
-                    const newGroupChatId = OBJECT_GROUPS[newReport.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
-                    const userOrg = users[userId].organization;
-                    const targetOrgs = [
-                        userOrg,
-                        ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
-                    ];
-                    const allChatIds = [newGroupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
-
-                    if (newReport.photos.length > 0) {
-                        const mediaGroup = newReport.photos.map((photoId, index) => ({
-                            type: 'photo',
-                            media: photoId,
-                            caption: index === 0 ? newReportText.slice(0, 1024) : undefined // Текст только у первого фото
-                        }));
-                        for (const chatId of allChatIds) {
-                            try {
-                                const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
-                                newReport.groupMessageIds[chatId] = messages[0].message_id; // Сохраняем ID первого сообщения
-                            } catch (e) {
-                                console.log(`Не удалось отправить обновленный отчет в чат ${chatId}: ${e.message}`);
-                            }
-                        }
-                    } else {
-                        for (const chatId of allChatIds) {
-                            try {
-                                const message = await ctx.telegram.sendMessage(chatId, newReportText);
-                                newReport.groupMessageIds[chatId] = message.message_id;
-                            } catch (e) {
-                                console.log(`Не удалось отправить обновленный отчет в чат ${chatId}: ${e.message}`);
-                            }
-                        }
-                    }
-
-                    await saveReport(userId, newReport);
-                    await saveUser(userId, users[userId]);
-                    await ctx.reply(`✅ Ваш отчёт обновлён:\n\n${newReportText}${newReport.photos.length > 0 ? '\n(С изображениями)' : ''}`, Markup.inlineKeyboard([
-                        [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
-                    ]));
-                    state.step = null;
-                    state.report = {};
-                } else if (ctx.message.text.toLowerCase() === 'удалить все фото') {
-                    state.report.photos = [];
-                    await ctx.reply('Все фото удалены. Отправьте новые или напишите "Готово" для завершения.');
-                }
+                const editMessage = await ctx.reply(
+                    '📸 Прикрепите новые изображения или удалите старые (отправьте фото, нажмите "Удалить все фото" или "Готово" для завершения)',
+                    Markup.inlineKeyboard([
+                        [Markup.button.callback('Удалить все фото', 'delete_all_photos')],
+                        [Markup.button.callback('Готово', 'finish_edit_report')]
+                    ])
+                );
+                state.messageIds.push(editMessage.message_id);
                 break;
 
             default:
@@ -313,6 +156,189 @@ ${newReport.materials}
 
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
         state.report.photos.push(photoId);
-        await ctx.reply('Фото добавлено. Отправьте еще или напишите "Готово" для завершения.');
+        await ctx.reply('Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.');
+    });
+
+    bot.action('finish_report', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'photos') return;
+
+        await clearPreviousMessages(ctx, userId);
+        const users = await loadUsers();
+
+        const date = new Date().toISOString().split('T')[0];
+        const timestamp = new Date().toISOString();
+        const reportId = `${date}_${users[userId].nextReportId++}`;
+        const report = {
+            reportId,
+            userId,
+            objectName: state.report.objectName,
+            date,
+            timestamp,
+            workDone: state.report.workDone,
+            materials: state.report.materials,
+            groupMessageIds: {},
+            fullName: users[userId].fullName,
+            photos: state.report.photos || []
+        };
+        const reportText = `
+📅 ОТЧЕТ ЗА ${date}  
+🏢 ${report.objectName}  
+➖➖➖➖➖➖➖➖➖➖➖ 
+👷 ${users[userId].fullName} 
+
+ВЫПОЛНЕННЫЕ РАБОТЫ:  
+${report.workDone}  
+
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+${report.materials}  
+➖➖➖➖➖➖➖➖➖➖➖
+        `.trim();
+
+        const groupChatId = OBJECT_GROUPS[report.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
+        const userOrg = users[userId].organization;
+        const targetOrgs = [
+            userOrg,
+            ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
+        ];
+        const allChatIds = [groupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
+
+        if (report.photos.length > 0) {
+            const mediaGroup = report.photos.map((photoId, index) => ({
+                type: 'photo',
+                media: photoId,
+                caption: index === 0 ? reportText.slice(0, 1024) : undefined
+            }));
+            for (const chatId of allChatIds) {
+                try {
+                    const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
+                    report.groupMessageIds[chatId] = messages[0].message_id;
+                } catch (e) {
+                    console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
+                }
+            }
+        } else {
+            for (const chatId of allChatIds) {
+                try {
+                    const message = await ctx.telegram.sendMessage(chatId, reportText);
+                    report.groupMessageIds[chatId] = message.message_id;
+                } catch (e) {
+                    console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
+                }
+            }
+        }
+
+        await saveReport(userId, report);
+        await saveUser(userId, users[userId]);
+        await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`);
+        state.step = null;
+        state.report = {};
+    });
+
+    bot.action('delete_all_photos', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'editPhotos') return;
+
+        state.report.photos = [];
+        await ctx.reply('Все фото удалены. Отправьте новые или нажмите "Готово" для завершения.');
+    });
+
+    bot.action('finish_edit_report', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'editPhotos') return;
+
+        await clearPreviousMessages(ctx, userId);
+        const users = await loadUsers();
+
+        const newTimestamp = new Date().toISOString();
+        const newReportId = `${state.report.date}_${users[userId].nextReportId++}`;
+        const newReport = {
+            reportId: newReportId,
+            userId,
+            objectName: state.report.objectName,
+            date: state.report.date,
+            timestamp: newTimestamp,
+            workDone: state.report.workDone,
+            materials: state.report.materials,
+            groupMessageIds: {},
+            fullName: users[userId].fullName,
+            photos: state.report.photos
+        };
+        const newReportText = `
+📅 ОТЧЕТ ЗА ${newReport.date} (ОБНОВЛЁН)  
+🏢 ${newReport.objectName}  
+➖➖➖➖➖➖➖➖➖➖➖ 
+👷 ${users[userId].fullName} 
+
+ВЫПОЛНЕННЫЕ РАБОТЫ:  
+${newReport.workDone}  
+
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+${newReport.materials}  
+➖➖➖➖➖➖➖➖➖➖➖
+        `.trim();
+
+        const oldReportId = state.report.originalReportId;
+        if (oldReportId) {
+            const userReports = await loadUserReports(userId);
+            const oldReport = userReports[oldReportId];
+            if (oldReport?.groupMessageIds) {
+                for (const [chatId, msgId] of Object.entries(oldReport.groupMessageIds)) {
+                    await ctx.telegram.deleteMessage(chatId, msgId).catch(e =>
+                        console.log(`Не удалось удалить сообщение ${msgId} в чате ${chatId}: ${e.message}`)
+                    );
+                }
+                const client = await require('../../database/db').pool.connect();
+                try {
+                    await client.query('DELETE FROM reports WHERE reportId = $1', [oldReportId]);
+                } finally {
+                    client.release();
+                }
+            }
+        }
+
+        const newGroupChatId = OBJECT_GROUPS[newReport.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
+        const userOrg = users[userId].organization;
+        const targetOrgs = [
+            userOrg,
+            ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
+        ];
+        const allChatIds = [newGroupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
+
+        if (newReport.photos.length > 0) {
+            const mediaGroup = newReport.photos.map((photoId, index) => ({
+                type: 'photo',
+                media: photoId,
+                caption: index === 0 ? newReportText.slice(0, 1024) : undefined
+            }));
+            for (const chatId of allChatIds) {
+                try {
+                    const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
+                    newReport.groupMessageIds[chatId] = messages[0].message_id;
+                } catch (e) {
+                    console.log(`Не удалось отправить обновленный отчет в чат ${chatId}: ${e.message}`);
+                }
+            }
+        } else {
+            for (const chatId of allChatIds) {
+                try {
+                    const message = await ctx.telegram.sendMessage(chatId, newReportText);
+                    newReport.groupMessageIds[chatId] = message.message_id;
+                } catch (e) {
+                    console.log(`Не удалось отправить обновленный отчет в чат ${chatId}: ${e.message}`);
+                }
+            }
+        }
+
+        await saveReport(userId, newReport);
+        await saveUser(userId, users[userId]);
+        await ctx.reply(`✅ Ваш отчёт обновлён:\n\n${newReportText}${newReport.photos.length > 0 ? '\n(С изображениями)' : ''}`, Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
+        ]));
+        state.step = null;
+        state.report = {};
     });
 };
