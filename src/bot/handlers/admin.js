@@ -64,31 +64,43 @@ module.exports = (bot) => {
 
         const inviteCodeData = await loadInviteCode(reviewUserId);
         const creatorId = inviteCodeData?.createdBy;
-        const creator = creatorId ? users[creatorId] : null;
-        const creatorFullName = creator ? creator.fullName : 'Неизвестно';
+        console.log('[review] ID создателя кода:', creatorId, 'для пользователя:', reviewUserId);
 
-        // Обработка selectedObjects: преобразуем в массив, если это не массив
+        const creator = creatorId && users[creatorId] ? users[creatorId] : null;
+        const creatorFullName = creator ? creator.fullName : 'Неизвестный пользователь';
+        console.log('[review] Создатель:', creatorFullName);
+
+        // Обработка selectedObjects
         const selectedObjects = Array.isArray(user.selectedObjects)
             ? user.selectedObjects
             : user.selectedObjects
-                ? [user.selectedObjects] // Если строка или одиночное значение
-                : []; // Если undefined или null
+                ? [user.selectedObjects]
+                : [];
+        const objectsList = selectedObjects.length > 0
+            ? selectedObjects.map(obj => `· ${obj}`).join('\n')
+            : 'Не выбраны';
 
         await clearPreviousMessages(ctx, userId);
+
         const userData = `
-Заявка на регистрацию:
-- Организация: ${user.organization}
-- Объекты: ${selectedObjects.join(', ') || 'Не указаны'}
-- Должность: ${user.position}
-- ФИО: ${user.fullName}
-- Пригласительный код создан: ${creatorFullName}
+📝 **Заявка на регистрацию**  
+➖➖➖➖➖➖➖➖➖➖➖  
+👤 **ФИО:** ${user.fullName || 'Не указано'}  
+🏢 **Организация:** ${user.organization || 'Не указано'}  
+💼 **Должность:** ${user.position || 'Не указана'}  
+🏗 **Объекты:**  
+${objectsList}  
+🔑 **Код создан:** ${creatorFullName}
         `.trim();
 
-        const message = await ctx.reply(userData, Markup.inlineKeyboard([
-            [Markup.button.callback('✅ Одобрить', `approve_${reviewUserId}`)],
-            [Markup.button.callback('❌ Отклонить', `reject_${reviewUserId}`)],
-            [Markup.button.callback('↩️ Назад', 'view_applications')]
-        ]));
+        const message = await ctx.reply(userData, {
+            parse_mode: 'Markdown',
+            reply_markup: Markup.inlineKeyboard([
+                [Markup.button.callback('✅ Одобрить', `approve_${reviewUserId}`)],
+                [Markup.button.callback('❌ Отклонить', `reject_${reviewUserId}`)],
+                [Markup.button.callback('↩️ Назад', 'view_applications')]
+            ]).reply_markup
+        });
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
