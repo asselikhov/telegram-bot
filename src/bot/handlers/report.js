@@ -122,14 +122,13 @@ async function downloadReportFile(ctx, objectIndex) {
         { key: 'itr', width: 30 }
     ];
 
+    // Сортировка по убыванию даты (свежие сверху)
     objectReports.sort((a, b) => {
         if (a.date === b.date) return a.userId.localeCompare(b.userId);
-        return a.date.localeCompare(b.date);
+        return b.date.localeCompare(a.date); // Убывание: новые даты раньше
     });
 
-    const totalRows = objectReports.length;
-    const startRow = totalRows + 2;
-    let currentRow = startRow;
+    let currentRow = 3; // Начинаем после заголовков
     let lastDate = null;
     let lastUserId = null;
     let dateStartRow = null;
@@ -137,7 +136,7 @@ async function downloadReportFile(ctx, objectIndex) {
     let dateCount = 0;
     let itrCount = 0;
 
-    for (let i = objectReports.length - 1; i >= 0; i--) {
+    for (let i = 0; i < objectReports.length; i++) {
         const report = objectReports[i];
         const user = users[report.userId] || {};
         const itrText = `${user.position || 'Не указано'}\n${user.organization || 'Не указано'}\n${report.fullName || user.fullName || 'Не указано'}`;
@@ -163,10 +162,10 @@ async function downloadReportFile(ctx, objectIndex) {
 
         // Логика объединения ячеек
         if (lastDate !== report.date && lastDate !== null && dateCount > 1) {
-            worksheet.mergeCells(`A${dateStartRow}:A${currentRow + 1}`);
+            worksheet.mergeCells(`A${dateStartRow}:A${currentRow - 1}`);
         }
         if (lastUserId !== report.userId && lastUserId !== null && itrCount > 1) {
-            worksheet.mergeCells(`D${itrStartRow}:D${currentRow + 1}`);
+            worksheet.mergeCells(`D${itrStartRow}:D${currentRow - 1}`);
         }
 
         if (lastDate !== report.date) {
@@ -185,8 +184,8 @@ async function downloadReportFile(ctx, objectIndex) {
             itrCount++;
         }
 
-        // Объединяем для последней строки, если это конец
-        if (i === 0) {
+        // Объединяем для последней строки
+        if (i === objectReports.length - 1) {
             if (dateCount > 1) {
                 worksheet.mergeCells(`A${dateStartRow}:A${currentRow}`);
             }
@@ -195,7 +194,7 @@ async function downloadReportFile(ctx, objectIndex) {
             }
         }
 
-        currentRow--;
+        currentRow++; // Двигаемся вниз
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
