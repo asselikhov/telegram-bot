@@ -3,7 +3,7 @@ const { pool } = require('../../database/db');
 const { generateInviteCode } = require('../../database/inviteCodeModel');
 const { loadUsers } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
-const { ORGANIZATION_OBJECTS } = require('../../config/config'); // Для списка организаций
+const { ORGANIZATION_OBJECTS } = require('../../config/config');
 const { ADMIN_ID } = require('../../config/config');
 
 module.exports = (bot) => {
@@ -61,7 +61,7 @@ module.exports = (bot) => {
         }
     });
 
-    // Обработчик для администратора
+    // Обработчик для администратора - показ списка организаций
     bot.action('admin_invite_code_menu', async (ctx) => {
         console.log('[admin_invite_code_menu] Обработка действия admin_invite_code_menu для userId:', ctx.from.id);
         const userId = ctx.from.id.toString();
@@ -84,8 +84,9 @@ module.exports = (bot) => {
             return;
         }
 
-        const buttons = organizations.map(org => [
-            Markup.button.callback(org, `generate_admin_code_${org}`)
+        // Создаем кнопки с индексами вместо полных названий
+        const buttons = organizations.map((org, index) => [
+            Markup.button.callback(org, `generate_admin_code_${index}`)
         ]);
         buttons.push([Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]);
 
@@ -95,13 +96,16 @@ module.exports = (bot) => {
         );
         console.log('[admin_invite_code_menu] Меню отправлено, message_id:', message.message_id);
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+
+        // Сохраняем список организаций в состоянии для последующего доступа
+        ctx.state.userStates[userId].adminOrganizations = organizations;
     });
 
     // Обработчик выбора организации администратором
-    bot.action(/generate_admin_code_(.+)/, async (ctx) => {
+    bot.action(/generate_admin_code_(\d+)/, async (ctx) => {
         console.log('[generate_admin_code] Обработка действия generate_admin_code для userId:', ctx.from.id);
         const userId = ctx.from.id.toString();
-        const organization = ctx.match[1];
+        const orgIndex = parseInt(ctx.match[1], 10);
 
         if (userId !== ADMIN_ID) {
             console.log('[generate_admin_code] Доступ запрещен, не администратор:', userId);
@@ -119,6 +123,14 @@ module.exports = (bot) => {
                 return;
             }
 
+            const organizations = ctx.state.userStates[userId].adminOrganizations || [];
+            if (!organizations[orgIndex]) {
+                console.log('[generate_admin_code] Организация не найдена по индексу:', orgIndex);
+                await ctx.reply('Организация не найдена.');
+                return;
+            }
+
+            const organization = organizations[orgIndex];
             console.log('[generate_admin_code] Генерация кода для организации:', organization);
             const code = await generateInviteCode(userId, organization);
 
@@ -156,8 +168,6 @@ module.exports = (bot) => {
         const code = ctx.match[1];
         console.log('[copy_code] Копирование кода:', code, 'для userId:', ctx.from.id);
 
-        // Telegram не поддерживает прямое копирование в буфер обмена через API,
-        // поэтому отправляем код как текст, который можно легко выделить
         await ctx.reply(`Код для копирования: \`${code}\`\nВыделите код выше и скопируйте его.`, { parse_mode: 'Markdown' });
     });
 };
