@@ -1,7 +1,8 @@
-// src/bot/handlers/start.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
+const { validateInviteCode, markInviteCodeAsUsed } = require('../../database/inviteCodeModel');
+const { showMainMenu } = require('./menu');
 
 module.exports = (bot) => {
     bot.start(async (ctx) => {
@@ -21,33 +22,32 @@ module.exports = (bot) => {
                 organization: '',
                 selectedObjects: [],
                 status: 'В работе',
-                isApproved: false,
+                isApproved: 0, // Изменено с false на 0 для совместимости с БД
                 nextReportId: 1,
                 reports: {}
             };
             await saveUser(userId, users[userId]);
 
             ctx.state.userStates[userId] = {
-                step: 'selectOrganization',
+                step: 'enterInviteCode',
                 messageIds: []
             };
             await clearPreviousMessages(ctx, userId);
 
-            const { showOrganizationSelection } = require('../actions/organization');
-            await showOrganizationSelection(ctx, userId);
-            console.log(`Новый пользователь ${userId} начал регистрацию с выбора организации`);
+            const message = await ctx.reply('Введите пригласительный код для регистрации:');
+            ctx.state.userStates[userId].messageIds.push(message.message_id);
+            console.log(`Новый пользователь ${userId} начал регистрацию с ввода пригласительного кода`);
         } else if (users[userId].isApproved) {
-            const { showMainMenu } = require('./menu');
             await showMainMenu(ctx);
         } else {
             const user = users[userId];
             await clearPreviousMessages(ctx, userId);
 
             if (!user.organization) {
-                ctx.state.userStates[userId] = { step: 'selectOrganization', messageIds: [] };
-                const { showOrganizationSelection } = require('../actions/organization');
-                await showOrganizationSelection(ctx, userId);
-                console.log(`Пользователь ${userId} возобновил регистрацию с выбора организации`);
+                ctx.state.userStates[userId] = { step: 'enterInviteCode', messageIds: [] };
+                const message = await ctx.reply('Введите пригласительный код для регистрации:');
+                ctx.state.userStates[userId].messageIds.push(message.message_id);
+                console.log(`Пользователь ${userId} возобновил регистрацию с ввода пригласительного кода`);
             } else if (!user.selectedObjects.length) {
                 ctx.state.userStates[userId] = { step: 'selectObjects', messageIds: [] };
                 const { showObjectSelection } = require('../actions/objects');
@@ -69,5 +69,32 @@ module.exports = (bot) => {
                 console.log(`Пользователь ${userId} уже заполнил заявку и ожидает подтверждения`);
             }
         }
+    });
+
+    bot.on('text', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'enterInviteCode') return;
+
+        const code = ctx.message.text.trim();
+        const organization = await validateInviteCode(code);
+
+        await clearPreviousMessages(ctx, userId);
+
+        if (!organization) {
+            const message = await ctx.reply('Неверный или уже использованный код. Попробуйте снова:');
+            ctx.state.userStates[userId].messageIds.push(message.message_id);
+            return;
+        }
+
+        const users = await loadUsers();
+        users[userId].organization = organization;
+        await saveUser(userId, users[userId]);
+        await markInviteCodeAsUsed(code);
+
+        state.step = 'selectObjects';
+        const { showObjectSelection } = require('../actions/objects');
+        await showObjectSelection(ctx, userId, []);
+        console.log(`Пользователь ${userId} перешел к выбору объектов после ввода кода`);
     });
 };

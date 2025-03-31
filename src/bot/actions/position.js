@@ -1,4 +1,3 @@
-// src/bot/actions/position.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { BASE_POSITIONS_LIST, ADMIN_ID } = require('../../config/config');

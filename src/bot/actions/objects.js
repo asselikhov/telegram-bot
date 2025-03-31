@@ -1,4 +1,3 @@
-// src/bot/actions/objects.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
@@ -67,6 +66,7 @@ module.exports = (bot) => {
         if (!state || !state.selectedObjects || state.selectedObjects.length === 0) {
             await clearPreviousMessages(ctx, userId);
             await ctx.reply('Выберите хотя бы один объект.');
+            await showObjectSelection(ctx, userId, []);
             return;
         }
 
