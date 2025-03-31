@@ -89,7 +89,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 break;
 
             // Ввод кода для смены организации
-            case 'changeOrganizationInput': // Переименовал шаг, чтобы отличать от регистрации
+            case 'changeOrganizationInput':
                 const orgCode = ctx.message.text.trim();
                 const newOrg = await validateInviteCode(orgCode);
                 if (!newOrg) {
@@ -117,7 +117,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 state.report.materials = ctx.message.text.trim();
                 state.step = 'photos';
                 const photoMessage = await ctx.reply(
-                    '📸 Прикрепите изображения к отчету (отправьте фото или нажмите "Готово" для завершения)',
+                    '📸 Прикрепите изображения к отчету или нажмите "Готово" для завершения',
                     Markup.inlineKeyboard([[Markup.button.callback('Готово', 'finish_report')]])
                 );
                 state.messageIds.push(photoMessage.message_id);
@@ -134,7 +134,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 state.report.materials = ctx.message.text.trim();
                 state.step = 'editPhotos';
                 const editMessage = await ctx.reply(
-                    '📸 Прикрепите новые изображения или удалите старые (отправьте фото, нажмите "Удалить все фото" или "Готово" для завершения)',
+                    '📸 Прикрепите новые изображения к отчету или нажмите "Готово" для завершения',
                     Markup.inlineKeyboard([
                         [Markup.button.callback('Удалить все фото', 'delete_all_photos')],
                         [Markup.button.callback('Готово', 'finish_edit_report')]
@@ -154,9 +154,23 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const state = ctx.state.userStates[userId];
         if (!state || (state.step !== 'photos' && state.step !== 'editPhotos')) return;
 
+        // Удаляем предыдущее сообщение бота (если есть)
+        if (state.messageIds.length > 0) {
+            const lastMessageId = state.messageIds.pop();
+            await ctx.telegram.deleteMessage(ctx.chat.id, lastMessageId).catch(e =>
+                console.log(`Не удалось удалить сообщение ${lastMessageId}: ${e.message}`)
+            );
+        }
+
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
         state.report.photos.push(photoId);
-        await ctx.reply('Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.');
+
+        // Отправляем новое сообщение с кнопкой "Готово" и заменяем предыдущее
+        const newMessage = await ctx.reply(
+            'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.',
+            Markup.inlineKeyboard([[Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]])
+        );
+        state.messageIds.push(newMessage.message_id);
     });
 
     bot.action('finish_report', async (ctx) => {
