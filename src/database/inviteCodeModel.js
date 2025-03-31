@@ -36,10 +36,11 @@ async function markInviteCodeAsUsed(code, userId) {
     try {
         const res = await client.query(`
             UPDATE invite_codes 
-            SET isUsed = TRUE, usedBy = $1
+            SET isUsed = TRUE, usedBy = $1, usedAt = NOW()
             WHERE code = $2
-            RETURNING organization, createdBy
+            RETURNING organization, createdBy, usedAt
         `, [userId, code]);
+        console.log('[markInviteCodeAsUsed] Результат для кода', code, ':', res.rows[0]);
         return res.rows[0];
     } finally {
         client.release();
@@ -50,7 +51,7 @@ async function getAllInviteCodes() {
     const client = await pool.connect();
     try {
         const res = await client.query(`
-            SELECT code, organization, isUsed, createdBy, createdAt 
+            SELECT code, organization, isUsed, createdBy, createdAt, usedAt 
             FROM invite_codes 
             ORDER BY createdAt DESC
         `);
@@ -59,7 +60,8 @@ async function getAllInviteCodes() {
             organization: row.organization,
             isUsed: row.isused,
             createdBy: row.createdby,
-            createdAt: row.createdat
+            createdAt: row.createdat,
+            usedAt: row.usedat
         }));
     } finally {
         client.release();
@@ -70,7 +72,7 @@ async function loadInviteCode(userId) {
     const client = await pool.connect();
     try {
         const res = await client.query(`
-            SELECT code, organization, createdBy, usedBy 
+            SELECT code, organization, createdBy, usedBy, usedAt 
             FROM invite_codes 
             WHERE usedBy = $1 
             ORDER BY createdAt DESC 

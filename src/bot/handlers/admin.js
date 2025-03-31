@@ -75,6 +75,11 @@ module.exports = (bot) => {
         }
         console.log('[review] Создатель:', creatorFullName);
 
+        // Форматирование времени использования
+        const usedAt = inviteCodeData?.usedAt
+            ? new Date(inviteCodeData.usedAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })
+            : 'Не указано';
+
         // Обработка selectedObjects
         const selectedObjects = Array.isArray(user.selectedObjects)
             ? user.selectedObjects
@@ -95,8 +100,9 @@ module.exports = (bot) => {
 💼 **Должность:** ${user.position || 'Не указана'}  
 🏗 **Объекты:**  
 ${objectsList}  
-🔑 **Код создан:** ${creatorFullName}
-        `.trim();
+🔑 **Код создан:** ${creatorFullName}  
+⏰ **Использован:** ${usedAt}
+    `.trim();
 
         const message = await ctx.reply(userData, {
             parse_mode: 'Markdown',
