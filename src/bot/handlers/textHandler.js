@@ -4,7 +4,7 @@ const { clearPreviousMessages } = require('../utils');
 const { loadInviteCode, markInviteCodeAsUsed, validateInviteCode } = require('../../database/inviteCodeModel');
 const { showObjectSelection } = require('../actions/objects');
 const { showProfile } = require('./menu');
-const { saveReport } = require('../../database/reportModel');
+const { saveReport, loadUserReports } = require('../../database/reportModel');
 const { ORGANIZATIONS_LIST, GENERAL_GROUP_CHAT_IDS, OBJECT_GROUPS, ADMIN_ID } = require('../../config/config');
 
 module.exports = (bot) => {
@@ -89,7 +89,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 break;
 
             // Ввод кода для смены организации
-            case 'enterInviteCode':
+            case 'enterInviteCode': // Повторное использование этого шага допустимо, так как контекст различается
                 const orgCode = ctx.message.text.trim();
                 const newOrg = await validateInviteCode(orgCode);
                 if (!newOrg) {
@@ -97,12 +97,12 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     state.messageIds.push(message.message_id);
                     return;
                 }
-                users[userId].organization = newOrg;
+                users[userId].organization = newOrg.organization; // Используем .organization из результата validateInviteCode
                 users[userId].selectedObjects = [];
                 await saveUser(userId, users[userId]);
                 await markInviteCodeAsUsed(orgCode);
                 state.step = 'selectObjects';
-                await ctx.reply(`Организация изменена на "${newOrg}". Теперь выберите объекты:`);
+                await ctx.reply(`Организация изменена на "${newOrg.organization}". Теперь выберите объекты:`);
                 await showObjectSelection(ctx, userId, []);
                 break;
 
