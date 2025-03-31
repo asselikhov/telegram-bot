@@ -304,6 +304,7 @@ async function showReportDetails(ctx, reportId) {
         return ctx.reply('Ошибка: отчёт не найден.');
     }
 
+    const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
     const reportText = `
 📅 ОТЧЕТ ЗА ${report.date}  
 🏢 ${report.objectName}  
@@ -316,7 +317,7 @@ ${report.workDone}
 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 ${report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
-Время: ${new Date(report.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}  
+Время: ${time}  
     `.trim();
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
