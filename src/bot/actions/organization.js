@@ -5,6 +5,8 @@ const { validateInviteCode, markInviteCodeAsUsed } = require('../../database/inv
 const { clearPreviousMessages } = require('../utils');
 const { showProfile } = require('../handlers/menu');
 const { showObjectSelection } = require('./objects');
+const { pool } = require('../../database/db');
+const { ADMIN_ID } = require('../../config/config');
 
 async function showOrganizationSelection(ctx, userId) {
     await clearPreviousMessages(ctx, userId);
@@ -44,9 +46,70 @@ module.exports = (bot) => {
     bot.action('edit_organization', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId].step = 'enterInviteCode';
-        const message = await ctx.reply('Введите пригласительный код для смены организации:');
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+
+        if (userId === ADMIN_ID) {
+            // Для админа показываем список всех организаций из базы
+            const client = await pool.connect();
+            try {
+                const res = await client.query('SELECT DISTINCT organization FROM users WHERE organization IS NOT NULL');
+                const organizations = res.rows.map(row => row.organization);
+
+                if (organizations.length === 0) {
+                    const message = await ctx.reply('В базе данных нет организаций.');
+                    ctx.state.userStates[userId].messageIds.push(message.message_id);
+                    return;
+                }
+
+                const buttons = organizations.map((org, index) => [
+                    Markup.button.callback(org, `admin_select_org_${index}`)
+                ]);
+                buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
+
+                const message = await ctx.reply(
+                    'Выберите новую организацию:',
+                    Markup.inlineKeyboard(buttons)
+                );
+                ctx.state.userStates[userId].messageIds.push(message.message_id);
+            } finally {
+                client.release();
+            }
+        } else {
+            // Для обычных пользователей запрашиваем код
+            ctx.state.userStates[userId].step = 'enterInviteCode';
+            const message = await ctx.reply('Введите пригласительный код для смены организации:');
+            ctx.state.userStates[userId].messageIds.push(message.message_id);
+        }
+    });
+
+    bot.action(/admin_select_org_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        const orgIndex = parseInt(ctx.match[1], 10);
+        await clearPreviousMessages(ctx, userId);
+
+        const client = await pool.connect();
+        try {
+            const res = await client.query('SELECT DISTINCT organization FROM users WHERE organization IS NOT NULL');
+            const organizations = res.rows.map(row => row.organization);
+            const selectedOrg = organizations[orgIndex];
+
+            if (!selectedOrg) {
+                const message = await ctx.reply('Ошибка: организация не найдена.');
+                ctx.state.userStates[userId].messageIds.push(message.message_id);
+                return;
+            }
+
+            const users = await loadUsers();
+            users[userId].organization = selectedOrg;
+            users[userId].selectedObjects = [];
+            await saveUser(userId, users[userId]);
+
+            await ctx.reply(`Организация изменена на "${selectedOrg}".`);
+            await showProfile(ctx);
+        } finally {
+            client.release();
+        }
     });
 
     bot.on('text', async (ctx) => {
