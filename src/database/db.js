@@ -14,6 +14,7 @@ pool.connect((err) => {
 async function initializeDatabase() {
     const client = await pool.connect();
     try {
+        // Создание таблиц
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 userId TEXT PRIMARY KEY,
@@ -47,14 +48,32 @@ async function initializeDatabase() {
                 organization TEXT NOT NULL,
                 isUsed BOOLEAN DEFAULT FALSE,
                 createdBy TEXT,
-                usedBy TEXT,  -- Добавляем столбец usedBy
+                usedBy TEXT,
                 createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (createdBy) REFERENCES users(userId)
             );
         `);
-        console.log('Таблицы созданы или уже существуют');
+
+        // Принудительная миграция: добавление столбца usedBy, если его нет
+        await client.query(`
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'invite_codes' 
+                    AND column_name = 'usedby'
+                ) THEN
+                    ALTER TABLE invite_codes
+                    ADD COLUMN usedBy TEXT;
+                END IF;
+            END;
+            $$;
+        `);
+
+        console.log('Таблицы созданы или обновлены');
     } catch (err) {
-        console.error('Ошибка при создании таблиц:', err.message);
+        console.error('Ошибка при создании или обновлении таблиц:', err.message);
     } finally {
         client.release();
     }
