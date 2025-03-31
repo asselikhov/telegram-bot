@@ -134,7 +134,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                         materials: state.report.materials,
                         groupMessageIds: {},
                         fullName: users[userId].fullName,
-                        photos: state.report.photos
+                        photos: state.report.photos || []
                     };
                     const reportText = `
 📅 ОТЧЕТ ЗА ${date}  
@@ -151,28 +151,35 @@ ${report.materials}
                     `.trim();
 
                     const groupChatId = OBJECT_GROUPS[report.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
-                    const mediaGroup = report.photos.length > 0 ? report.photos.map(photoId => ({ type: 'photo', media: photoId })) : [];
-                    if (mediaGroup.length > 0) {
-                        await ctx.telegram.sendMediaGroup(groupChatId, mediaGroup);
-                    }
-                    const groupMessage = await ctx.telegram.sendMessage(groupChatId, reportText);
-                    report.groupMessageIds[groupChatId] = groupMessage.message_id;
-
                     const userOrg = users[userId].organization;
                     const targetOrgs = [
                         userOrg,
                         ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
                     ];
-                    for (const org of targetOrgs) {
-                        const chatId = GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId;
-                        try {
-                            if (mediaGroup.length > 0) {
-                                await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
+                    const allChatIds = [groupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
+
+                    if (report.photos.length > 0) {
+                        const mediaGroup = report.photos.map((photoId, index) => ({
+                            type: 'photo',
+                            media: photoId,
+                            caption: index === 0 ? reportText.slice(0, 1024) : undefined // Текст только у первого фото
+                        }));
+                        for (const chatId of allChatIds) {
+                            try {
+                                const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
+                                report.groupMessageIds[chatId] = messages[0].message_id; // Сохраняем ID первого сообщения
+                            } catch (e) {
+                                console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
                             }
-                            const msg = await ctx.telegram.sendMessage(chatId, reportText);
-                            report.groupMessageIds[chatId] = msg.message_id;
-                        } catch (e) {
-                            console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
+                        }
+                    } else {
+                        for (const chatId of allChatIds) {
+                            try {
+                                const message = await ctx.telegram.sendMessage(chatId, reportText);
+                                report.groupMessageIds[chatId] = message.message_id;
+                            } catch (e) {
+                                console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
+                            }
                         }
                     }
 
@@ -248,27 +255,35 @@ ${newReport.materials}
                     }
 
                     const newGroupChatId = OBJECT_GROUPS[newReport.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
-                    const mediaGroup = newReport.photos.length > 0 ? newReport.photos.map(photoId => ({ type: 'photo', media: photoId })) : [];
-                    if (mediaGroup.length > 0) {
-                        await ctx.telegram.sendMediaGroup(newGroupChatId, mediaGroup);
-                    }
-                    const newGroupMsg = await ctx.telegram.sendMessage(newGroupChatId, newReportText);
-                    newReport.groupMessageIds[newGroupChatId] = newGroupMsg.message_id;
-
-                    const targetOrganizations = [
-                        users[userId].organization,
-                        ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(users[userId].organization))
+                    const userOrg = users[userId].organization;
+                    const targetOrgs = [
+                        userOrg,
+                        ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
                     ];
-                    for (const org of targetOrganizations) {
-                        const chatId = GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId;
-                        try {
-                            if (mediaGroup.length > 0) {
-                                await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
+                    const allChatIds = [newGroupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
+
+                    if (newReport.photos.length > 0) {
+                        const mediaGroup = newReport.photos.map((photoId, index) => ({
+                            type: 'photo',
+                            media: photoId,
+                            caption: index === 0 ? newReportText.slice(0, 1024) : undefined // Текст только у первого фото
+                        }));
+                        for (const chatId of allChatIds) {
+                            try {
+                                const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
+                                newReport.groupMessageIds[chatId] = messages[0].message_id; // Сохраняем ID первого сообщения
+                            } catch (e) {
+                                console.log(`Не удалось отправить обновленный отчет в чат ${chatId}: ${e.message}`);
                             }
-                            const msg = await ctx.telegram.sendMessage(chatId, newReportText);
-                            newReport.groupMessageIds[chatId] = msg.message_id;
-                        } catch (e) {
-                            console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
+                        }
+                    } else {
+                        for (const chatId of allChatIds) {
+                            try {
+                                const message = await ctx.telegram.sendMessage(chatId, newReportText);
+                                newReport.groupMessageIds[chatId] = message.message_id;
+                            } catch (e) {
+                                console.log(`Не удалось отправить обновленный отчет в чат ${chatId}: ${e.message}`);
+                            }
                         }
                     }
 

@@ -14,7 +14,6 @@ pool.connect((err) => {
 async function initializeDatabase() {
     const client = await pool.connect();
     try {
-        // Создание таблиц
         await client.query(`
             CREATE TABLE IF NOT EXISTS users (
                 userId TEXT PRIMARY KEY,
@@ -39,7 +38,7 @@ async function initializeDatabase() {
                 groupMessageId TEXT,
                 generalMessageId TEXT,
                 fullName TEXT,
-                photos TEXT DEFAULT '[]', -- Добавляем новое поле для хранения JSON массива photoIds
+                photos TEXT DEFAULT '[]',
                 FOREIGN KEY (userId) REFERENCES users(userId)
             );
         `);
@@ -55,7 +54,6 @@ async function initializeDatabase() {
             );
         `);
 
-        // Принудительная миграция: добавление столбца usedBy, если его нет
         await client.query(`
             DO $$
             BEGIN
@@ -72,7 +70,6 @@ async function initializeDatabase() {
             $$;
         `);
 
-        // Принудительная миграция: добавление столбца photos, если его нет
         await client.query(`
             DO $$
             BEGIN
