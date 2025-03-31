@@ -89,12 +89,12 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 break;
 
             // Ввод кода для смены организации
-            case 'enterInviteCode':
+            case 'changeOrganizationInput': // Переименовал шаг, чтобы отличать от регистрации
                 const orgCode = ctx.message.text.trim();
                 const newOrg = await validateInviteCode(orgCode);
                 if (!newOrg) {
-                    const message = await ctx.reply('Неверный или уже использованный код. Попробуйте снова:');
-                    state.messageIds.push(message.message_id);
+                    const orgMessage = await ctx.reply('Неверный или уже использованный код. Попробуйте снова:');
+                    state.messageIds.push(orgMessage.message_id);
                     return;
                 }
                 users[userId].organization = newOrg.organization;
@@ -116,11 +116,11 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             case 'materials':
                 state.report.materials = ctx.message.text.trim();
                 state.step = 'photos';
-                const message = await ctx.reply(
+                const photoMessage = await ctx.reply(
                     '📸 Прикрепите изображения к отчету (отправьте фото или нажмите "Готово" для завершения)',
                     Markup.inlineKeyboard([[Markup.button.callback('Готово', 'finish_report')]])
                 );
-                state.messageIds.push(message.message_id);
+                state.messageIds.push(photoMessage.message_id);
                 break;
 
             // Редактирование отчета
