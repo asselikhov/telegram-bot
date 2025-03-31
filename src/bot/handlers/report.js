@@ -154,10 +154,22 @@ async function downloadReportFile(ctx, objectIndex) {
         worksheet.getCell(`C${currentRow}`).style = paddedCellStyle;
         worksheet.getCell(`D${currentRow}`).style = centeredCellStyle;
 
+        const maxLines = Math.max(
+            report.workDone.split('\n').length,
+            report.materials.split('\n').length,
+            itrText.split('\n').length
+        );
+        worksheet.getRow(currentRow).height = Math.max(15, maxLines * 15);
+
+        // Логика объединения ячеек
+        if (lastDate !== report.date && lastDate !== null && dateCount > 1) {
+            worksheet.mergeCells(`A${dateStartRow}:A${currentRow + 1}`);
+        }
+        if (lastUserId !== report.userId && lastUserId !== null && itrCount > 1) {
+            worksheet.mergeCells(`D${itrStartRow}:D${currentRow + 1}`);
+        }
+
         if (lastDate !== report.date) {
-            if (dateCount > 1) {
-                worksheet.mergeCells(`A${dateStartRow}:A${currentRow + 1}`);
-            }
             lastDate = report.date;
             dateStartRow = currentRow;
             dateCount = 1;
@@ -166,9 +178,6 @@ async function downloadReportFile(ctx, objectIndex) {
         }
 
         if (lastUserId !== report.userId || lastDate !== report.date) {
-            if (itrCount > 1) {
-                worksheet.mergeCells(`D${itrStartRow}:D${currentRow + 1}`);
-            }
             lastUserId = report.userId;
             itrStartRow = currentRow;
             itrCount = 1;
@@ -176,21 +185,17 @@ async function downloadReportFile(ctx, objectIndex) {
             itrCount++;
         }
 
-        const maxLines = Math.max(
-            report.workDone.split('\n').length,
-            report.materials.split('\n').length,
-            itrText.split('\n').length
-        );
-        worksheet.getRow(currentRow).height = Math.max(15, maxLines * 15);
+        // Объединяем для последней строки, если это конец
+        if (i === 0) {
+            if (dateCount > 1) {
+                worksheet.mergeCells(`A${dateStartRow}:A${currentRow}`);
+            }
+            if (itrCount > 1) {
+                worksheet.mergeCells(`D${itrStartRow}:D${currentRow}`);
+            }
+        }
 
         currentRow--;
-    }
-
-    if (dateCount > 1) {
-        worksheet.mergeCells(`A${dateStartRow}:A${startRow}`);
-    }
-    if (itrCount > 1) {
-        worksheet.mergeCells(`D${itrStartRow}:D${startRow}`);
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
