@@ -143,7 +143,7 @@ async function downloadReportFile(ctx, objectIndex) {
         const user = users[report.userId] || {};
         const itrText = `${user.position || 'Не указано'}\n${user.organization || 'Не указано'}\n${report.fullName || user.fullName || 'Не указано'}`;
         const photosText = report.photos && report.photos.length > 0 ? `${report.photos.length} фото` : 'Нет';
-        const formattedDate = parseAndFormatDate(report.date); // Преобразуем дату в DD.MM.YYYY
+        const formattedDate = parseAndFormatDate(report.date);
 
         worksheet.getRow(currentRow).values = [
             formattedDate,
@@ -255,7 +255,7 @@ async function showReportObjects(ctx) {
     await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
 }
 
-async function showReportDates(ctx, objectIndex) {
+async function showReportDates(ctx, objectIndex, page = 0) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
@@ -264,18 +264,49 @@ async function showReportDates(ctx, objectIndex) {
     await clearPreviousMessages(ctx, userId);
 
     const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
-    // Сортируем отчеты по timestamp по возрастанию и извлекаем уникальные даты
+    // Сортируем отчеты по timestamp по возрастанию
     const sortedReports = objectReports.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     const uniqueDates = [...new Set(sortedReports.map(r => parseAndFormatDate(r.date)))];
-    const buttons = uniqueDates.map((date, index) =>
-        [Markup.button.callback(date, `select_report_date_${objectIndex}_${index}`)]
+
+    const itemsPerPage = 10;
+    const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
+    const pageNum = typeof page === 'number' ? page : 0;
+
+    const startIndex = pageNum * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, uniqueDates.length);
+    const currentDates = uniqueDates.slice(startIndex, endIndex);
+
+    if (currentDates.length === 0) {
+        console.log(`[showReportDates] Нет дат для отображения на странице ${pageNum} для объекта ${objectName}`);
+        return ctx.reply('Ошибка: нет дат для отображения.');
+    }
+
+    const buttons = currentDates.map((date, index) =>
+        [Markup.button.callback(date, `select_report_date_${objectIndex}_${startIndex + index}`)]
     );
+
+    const paginationButtons = [];
+    if (totalPages > 1) {
+        if (pageNum > 0) {
+            paginationButtons.push(Markup.button.callback('⬅️ Назад', `report_dates_page_${objectIndex}_${pageNum - 1}`));
+        }
+        if (pageNum < totalPages - 1) {
+            paginationButtons.push(Markup.button.callback('Вперед ➡️', `report_dates_page_${objectIndex}_${pageNum + 1}`));
+        }
+    }
+    if (paginationButtons.length > 0) {
+        buttons.push(paginationButtons);
+    }
     buttons.push([Markup.button.callback('↩️ Назад', `select_report_object_${objectIndex}`)]);
 
-    await ctx.reply(`Выберите дату для объекта "${objectName}":`, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(
+        `Выберите дату для объекта "${objectName}" (Страница ${pageNum + 1} из ${totalPages}):`,
+        Markup.inlineKeyboard(buttons)
+    );
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
-async function showReportTimestamps(ctx, objectIndex, dateIndex) {
+async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     const userId = ctx.from.id.toString();
     const reports = await loadUserReports(userId);
 
@@ -291,13 +322,44 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     await clearPreviousMessages(ctx, userId);
 
     const dateReports = sortedReports.filter(([_, r]) => parseAndFormatDate(r.date) === selectedDate);
-    const buttons = dateReports.map(([reportId, report]) => {
+
+    const itemsPerPage = 10;
+    const totalPages = Math.ceil(dateReports.length / itemsPerPage);
+    const pageNum = typeof page === 'number' ? page : 0;
+
+    const startIndex = pageNum * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, dateReports.length);
+    const currentReports = dateReports.slice(startIndex, endIndex);
+
+    if (currentReports.length === 0) {
+        console.log(`[showReportTimestamps] Нет отчетов для отображения на странице ${pageNum} для даты ${selectedDate}`);
+        return ctx.reply('Ошибка: нет отчетов для отображения.');
+    }
+
+    const buttons = currentReports.map(([reportId, report]) => {
         const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
         return [Markup.button.callback(time, `select_report_time_${reportId}`)];
     });
+
+    const paginationButtons = [];
+    if (totalPages > 1) {
+        if (pageNum > 0) {
+            paginationButtons.push(Markup.button.callback('⬅️ Назад', `report_timestamps_page_${objectIndex}_${dateIndex}_${pageNum - 1}`));
+        }
+        if (pageNum < totalPages - 1) {
+            paginationButtons.push(Markup.button.callback('Вперед ➡️', `report_timestamps_page_${objectIndex}_${dateIndex}_${pageNum + 1}`));
+        }
+    }
+    if (paginationButtons.length > 0) {
+        buttons.push(paginationButtons);
+    }
     buttons.push([Markup.button.callback('↩️ Назад', `select_report_object_${objectIndex}`)]);
 
-    await ctx.reply(`Выберите время отчета для "${objectName}" за ${selectedDate}:`, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(
+        `Выберите время отчета для "${objectName}" за ${selectedDate} (Страница ${pageNum + 1} из ${totalPages}):`,
+        Markup.inlineKeyboard(buttons)
+    );
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 async function showReportDetails(ctx, reportId) {
@@ -391,8 +453,23 @@ module.exports = (bot) => {
     });
 
     bot.action('view_reports', showReportObjects);
-    bot.action(/select_report_object_(\d+)/, (ctx) => showReportDates(ctx, parseInt(ctx.match[1], 10)));
-    bot.action(/select_report_date_(\d+)_(\d+)/, (ctx) => showReportTimestamps(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
+    bot.action(/select_report_object_(\d+)/, (ctx) => showReportDates(ctx, parseInt(ctx.match[1], 10), 0));
+    bot.action(/report_dates_page_(\d+)_(\d+)/, (ctx) => {
+        const objectIndex = parseInt(ctx.match[1], 10);
+        const page = parseInt(ctx.match[2], 10);
+        showReportDates(ctx, objectIndex, page);
+    });
+    bot.action(/select_report_date_(\d+)_(\d+)/, (ctx) => {
+        const objectIndex = parseInt(ctx.match[1], 10);
+        const dateIndex = parseInt(ctx.match[2], 10);
+        showReportTimestamps(ctx, objectIndex, dateIndex, 0);
+    });
+    bot.action(/report_timestamps_page_(\d+)_(\d+)_(\d+)/, (ctx) => {
+        const objectIndex = parseInt(ctx.match[1], 10);
+        const dateIndex = parseInt(ctx.match[2], 10);
+        const page = parseInt(ctx.match[3], 10);
+        showReportTimestamps(ctx, objectIndex, dateIndex, page);
+    });
     bot.action(/select_report_time_(.+)/, (ctx) => showReportDetails(ctx, ctx.match[1]));
     bot.action(/edit_report_(.+)/, (ctx) => editReport(ctx, ctx.match[1]));
 };
