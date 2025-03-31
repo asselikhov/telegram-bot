@@ -47,6 +47,7 @@ async function initializeDatabase() {
                 organization TEXT NOT NULL,
                 isUsed BOOLEAN DEFAULT FALSE,
                 createdBy TEXT,
+                usedBy TEXT,  -- Добавляем столбец usedBy
                 createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (createdBy) REFERENCES users(userId)
             );
