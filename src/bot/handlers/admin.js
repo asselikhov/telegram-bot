@@ -65,7 +65,7 @@ module.exports = (bot) => {
         const inviteCodeData = await loadInviteCode(reviewUserId);
         console.log('[review] Полные данные inviteCodeData для userId', reviewUserId, ':', inviteCodeData);
 
-        const creatorId = inviteCodeData?.createdBy; // Используем createdBy (с большой B)
+        const creatorId = inviteCodeData?.createdBy;
         console.log('[review] ID создателя кода:', creatorId, 'для пользователя:', reviewUserId);
 
         let creatorFullName;
@@ -77,12 +77,10 @@ module.exports = (bot) => {
         }
         console.log('[review] Создатель:', creatorFullName);
 
-        // Форматирование времени использования
-        const usedAt = inviteCodeData?.usedAt // Используем usedAt (с большой A)
+        const usedAt = inviteCodeData?.usedAt
             ? new Date(inviteCodeData.usedAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })
             : 'Не указано';
 
-        // Обработка selectedObjects
         const selectedObjects = Array.isArray(user.selectedObjects)
             ? user.selectedObjects
             : user.selectedObjects
@@ -104,7 +102,7 @@ module.exports = (bot) => {
 ${objectsList}  
 🔑 **Код создан:** ${creatorFullName}  
 ⏰ **Использован:** ${usedAt}
-    `.trim();
+        `.trim();
 
         const message = await ctx.reply(userData, {
             parse_mode: 'Markdown',
@@ -117,6 +115,24 @@ ${objectsList}
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
+    bot.action(/approve_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        const approveUserId = ctx.match[1];
+        const users = await loadUsers();
+        const user = users[approveUserId];
+
+        if (user && !user.isApproved) {
+            users[approveUserId].isApproved = 1;
+            await saveUser(approveUserId, users[approveUserId]);
+            await ctx.telegram.sendMessage(approveUserId, '✅ Ваша заявка одобрена! Используйте /start для входа в меню.');
+            await ctx.reply(`Заявка ${user.fullName || approveUserId} одобрена.`);
+            console.log(`[admin.js] Пользователь ${approveUserId} (${user.fullName}) одобрен`);
+        }
+        await showApplications(ctx);
+    });
+
     bot.action(/reject_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
@@ -127,8 +143,9 @@ ${objectsList}
 
         if (user && !user.isApproved) {
             await deleteUser(rejectUserId);
-            await ctx.telegram.sendMessage(rejectUserId, 'Ваша заявка отклонена администратором.');
-            await ctx.reply(`Заявка ${user.fullName} отклонена.`);
+            await ctx.telegram.sendMessage(rejectUserId, '❌ Ваша заявка отклонена администратором.');
+            await ctx.reply(`Заявка ${user.fullName || rejectUserId} отклонена.`);
+            console.log(`[admin.js] Заявка пользователя ${rejectUserId} (${user.fullName}) отклонена`);
         }
         await showApplications(ctx);
     });
