@@ -81,12 +81,12 @@ async function showEditData(ctx) {
 
     const buttons = [
         [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
-        [Markup.button.callback('✏️ Изменить должность', 'edit_position')],
-        [Markup.button.callback('✏️ Изменить организацию', 'edit_organization')],
-        [Markup.button.callback('✏️ Изменить объекты', 'edit_object')],
-        [Markup.button.callback('✏️ Изменить статус', 'edit_status')],
-        [Markup.button.callback('↩️ Назад', 'profile')]
-    ];
+        [Markup.button.callback('✏️ Изменить должность', 'edit_position }],
+                [Markup.button.callback('✏️ Изменить организацию', 'edit_organization')],
+            [Markup.button.callback('✏️ Изменить объекты', 'edit_object')],
+            [Markup.button.callback('✏️ Изменить статус', 'edit_status')],
+            [Markup.button.callback('↩️ Назад', 'profile')]
+        ];
 
     const message = await ctx.reply('Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons));
     ctx.state.userStates[userId].messageIds.push(message.message_id);
@@ -97,7 +97,6 @@ module.exports = (bot) => {
     bot.action('profile', showProfile);
     bot.action('edit_data', showEditData);
 
-    // Добавляем обработчик для редактирования ФИО
     bot.action('edit_fullName', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
@@ -105,27 +104,6 @@ module.exports = (bot) => {
         ctx.state.userStates[userId].step = 'editFullNameInput';
         const message = await ctx.reply('Введите новое ФИО:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-    });
-
-    // Обработка ввода текста для редактирования ФИО
-    bot.on('text', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        const state = ctx.state.userStates[userId];
-        if (!state || !state.step) return;
-
-        await clearPreviousMessages(ctx, userId);
-        const users = await loadUsers();
-
-        if (state.step === 'editFullNameInput') {
-            const newFullName = ctx.message.text.trim();
-            users[userId].fullName = newFullName;
-            await saveUser(userId, users[userId]);
-            console.log(`ФИО обновлено для userId ${userId}: ${newFullName}`);
-
-            state.step = null;
-            await ctx.reply(`Ваше ФИО изменено на "${newFullName}"`);
-            await showProfile(ctx);
-        }
     });
 };
 

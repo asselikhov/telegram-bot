@@ -102,6 +102,15 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
 
             ctx.state.userStates[userId] = { step: null, messageIds: [] };
             console.log(`Заявка от userId ${userId} отправлена администратору`);
+        } else if (state.step === 'editFullNameInput') {
+            const newFullName = ctx.message.text.trim();
+            users[userId].fullName = newFullName;
+            await saveUser(userId, users[userId]);
+            console.log(`ФИО обновлено для userId ${userId}: ${newFullName}`);
+
+            state.step = null;
+            await ctx.reply(`Ваше ФИО изменено на "${newFullName}"`);
+            await require('../handlers/menu').showProfile(ctx);
         }
     });
 };
