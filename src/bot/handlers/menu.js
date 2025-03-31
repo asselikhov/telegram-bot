@@ -2,6 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
+const { ADMIN_ID } = require('../../config/config');
 
 async function showMainMenu(ctx) {
     const userId = ctx.from.id.toString();
@@ -28,7 +29,7 @@ async function showMainMenu(ctx) {
     if (user.isApproved) {
         buttons.splice(1, 0, [Markup.button.callback('📤 Выгрузить отчет', 'download_report')]);
     }
-    if (userId === process.env.ADMIN_ID) {
+    if (userId === ADMIN_ID) {
         buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);
     }
 
@@ -66,7 +67,7 @@ ${statusEmoji} ${user.status || 'Не указан'}
     const buttons = [
         [Markup.button.callback('✏️ Изменить данные', 'edit_data')],
         [Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')],
-        [Markup.button.callback('🔑 Пригласительный код', userId === process.env.ADMIN_ID ? 'admin_invite_codes' : 'generate_invite_code')],
+        [Markup.button.callback('🔑 Пригласительный код', userId === ADMIN_ID ? 'admin_invite_code_menu' : 'generate_invite_code')],
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ];
 
