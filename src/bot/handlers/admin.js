@@ -3,7 +3,7 @@ const { loadUsers, saveUser, deleteUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
 const { showMainMenu } = require('./menu');
 const { ADMIN_ID } = require('../../config/config');
-const { loadInviteCode } = require('../../database/inviteCodeModel'); // Добавляем импорт
+const { loadInviteCode } = require('../../database/inviteCodeModel');
 
 async function showAdminPanel(ctx) {
     const userId = ctx.from.id.toString();
@@ -62,7 +62,6 @@ module.exports = (bot) => {
 
         if (!user || user.isApproved) return;
 
-        // Получаем данные о последнем использованном коде
         const inviteCodeData = await loadInviteCode(reviewUserId);
         const creatorId = inviteCodeData?.createdBy;
         const creator = creatorId ? users[creatorId] : null;

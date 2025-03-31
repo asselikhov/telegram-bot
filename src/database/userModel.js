@@ -1,4 +1,4 @@
-const { pool } = require('./db');
+const { pool } = require('../db'); // Исправляем путь на ../db
 
 async function loadUsers() {
     const client = await pool.connect();
@@ -55,7 +55,7 @@ async function saveUser(userId, userData) {
     }
 }
 
-async function deleteUser(userId) { // Новая функция для удаления пользователя
+async function deleteUser(userId) {
     const client = await pool.connect();
     try {
         await client.query('DELETE FROM users WHERE userid = $1', [userId]);
