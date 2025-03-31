@@ -63,6 +63,8 @@ module.exports = (bot) => {
         if (!user || user.isApproved) return;
 
         const inviteCodeData = await loadInviteCode(reviewUserId);
+        console.log('[review] Полные данные inviteCodeData для userId', reviewUserId, ':', inviteCodeData);
+
         const creatorId = inviteCodeData?.createdBy;
         console.log('[review] ID создателя кода:', creatorId, 'для пользователя:', reviewUserId);
 
