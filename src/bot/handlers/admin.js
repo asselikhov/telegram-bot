@@ -79,7 +79,7 @@ module.exports = (bot) => {
 
         const message = await ctx.reply(userData, Markup.inlineKeyboard([
             [Markup.button.callback('✅ Одобрить', `approve_${reviewUserId}`)],
-            [Markup.button at('❌ Отклонить', `reject_${reviewUserId}`)],
+            [Markup.button.callback('❌ Отклонить', `reject_${reviewUserId}`)], // Исправлено
             [Markup.button.callback('↩️ Назад', 'view_applications')]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
