@@ -72,7 +72,7 @@ async function loadInviteCode(userId) {
     const client = await pool.connect();
     try {
         const res = await client.query(`
-            SELECT code, organization, createdBy, usedBy, usedAt 
+            SELECT code, organization, createdby AS "createdBy", usedby AS "usedBy", usedat AS "usedAt"
             FROM invite_codes 
             WHERE usedBy = $1 
             ORDER BY createdAt DESC 
