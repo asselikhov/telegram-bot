@@ -97,7 +97,7 @@ module.exports = (bot) => {
             await markInviteCodeAsUsed(code, userId);
 
             state.step = 'selectObjects';
-            state.createdBy = createdBy; // Сохраняем для отладки, хотя не обязательно
+            state.createdBy = createdBy; // Для отладки
             const { showObjectSelection } = require('../actions/objects');
             await showObjectSelection(ctx, userId, []);
             console.log(`Пользователь ${userId} перешел к выбору объектов после ввода кода`);
