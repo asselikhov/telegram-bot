@@ -58,7 +58,7 @@ module.exports = {
     DATABASE_URL: process.env.DATABASE_URL,
     PORT: process.env.PORT || 3000,
     OBJECTS_LIST_CYRILLIC,
-    BASE_POSITIONS_LIST: ['Производитель работ', 'Руководитель проекта', 'Начальник участка', 'Делопроизводитель', 'Инженер по комплектации', 'Инженер ПТО', 'Инженер СКК'],
+    BASE_POSITIONS_LIST: ['Производитель работ', 'Руководитель проекта', 'Начальник участка', 'Делопроизводитель', 'Инженер МТО', 'Инженер ПТО', 'Инженер СКК', 'Главный инженер'],
     ORGANIZATIONS_LIST,
     GENERAL_GROUP_CHAT_IDS, // Заменяем старый GENERAL_GROUP_CHAT_ID
     OBJECT_GROUPS: {
