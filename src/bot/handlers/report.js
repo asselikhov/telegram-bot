@@ -3,7 +3,7 @@ const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, loadAllReports } = require('../../database/reportModel');
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
-const { clearPreviousMessages, formatDate } = require('../utils');
+const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 
 async function showDownloadReport(ctx, page = 0) {
     const userId = ctx.from.id.toString();
@@ -124,8 +124,10 @@ async function downloadReportFile(ctx, objectIndex) {
     ];
 
     objectReports.sort((a, b) => {
-        if (a.date === b.date) return a.userId.localeCompare(b.userId);
-        return b.date.localeCompare(a.date); // Сравниваем как строки DD.MM.YYYY
+        const dateA = parseAndFormatDate(a.date);
+        const dateB = parseAndFormatDate(b.date);
+        if (dateA === dateB) return a.userId.localeCompare(b.userId);
+        return dateB.localeCompare(dateA); // Сравниваем как строки DD.MM.YYYY
     });
 
     let currentRow = 3;
@@ -141,9 +143,10 @@ async function downloadReportFile(ctx, objectIndex) {
         const user = users[report.userId] || {};
         const itrText = `${user.position || 'Не указано'}\n${user.organization || 'Не указано'}\n${report.fullName || user.fullName || 'Не указано'}`;
         const photosText = report.photos && report.photos.length > 0 ? `${report.photos.length} фото` : 'Нет';
+        const formattedDate = parseAndFormatDate(report.date); // Преобразуем дату в DD.MM.YYYY
 
         worksheet.getRow(currentRow).values = [
-            report.date, // Уже в DD.MM.YYYY
+            formattedDate, // Используем преобразованную дату
             report.workDone,
             report.materials,
             itrText,
@@ -164,22 +167,22 @@ async function downloadReportFile(ctx, objectIndex) {
         );
         worksheet.getRow(currentRow).height = Math.max(15, maxLines * 15);
 
-        if (lastDate !== report.date && lastDate !== null && dateCount > 1) {
+        if (lastDate !== formattedDate && lastDate !== null && dateCount > 1) {
             worksheet.mergeCells(`A${dateStartRow}:A${currentRow - 1}`);
         }
         if (lastUserId !== report.userId && lastUserId !== null && itrCount > 1) {
             worksheet.mergeCells(`D${itrStartRow}:D${currentRow - 1}`);
         }
 
-        if (lastDate !== report.date) {
-            lastDate = report.date;
+        if (lastDate !== formattedDate) {
+            lastDate = formattedDate;
             dateStartRow = currentRow;
             dateCount = 1;
         } else {
             dateCount++;
         }
 
-        if (lastUserId !== report.userId || lastDate !== report.date) {
+        if (lastUserId !== report.userId || lastDate !== formattedDate) {
             lastUserId = report.userId;
             itrStartRow = currentRow;
             itrCount = 1;
@@ -261,7 +264,7 @@ async function showReportDates(ctx, objectIndex) {
     await clearPreviousMessages(ctx, userId);
 
     const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
-    const uniqueDates = [...new Set(objectReports.map(r => r.date))];
+    const uniqueDates = [...new Set(objectReports.map(r => parseAndFormatDate(r.date)))]; // Преобразуем даты
     const buttons = uniqueDates.map((date, index) =>
         [Markup.button.callback(date, `select_report_date_${objectIndex}_${index}`)]
     );
@@ -277,12 +280,12 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const objectName = uniqueObjects[objectIndex];
     const objectReports = Object.entries(reports).filter(([_, r]) => r.objectName === objectName);
-    const uniqueDates = [...new Set(objectReports.map(([, r]) => r.date))];
+    const uniqueDates = [...new Set(objectReports.map(([, r]) => parseAndFormatDate(r.date)))];
     const selectedDate = uniqueDates[dateIndex];
 
     await clearPreviousMessages(ctx, userId);
 
-    const dateReports = objectReports.filter(([_, r]) => r.date === selectedDate);
+    const dateReports = objectReports.filter(([_, r]) => parseAndFormatDate(r.date) === selectedDate);
     const buttons = dateReports.map(([reportId, report]) => {
         const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
         return [Markup.button.callback(time, `select_report_time_${reportId}`)];
@@ -304,9 +307,10 @@ async function showReportDetails(ctx, reportId) {
         return ctx.reply('Ошибка: отчёт не найден.');
     }
 
+    const formattedDate = parseAndFormatDate(report.date); // Преобразуем дату в DD.MM.YYYY
     const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
     const reportText = `
-📅 ОТЧЕТ ЗА ${report.date}  
+📅 ОТЧЕТ ЗА ${formattedDate}  
 🏢 ${report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
 👷 ${report.fullName}  
@@ -321,10 +325,10 @@ ${report.materials}
     `.trim();
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
-    const uniqueDates = [...new Set(Object.values(reports).filter(r => r.objectName === report.objectName).map(r => r.date))];
+    const uniqueDates = [...new Set(Object.values(reports).filter(r => r.objectName === report.objectName).map(r => parseAndFormatDate(r.date)))];
     const buttons = [
         [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
-        [Markup.button.callback('↩️ Назад', `select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(report.date)}`)]
+        [Markup.button.callback('↩️ Назад', `select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(formattedDate)}`)]
     ];
 
     if (report.photos && report.photos.length > 0) {

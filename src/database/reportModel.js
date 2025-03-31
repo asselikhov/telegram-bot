@@ -9,7 +9,7 @@ async function loadUserReports(userId) {
         res.rows.forEach(row => {
             reports[row.reportid] = {
                 objectName: row.objectname,
-                date: row.date, // Уже в формате DD.MM.YYYY
+                date: row.date, // Может быть в старом формате (например, YYYY-MM-DD)
                 timestamp: row.timestamp,
                 workDone: row.workdone,
                 materials: row.materials,
@@ -50,8 +50,8 @@ async function getReportText(objectName) {
         );
         if (res.rows.length === 0) return '';
         return res.rows.map(row => {
-            const date = row.date; // Уже в DD.MM.YYYY
-            const time = new Date(row.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' }); // Оставим только время
+            const date = row.date; // Оставляем как есть, форматирование в report.js
+            const time = new Date(row.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
             return `${date} ${time}\n${row.objectname}\n${row.position || 'Не указана'} ${row.organization || 'Не указана'} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n${row.materials}\n--------------------------\n`;
         }).join('');
     } finally {
@@ -69,7 +69,7 @@ async function loadAllReports() {
                 reportId: row.reportid,
                 userId: row.userid,
                 objectName: row.objectname,
-                date: row.date, // Уже в DD.MM.YYYY
+                date: row.date, // Может быть в старом формате
                 timestamp: row.timestamp,
                 workDone: row.workdone,
                 materials: row.materials,

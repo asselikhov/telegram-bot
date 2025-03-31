@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { clearPreviousMessages, formatDate } = require('../utils');
+const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 const { loadInviteCode, markInviteCodeAsUsed, validateInviteCode } = require('../../database/inviteCodeModel');
 const { showObjectSelection } = require('../actions/objects');
 const { showProfile } = require('./menu');
@@ -260,7 +260,7 @@ ${report.materials}
         const users = await loadUsers();
 
         const newTimestamp = new Date().toISOString();
-        const formattedDate = state.report.date; // Оставляем исходную дату в DD.MM.YYYY
+        const formattedDate = parseAndFormatDate(state.report.date); // Преобразуем старую дату в DD.MM.YYYY
         const newReportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`; // Например, 31_03_2025_2
         const newReport = {
             reportId: newReportId,
