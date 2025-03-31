@@ -252,7 +252,8 @@ async function showReportObjects(ctx) {
     );
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
-    await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 async function showReportDates(ctx, objectIndex, page = 0) {
@@ -297,7 +298,8 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     if (paginationButtons.length > 0) {
         buttons.push(paginationButtons);
     }
-    buttons.push([Markup.button.callback('↩️ Назад', `select_report_object_${objectIndex}`)]);
+    // Изменяем действие кнопки "Назад" на 'view_reports' для возврата к списку объектов
+    buttons.push([Markup.button.callback('↩️ Назад', 'view_reports')]);
 
     const message = await ctx.reply(
         `Выберите дату для объекта "${objectName}" (Страница ${pageNum + 1} из ${totalPages}):`,
