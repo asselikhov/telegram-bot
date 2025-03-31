@@ -69,7 +69,12 @@ module.exports = (bot) => {
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        if (!state) return;
+        console.log(`[position.js] Получен текст для userId ${userId}, state:`, state); // Отладка
+
+        if (!state || !state.step) {
+            console.log(`[position.js] Нет состояния или шага для userId ${userId}`);
+            return;
+        }
 
         await clearPreviousMessages(ctx, userId);
         const users = await loadUsers();
@@ -111,6 +116,8 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             state.step = null;
             await ctx.reply(`Ваше ФИО изменено на "${newFullName}"`);
             await require('../handlers/menu').showProfile(ctx);
+        } else {
+            console.log(`[position.js] Неизвестный шаг для userId ${userId}: ${state.step}`);
         }
     });
 };
