@@ -38,7 +38,7 @@ module.exports = (bot) => {
             const messageText = `
 🔑 **Пригласительный код**  
 ➖➖➖➖➖➖➖➖➖  
-Организация: **${organization}**  
+**${organization}**  
 Код: \`${code}\`  
 Отправьте этот код пользователю для регистрации.
             `.trim();
@@ -48,7 +48,6 @@ module.exports = (bot) => {
                 {
                     parse_mode: 'Markdown',
                     reply_markup: Markup.inlineKeyboard([
-                        [Markup.button.callback('📋 Скопировать код', `copy_code_${code}`)],
                         [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
                     ]).reply_markup
                 }
@@ -140,7 +139,7 @@ module.exports = (bot) => {
             const messageText = `
 🔑 **Пригласительный код**  
 ➖➖➖➖➖➖➖➖➖  
-Организация: **${organization}**  
+**${organization}**  
 Код: \`${code}\`  
 Отправьте этот код пользователю для регистрации.
             `.trim();
@@ -150,7 +149,6 @@ module.exports = (bot) => {
                 {
                     parse_mode: 'Markdown',
                     reply_markup: Markup.inlineKeyboard([
-                        [Markup.button.callback('📋 Скопировать код', `copy_code_${code}`)],
                         [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
                     ]).reply_markup
                 }
@@ -161,13 +159,5 @@ module.exports = (bot) => {
             console.error('[generate_admin_code] Ошибка при генерации кода:', error);
             await ctx.reply('Произошла ошибка при генерации кода. Попробуйте позже.');
         }
-    });
-
-    // Обработчик копирования кода
-    bot.action(/copy_code_(.+)/, async (ctx) => {
-        const code = ctx.match[1];
-        console.log('[copy_code] Копирование кода:', code, 'для userId:', ctx.from.id);
-
-        await ctx.reply(`Код для копирования: \`${code}\`\nВыделите код выше и скопируйте его.`, { parse_mode: 'Markdown' });
     });
 };
