@@ -42,17 +42,14 @@ async function initializeDatabase() {
             );
         `);
         await client.query(`
-            DO $$
-            BEGIN
-                IF NOT EXISTS (
-                    SELECT 1 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'reports' 
-                    AND column_name = 'fullname'
-                ) THEN
-                    ALTER TABLE reports ADD COLUMN fullName TEXT;
-                END IF;
-            END $$;
+            CREATE TABLE IF NOT EXISTS invite_codes (
+                code TEXT PRIMARY KEY,
+                organization TEXT NOT NULL,
+                isUsed BOOLEAN DEFAULT FALSE,
+                createdBy TEXT,
+                createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (createdBy) REFERENCES users(userId)
+            );
         `);
         console.log('Таблицы созданы или уже существуют');
     } catch (err) {

@@ -1,4 +1,3 @@
-// menu.js
 const { Markup } = require('telegraf');
 const { loadUsers } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
@@ -12,7 +11,6 @@ async function showMainMenu(ctx) {
     await clearPreviousMessages(ctx, userId);
     if (ctx.state.userStates[userId]) {
         ctx.state.userStates[userId].messageIds = [];
-        console.log(`messageIds очищен для userId ${userId} при возврате в главное меню`);
     }
 
     const menuText = `
@@ -66,12 +64,9 @@ ${statusEmoji} ${user.status || 'Не указан'}
 `.trim();
 
     const buttons = [
-        [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
-        [Markup.button.callback('✏️ Изменить должность', 'edit_position')],
-        [Markup.button.callback('✏️ Изменить организацию', 'edit_organization')],
-        [Markup.button.callback('✏️ Изменить объекты', 'edit_object')],
-        [Markup.button.callback('✏️ Изменить статус', 'edit_status')],
+        [Markup.button.callback('✏️ Изменить данные', 'edit_data')],
         [Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')],
+        [Markup.button.callback('🔑 Пригласительный код', userId === process.env.ADMIN_ID ? 'admin_invite_codes' : 'generate_invite_code')],
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ];
 
@@ -79,9 +74,27 @@ ${statusEmoji} ${user.status || 'Не указан'}
     ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
+async function showEditData(ctx) {
+    const userId = ctx.from.id.toString();
+    await clearPreviousMessages(ctx, userId);
+
+    const buttons = [
+        [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
+        [Markup.button.callback('✏️ Изменить должность', 'edit_position')],
+        [Markup.button.callback('✏️ Изменить организацию', 'edit_organization')],
+        [Markup.button.callback('✏️ Изменить объекты', 'edit_object')],
+        [Markup.button.callback('✏️ Изменить статус', 'edit_status')],
+        [Markup.button.callback('↩️ Назад', 'profile')]
+    ];
+
+    const message = await ctx.reply('Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
+}
+
 module.exports = (bot) => {
     bot.action('main_menu', showMainMenu);
     bot.action('profile', showProfile);
+    bot.action('edit_data', showEditData);
 };
 
 module.exports.showMainMenu = showMainMenu;

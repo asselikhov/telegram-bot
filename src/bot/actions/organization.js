@@ -1,7 +1,7 @@
-// src/bot/actions/organization.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { ORGANIZATIONS_LIST, ORGANIZATION_OBJECTS } = require('../../config/config');
+const { validateInviteCode, markInviteCodeAsUsed } = require('../../database/inviteCodeModel');
 const { clearPreviousMessages } = require('../utils');
 const { showProfile } = require('../handlers/menu');
 const { showObjectSelection } = require('./objects');
@@ -44,36 +44,8 @@ module.exports = (bot) => {
     bot.action('edit_organization', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
-        const buttons = ORGANIZATIONS_LIST.map((org, index) => [Markup.button.callback(org, `select_org_edit_${index}`)]);
-        buttons.push([Markup.button.callback('Ввести свою организацию', 'custom_org_edit')]);
-        buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
-        const message = await ctx.reply('Выберите новую организацию:', Markup.inlineKeyboard(buttons));
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
-    });
-
-    bot.action(/select_org_edit_(\d+)/, async (ctx) => {
-        const userId = ctx.from.id.toString();
-        const orgIndex = parseInt(ctx.match[1], 10);
-        const selectedOrganization = ORGANIZATIONS_LIST[orgIndex];
-        if (!selectedOrganization) return;
-
-        await clearPreviousMessages(ctx, userId);
-
-        const users = await loadUsers();
-        users[userId].organization = selectedOrganization;
-        users[userId].selectedObjects = [];
-        await saveUser(userId, users[userId]);
-
-        ctx.state.userStates[userId].step = null;
-        await ctx.reply(`Организация обновлена на "${selectedOrganization}".`);
-        await showProfile(ctx);
-    });
-
-    bot.action('custom_org_edit', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId].step = 'customOrgEditInput';
-        const message = await ctx.reply('Введите новое название организации:');
+        ctx.state.userStates[userId].step = 'enterInviteCode';
+        const message = await ctx.reply('Введите пригласительный код для смены организации:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
@@ -92,13 +64,23 @@ module.exports = (bot) => {
             state.step = 'selectObjects';
             await showObjectSelection(ctx, userId, []);
             console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
-        } else if (state.step === 'customOrgEditInput') {
-            users[userId].organization = ctx.message.text.trim();
+        } else if (state.step === 'enterInviteCode') {
+            const code = ctx.message.text.trim();
+            const organization = await validateInviteCode(code);
+            if (!organization) {
+                const message = await ctx.reply('Неверный или уже использованный код. Попробуйте снова:');
+                ctx.state.userStates[userId].messageIds.push(message.message_id);
+                return;
+            }
+
+            users[userId].organization = organization;
             users[userId].selectedObjects = [];
             await saveUser(userId, users[userId]);
-            state.step = null;
-            await ctx.reply(`Организация обновлена на "${users[userId].organization}".`);
-            await showProfile(ctx);
+            await markInviteCodeAsUsed(code);
+
+            state.step = 'selectObjects';
+            await ctx.reply(`Организация изменена на "${organization}". Теперь выберите объекты:`);
+            await showObjectSelection(ctx, userId, []);
         }
     });
 };

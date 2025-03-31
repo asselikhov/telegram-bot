@@ -6,6 +6,7 @@ const menuHandler = require('./handlers/menu');
 const reportHandler = require('./handlers/report');
 const adminHandler = require('./handlers/admin');
 const commandsHandler = require('./handlers/commands');
+const inviteCodeHandler = require('./handlers/inviteCodeHandler');
 const positionActions = require('./actions/position');
 const organizationActions = require('./actions/organization');
 const objectsActions = require('./actions/objects');
@@ -39,7 +40,6 @@ bot.use((ctx, next) => {
   ctx.reply = async (text, extra) => {
     const message = await originalReply(text, extra);
     if (userStates[userId]) {
-      // Добавляем ID только если его ещё нет в массиве
       if (!userStates[userId].messageIds.includes(message.message_id)) {
         userStates[userId].messageIds.push(message.message_id);
         console.log(`[ctx.reply] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
@@ -55,7 +55,6 @@ bot.use((ctx, next) => {
     const message = await originalSendMessage(chatId, text, extra);
     const targetUserId = chatId.toString();
     if (userStates[targetUserId]) {
-      // Аналогичная проверка для sendMessage
       if (!userStates[targetUserId].messageIds.includes(message.message_id)) {
         userStates[targetUserId].messageIds.push(message.message_id);
         console.log(`[sendMessage] Сообщение ${message.message_id} добавлено в messageIds для userId ${targetUserId}. Массив:`, userStates[targetUserId].messageIds);
@@ -95,7 +94,7 @@ async function sendReportReminders() {
 ${user.fullName}, вы не предоставили отчет за ${currentDate}.
 
 Пожалуйста, внесите данные.
-          `.trim();
+                    `.trim();
           try {
             await bot.telegram.sendMessage(groupChatId, reminderText);
             console.log(`Напоминание отправлено для ${user.fullName} в группу ${groupChatId} в 19:00 по Москве`);
@@ -122,6 +121,7 @@ menuHandler(bot);
 reportHandler(bot);
 adminHandler(bot);
 commandsHandler(bot);
+inviteCodeHandler(bot);
 positionActions(bot);
 organizationActions(bot);
 objectsActions(bot);
