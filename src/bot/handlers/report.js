@@ -146,7 +146,7 @@ async function downloadReportFile(ctx, objectIndex) {
         const formattedDate = parseAndFormatDate(report.date); // Преобразуем дату в DD.MM.YYYY
 
         worksheet.getRow(currentRow).values = [
-            formattedDate, // Используем преобразованную дату
+            formattedDate,
             report.workDone,
             report.materials,
             itrText,
@@ -203,7 +203,7 @@ async function downloadReportFile(ctx, objectIndex) {
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
-    const filename = `${objectName}_reports_${formatDate(new Date())}.xlsx`; // DD.MM.YYYY в имени файла
+    const filename = `${objectName}_reports_${formatDate(new Date())}.xlsx`;
 
     await ctx.replyWithDocument({
         source: buffer,
@@ -264,7 +264,9 @@ async function showReportDates(ctx, objectIndex) {
     await clearPreviousMessages(ctx, userId);
 
     const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
-    const uniqueDates = [...new Set(objectReports.map(r => parseAndFormatDate(r.date)))]; // Преобразуем даты
+    // Сортируем отчеты по timestamp по возрастанию и извлекаем уникальные даты
+    const sortedReports = objectReports.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const uniqueDates = [...new Set(sortedReports.map(r => parseAndFormatDate(r.date)))];
     const buttons = uniqueDates.map((date, index) =>
         [Markup.button.callback(date, `select_report_date_${objectIndex}_${index}`)]
     );
@@ -280,12 +282,15 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex) {
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const objectName = uniqueObjects[objectIndex];
     const objectReports = Object.entries(reports).filter(([_, r]) => r.objectName === objectName);
-    const uniqueDates = [...new Set(objectReports.map(([, r]) => parseAndFormatDate(r.date)))];
+
+    // Сортируем отчеты по timestamp по возрастанию
+    const sortedReports = objectReports.sort((a, b) => a[1].timestamp.localeCompare(b[1].timestamp));
+    const uniqueDates = [...new Set(sortedReports.map(([, r]) => parseAndFormatDate(r.date)))];
     const selectedDate = uniqueDates[dateIndex];
 
     await clearPreviousMessages(ctx, userId);
 
-    const dateReports = objectReports.filter(([_, r]) => parseAndFormatDate(r.date) === selectedDate);
+    const dateReports = sortedReports.filter(([_, r]) => parseAndFormatDate(r.date) === selectedDate);
     const buttons = dateReports.map(([reportId, report]) => {
         const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
         return [Markup.button.callback(time, `select_report_time_${reportId}`)];
@@ -307,7 +312,7 @@ async function showReportDetails(ctx, reportId) {
         return ctx.reply('Ошибка: отчёт не найден.');
     }
 
-    const formattedDate = parseAndFormatDate(report.date); // Преобразуем дату в DD.MM.YYYY
+    const formattedDate = parseAndFormatDate(report.date);
     const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
     const reportText = `
 📅 ОТЧЕТ ЗА ${formattedDate}  
