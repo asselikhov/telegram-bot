@@ -81,12 +81,12 @@ async function showEditData(ctx) {
 
     const buttons = [
         [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
-        [Markup.button.callback('✏️ Изменить должность', 'edit_position }],
-                [Markup.button.callback('✏️ Изменить организацию', 'edit_organization')],
-            [Markup.button.callback('✏️ Изменить объекты', 'edit_object')],
-            [Markup.button.callback('✏️ Изменить статус', 'edit_status')],
-            [Markup.button.callback('↩️ Назад', 'profile')]
-        ];
+        [Markup.button.callback('✏️ Изменить должность', 'edit_position')], // Убрана лишняя запятая
+        [Markup.button.callback('✏️ Изменить организацию', 'edit_organization')],
+        [Markup.button.callback('✏️ Изменить объекты', 'edit_object')],
+        [Markup.button.callback('✏️ Изменить статус', 'edit_status')],
+        [Markup.button.callback('↩️ Назад', 'profile')]
+    ];
 
     const message = await ctx.reply('Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons));
     ctx.state.userStates[userId].messageIds.push(message.message_id);
