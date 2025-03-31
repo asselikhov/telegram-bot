@@ -3,7 +3,7 @@ const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, loadAllReports } = require('../../database/reportModel');
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
-const { clearPreviousMessages } = require('../utils');
+const { clearPreviousMessages, formatDate } = require('../utils');
 
 async function showDownloadReport(ctx, page = 0) {
     const userId = ctx.from.id.toString();
@@ -125,7 +125,7 @@ async function downloadReportFile(ctx, objectIndex) {
 
     objectReports.sort((a, b) => {
         if (a.date === b.date) return a.userId.localeCompare(b.userId);
-        return b.date.localeCompare(a.date);
+        return b.date.localeCompare(a.date); // Сравниваем как строки DD.MM.YYYY
     });
 
     let currentRow = 3;
@@ -143,7 +143,7 @@ async function downloadReportFile(ctx, objectIndex) {
         const photosText = report.photos && report.photos.length > 0 ? `${report.photos.length} фото` : 'Нет';
 
         worksheet.getRow(currentRow).values = [
-            report.date,
+            report.date, // Уже в DD.MM.YYYY
             report.workDone,
             report.materials,
             itrText,
@@ -200,7 +200,7 @@ async function downloadReportFile(ctx, objectIndex) {
     }
 
     const buffer = await workbook.xlsx.writeBuffer();
-    const filename = `${objectName}_reports_${new Date().toISOString().split('T')[0]}.xlsx`;
+    const filename = `${objectName}_reports_${formatDate(new Date())}.xlsx`; // DD.MM.YYYY в имени файла
 
     await ctx.replyWithDocument({
         source: buffer,
@@ -265,7 +265,7 @@ async function showReportDates(ctx, objectIndex) {
     const buttons = uniqueDates.map((date, index) =>
         [Markup.button.callback(date, `select_report_date_${objectIndex}_${index}`)]
     );
-    buttons.push([Markup.button.callback('↩️ Назад', 'view_reports')]);
+    buttons.push([Markup.button.callback('↩️ Назад', `select_report_object_${objectIndex}`)]);
 
     await ctx.reply(`Выберите дату для объекта "${objectName}":`, Markup.inlineKeyboard(buttons));
 }

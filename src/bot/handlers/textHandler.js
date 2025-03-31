@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { clearPreviousMessages } = require('../utils');
+const { clearPreviousMessages, formatDate } = require('../utils');
 const { loadInviteCode, markInviteCodeAsUsed, validateInviteCode } = require('../../database/inviteCodeModel');
 const { showObjectSelection } = require('../actions/objects');
 const { showProfile } = require('./menu');
@@ -22,7 +22,6 @@ module.exports = (bot) => {
         const users = await loadUsers();
 
         switch (state.step) {
-            // Регистрация: ввод кода
             case 'enterInviteCode':
                 const code = ctx.message.text.trim();
                 const inviteData = await validateInviteCode(code);
@@ -40,7 +39,6 @@ module.exports = (bot) => {
                 await showObjectSelection(ctx, userId, []);
                 break;
 
-            // Регистрация: ввод ФИО
             case 'enterFullName':
                 const fullName = ctx.message.text.trim();
                 users[userId].fullName = fullName;
@@ -67,7 +65,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 ctx.state.userStates[userId] = { step: null, messageIds: [] };
                 break;
 
-            // Редактирование ФИО
             case 'editFullNameInput':
                 const newFullName = ctx.message.text.trim();
                 users[userId].fullName = newFullName;
@@ -78,7 +75,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 await showProfile(ctx);
                 break;
 
-            // Ввод своей организации
             case 'customOrganizationInput':
                 users[userId].organization = ctx.message.text.trim();
                 users[userId].selectedObjects = [];
@@ -88,7 +84,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
                 break;
 
-            // Ввод кода для смены организации
             case 'changeOrganizationInput':
                 const orgCode = ctx.message.text.trim();
                 const newOrg = await validateInviteCode(orgCode);
@@ -106,7 +101,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 await showObjectSelection(ctx, userId, []);
                 break;
 
-            // Создание отчета
             case 'workDone':
                 state.report.workDone = ctx.message.text.trim();
                 state.step = 'materials';
@@ -123,7 +117,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 state.messageIds.push(photoMessage.message_id);
                 break;
 
-            // Редактирование отчета
             case 'editWorkDone':
                 state.report.workDone = ctx.message.text.trim();
                 state.step = 'editMaterials';
@@ -136,7 +129,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 const editMessage = await ctx.reply(
                     '📸 Прикрепите новые изображения к отчету или нажмите "Готово" для завершения',
                     Markup.inlineKeyboard([
-                        [Markup.button.callback('Удалить все старые фото', 'delete_all_photos')],
+                        [Markup.button.callback('Удалить все фото', 'delete_all_photos')],
                         [Markup.button.callback('Готово', 'finish_edit_report')]
                     ])
                 );
@@ -154,7 +147,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const state = ctx.state.userStates[userId];
         if (!state || (state.step !== 'photos' && state.step !== 'editPhotos')) return;
 
-        // Удаляем предыдущее сообщение бота (если есть)
         if (state.messageIds.length > 0) {
             const lastMessageId = state.messageIds.pop();
             await ctx.telegram.deleteMessage(ctx.chat.id, lastMessageId).catch(e =>
@@ -165,7 +157,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
         state.report.photos.push(photoId);
 
-        // Отправляем новое сообщение с кнопкой "Готово" и заменяем предыдущее
         const newMessage = await ctx.reply(
             'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.',
             Markup.inlineKeyboard([[Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]])
@@ -181,14 +172,15 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         await clearPreviousMessages(ctx, userId);
         const users = await loadUsers();
 
-        const date = new Date().toISOString().split('T')[0];
-        const timestamp = new Date().toISOString();
-        const reportId = `${date}_${users[userId].nextReportId++}`;
+        const date = new Date();
+        const formattedDate = formatDate(date); // DD.MM.YYYY
+        const timestamp = date.toISOString();
+        const reportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`; // Например, 31_03_2025_1
         const report = {
             reportId,
             userId,
             objectName: state.report.objectName,
-            date,
+            date: formattedDate, // Сохраняем в формате DD.MM.YYYY
             timestamp,
             workDone: state.report.workDone,
             materials: state.report.materials,
@@ -197,7 +189,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             photos: state.report.photos || []
         };
         const reportText = `
-📅 ОТЧЕТ ЗА ${date}  
+📅 ОТЧЕТ ЗА ${formattedDate}  
 🏢 ${report.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
 👷 ${users[userId].fullName} 
@@ -268,12 +260,13 @@ ${report.materials}
         const users = await loadUsers();
 
         const newTimestamp = new Date().toISOString();
-        const newReportId = `${state.report.date}_${users[userId].nextReportId++}`;
+        const formattedDate = state.report.date; // Оставляем исходную дату в DD.MM.YYYY
+        const newReportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`; // Например, 31_03_2025_2
         const newReport = {
             reportId: newReportId,
             userId,
             objectName: state.report.objectName,
-            date: state.report.date,
+            date: formattedDate, // Сохраняем в DD.MM.YYYY
             timestamp: newTimestamp,
             workDone: state.report.workDone,
             materials: state.report.materials,
@@ -282,7 +275,7 @@ ${report.materials}
             photos: state.report.photos
         };
         const newReportText = `
-📅 ОТЧЕТ ЗА ${newReport.date} (ОБНОВЛЁН)  
+📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)  
 🏢 ${newReport.objectName}  
 ➖➖➖➖➖➖➖➖➖➖➖ 
 👷 ${users[userId].fullName} 

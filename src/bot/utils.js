@@ -1,3 +1,11 @@
+function formatDate(date) {
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0'); // +1, т.к. месяцы с 0
+    const year = d.getFullYear();
+    return `${day}.${month}.${year}`;
+}
+
 async function clearPreviousMessages(ctx, userId) {
     const state = ctx.state.userStates[userId];
     console.log(`clearPreviousMessages вызван для userId ${userId}. State:`, state);
@@ -20,4 +28,4 @@ async function clearPreviousMessages(ctx, userId) {
     }
 }
 
-module.exports = { clearPreviousMessages };
+module.exports = { clearPreviousMessages, formatDate };

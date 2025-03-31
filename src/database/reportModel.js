@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const { formatDate } = require('../bot/utils');
 
 async function loadUserReports(userId) {
     const client = await pool.connect();
@@ -8,7 +9,7 @@ async function loadUserReports(userId) {
         res.rows.forEach(row => {
             reports[row.reportid] = {
                 objectName: row.objectname,
-                date: row.date,
+                date: row.date, // Уже в формате DD.MM.YYYY
                 timestamp: row.timestamp,
                 workDone: row.workdone,
                 materials: row.materials,
@@ -67,7 +68,7 @@ async function loadAllReports() {
                 reportId: row.reportid,
                 userId: row.userid,
                 objectName: row.objectname,
-                date: row.date,
+                date: row.date, // Уже в DD.MM.YYYY
                 timestamp: row.timestamp,
                 workDone: row.workdone,
                 materials: row.materials,
