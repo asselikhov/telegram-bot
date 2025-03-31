@@ -136,7 +136,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 const editMessage = await ctx.reply(
                     '📸 Прикрепите новые изображения к отчету или нажмите "Готово" для завершения',
                     Markup.inlineKeyboard([
-                        [Markup.button.callback('Удалить все фото', 'delete_all_photos')],
+                        [Markup.button.callback('Удалить все старые фото', 'delete_all_photos')],
                         [Markup.button.callback('Готово', 'finish_edit_report')]
                     ])
                 );
