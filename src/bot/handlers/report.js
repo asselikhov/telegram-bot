@@ -296,32 +296,26 @@ async function showReportDetails(ctx, reportId) {
     }
 
     const reportText = `
-📅 ОТЧЕТ ЗА ${report.date}
+📅 ОТЧЕТ ЗА ${report.date}  
+🏢 ${report.objectName}  
+➖➖➖➖➖➖➖➖➖➖➖ 
+👷 ${report.fullName}  
 
-🏢 ${report.objectName}
+ВЫПОЛНЕННЫЕ РАБОТЫ:  
+${report.workDone}  
 
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+${report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
-👷 ${report.fullName}
-
-ВЫПОЛНЕННЫЕ РАБОТЫ:
-
-${report.workDone}
-
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
-
-${report.materials}
-
-➖➖➖➖➖➖➖➖➖➖➖
-Время: ${new Date(report.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}
-
-`.trim();
+Время: ${new Date(report.timestamp).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}  
+    `.trim();
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const uniqueDates = [...new Set(Object.values(reports).filter(r => r.objectName === report.objectName).map(r => r.date))];
     const buttons = [
-        [Markup.button.callback('✏️ Редактировать', edit_report_${reportId})],
-    [Markup.button.callback('↩️ Назад', select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(report.date)})]
-];
+        [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
+        [Markup.button.callback('↩️ Назад', `select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(report.date)}`)]
+    ];
 
     await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
 }
@@ -333,7 +327,7 @@ async function editReport(ctx, reportId) {
 
     if (!report) {
         await clearPreviousMessages(ctx, userId);
-        console.log([editReport] Ошибка: отчёт с ID ${reportId} не найден);
+        console.log(`[editReport] Ошибка: отчёт с ID ${reportId} не найден`);
         return ctx.reply('Ошибка: не удалось найти отчёт для редактирования.');
     }
 
@@ -376,7 +370,7 @@ module.exports = (bot) => {
 
     bot.action('view_reports', showReportObjects);
     bot.action(/select_report_object_(\d+)/, (ctx) => showReportDates(ctx, parseInt(ctx.match[1], 10)));
-    bot.action(/select_report_date_(\d+)(\d+)/, (ctx) => showReportTimestamps(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
-    bot.action(/select_report_time(.+)/, (ctx) => showReportDetails(ctx, ctx.match[1]));
+    bot.action(/select_report_date_(\d+)_(\d+)/, (ctx) => showReportTimestamps(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
+    bot.action(/select_report_time_(.+)/, (ctx) => showReportDetails(ctx, ctx.match[1]));
     bot.action(/edit_report_(.+)/, (ctx) => editReport(ctx, ctx.match[1]));
 };
