@@ -22,7 +22,7 @@ module.exports = (bot) => {
                 organization: '',
                 selectedObjects: [],
                 status: 'В работе',
-                isApproved: 0, // Изменено с false на 0 для совместимости с БД
+                isApproved: 0,
                 nextReportId: 1,
                 reports: {}
             };

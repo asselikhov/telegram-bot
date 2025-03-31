@@ -1,88 +1,113 @@
 const { Markup } = require('telegraf');
-const { loadUsers, saveUser } = require('../../database/userModel');
-const { pool } = require('../../database/db');
-const { ADMIN_ID } = require('../../config/config');
+const { loadUsers, saveUser, deleteUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
+const { showMainMenu } = require('./menu');
+const { ADMIN_ID } = require('../../config/config');
 
 async function showAdminPanel(ctx) {
     const userId = ctx.from.id.toString();
     if (userId !== ADMIN_ID) return;
 
-    await clearPreviousMessages(ctx, userId); // Очистка предыдущих сообщений
-
-    const buttons = [
-        [Markup.button.callback('📝 Заявки', 'show_requests')],
-        [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
-    ];
-
-    const message = await ctx.reply('👑 АДМИН-ПАНЕЛЬ', Markup.inlineKeyboard(buttons));
+    await clearPreviousMessages(ctx, userId);
+    const message = await ctx.reply(
+        '👑 Админ-панель\nВыберите действие:',
+        Markup.inlineKeyboard([
+            [Markup.button.callback('📋 Просмотреть заявки', 'view_applications')],
+            [Markup.button.callback('↩️ Назад', 'main_menu')]
+        ])
+    );
     ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
-async function showRequests(ctx) {
+async function showApplications(ctx) {
     const userId = ctx.from.id.toString();
     if (userId !== ADMIN_ID) return;
 
-    await clearPreviousMessages(ctx, userId); // Очистка предыдущих сообщений
-
+    await clearPreviousMessages(ctx, userId);
     const users = await loadUsers();
-    const pendingUsers = Object.entries(users)
-        .filter(([_, user]) => !user.isApproved)
-        .map(([userId, user]) => ({
-            userId,
-            fullName: user.fullName || 'Не указано',
-            position: user.position || 'Не указана',
-            organization: user.organization || 'Не указана',
-            objects: user.selectedObjects.length > 0 ? user.selectedObjects.join(', ') : 'Не выбраны'
-        }));
+    const pendingUsers = Object.entries(users).filter(([_, user]) => !user.isApproved);
 
-    const requestsText = pendingUsers.length === 0
-        ? 'Нет неподтвержденных заявок.'
-        : pendingUsers.map(u => `\n${u.fullName} - ${u.position} (${u.organization})\n\n${u.objects}`).join('\n\n');
+    if (pendingUsers.length === 0) {
+        const message = await ctx.reply('Заявок на рассмотрение нет.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'admin_panel')]
+        ]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
+    }
 
-    const buttons = pendingUsers.map(u => [
-        Markup.button.callback(`✅ Одобрить (${u.fullName})`, `approve_${u.userId}`),
-        Markup.button.callback(`❌ Отклонить (${u.fullName})`, `reject_${u.userId}`)
+    const buttons = pendingUsers.map(([uid, user]) => [
+        Markup.button.callback(
+            `${user.fullName} (${user.organization})`,
+            `review_${uid}`
+        )
     ]);
-    buttons.push([Markup.button.callback('↩️ Назад в админ-панель', 'admin_panel')]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
 
-    const message = await ctx.reply(`📝 СПИСОК ЗАЯВОК\n\n${requestsText}`, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply('Заявки на рассмотрение:', Markup.inlineKeyboard(buttons));
     ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 module.exports = (bot) => {
     bot.action('admin_panel', showAdminPanel);
+    bot.action('view_applications', showApplications);
 
-    bot.action('show_requests', showRequests);
-
-    bot.action(/approve_(.+)/, async (ctx) => {
+    bot.action(/review_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
-        const targetUserId = ctx.match[1];
         if (userId !== ADMIN_ID) return;
 
+        const reviewUserId = ctx.match[1];
         const users = await loadUsers();
-        if (!users[targetUserId]) return;
+        const user = users[reviewUserId];
 
-        users[targetUserId].isApproved = true;
-        await saveUser(targetUserId, users[targetUserId]);
-        await ctx.reply(`Пользователь ${users[targetUserId].fullName} одобрен.`);
-        await bot.telegram.sendMessage(targetUserId, '✅ Ваш профиль подтвержден.');
-        await showRequests(ctx); // Обновляем список заявок
+        if (!user || user.isApproved) return;
+
+        await clearPreviousMessages(ctx, userId);
+        const userData = `
+Заявка на регистрацию:
+- Организация: ${user.organization}
+- Объекты: ${user.selectedObjects.join(', ')}
+- Должность: ${user.position}
+- ФИО: ${user.fullName}
+        `.trim();
+
+        const message = await ctx.reply(userData, Markup.inlineKeyboard([
+            [Markup.button.callback('✅ Одобрить', `approve_${reviewUserId}`)],
+            [Markup.button.callback('❌ Отклонить', `reject_${reviewUserId}`)],
+            [Markup.button.callback('↩️ Назад', 'view_applications')]
+        ]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
-    bot.action(/reject_(.+)/, async (ctx) => {
+    bot.action(/approve_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
-        const targetUserId = ctx.match[1];
         if (userId !== ADMIN_ID) return;
 
-        const client = await pool.connect();
-        try {
-            await client.query('DELETE FROM users WHERE userId = $1', [targetUserId]);
-            await ctx.reply('Заявка отклонена.');
-            await bot.telegram.sendMessage(targetUserId, '❌ Ваша заявка отклонена.');
-            await showRequests(ctx); // Обновляем список заявок
-        } finally {
-            client.release();
+        const approveUserId = ctx.match[1];
+        const users = await loadUsers();
+        const user = users[approveUserId];
+
+        if (user && !user.isApproved) {
+            users[approveUserId].isApproved = 1;
+            await saveUser(approveUserId, users[approveUserId]);
+            await ctx.telegram.sendMessage(approveUserId, 'Ваша заявка одобрена! Используйте /start для входа.');
+            await ctx.reply(`Пользователь ${user.fullName} одобрен.`);
         }
+        await showApplications(ctx);
+    });
+
+    bot.action(/reject_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        const rejectUserId = ctx.match[1];
+        const users = await loadUsers();
+        const user = users[rejectUserId];
+
+        if (user && !user.isApproved) {
+            await deleteUser(rejectUserId);
+            await ctx.telegram.sendMessage(rejectUserId, 'Ваша заявка отклонена администратором.');
+            await ctx.reply(`Заявка ${user.fullName} отклонена.`);
+        }
+        await showApplications(ctx);
     });
 };
