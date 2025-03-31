@@ -1,4 +1,4 @@
-const { pool } = require('../db'); // Исправляем путь на ../db
+const { pool } = require('./db'); // Исправляем на ./db
 
 async function loadUsers() {
     const client = await pool.connect();
