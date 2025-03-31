@@ -1,96 +1,83 @@
-const { Markup } = require('telegraf');
-const { loadUsers } = require('../../database/userModel');
-const { generateInviteCode, getAllInviteCodes } = require('../../database/inviteCodeModel');
-const { clearPreviousMessages } = require('../utils');
-const { ADMIN_ID } = require('../../config/config');
-const { pool } = require('../../database/db');
+const { pool } = require('./db');
+const { v4: uuidv4 } = require('uuid');
 
-async function handleGenerateInviteCode(ctx) {
-    const userId = ctx.from.id.toString();
-    const users = await loadUsers();
-    const user = users[userId];
-
-    if (!user.isApproved || !user.organization) {
-        await ctx.reply('Вы не можете сгенерировать код, пока ваш профиль не подтвержден или не указана организация.');
-        return;
-    }
-
-    await clearPreviousMessages(ctx, userId);
-    const code = await generateInviteCode(userId, user.organization);
-    const message = await ctx.reply(
-        `Ваш пригласительный код: \`${code}\`\nПривязан к организации: ${user.organization}\nПередайте его пользователю для регистрации.`,
-        { parse_mode: 'Markdown' }
-    );
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
-}
-
-async function handleAdminInviteCodeMenu(ctx) {
-    const userId = ctx.from.id.toString();
-    if (userId !== ADMIN_ID) return;
-
-    await clearPreviousMessages(ctx, userId);
-
-    // Получаем все уникальные организации из таблицы users
+async function generateInviteCode(userId, organization) {
     const client = await pool.connect();
     try {
-        const res = await client.query('SELECT DISTINCT organization FROM users WHERE organization IS NOT NULL');
-        const organizations = res.rows.map(row => row.organization);
-
-        if (organizations.length === 0) {
-            const message = await ctx.reply('В базе данных нет организаций.');
-            ctx.state.userStates[userId].messageIds.push(message.message_id);
-            return;
-        }
-
-        const buttons = organizations.map((org, index) => [
-            Markup.button.callback(org, `admin_generate_code_${index}`)
-        ]);
-        buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
-
-        const message = await ctx.reply(
-            'Выберите организацию для генерации пригласительного кода:',
-            Markup.inlineKeyboard(buttons)
-        );
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        const code = uuidv4().slice(0, 8);
+        await client.query(`
+            INSERT INTO invite_codes (code, organization, createdBy)
+            VALUES ($1, $2, $3)
+        `, [code, organization, userId]);
+        return code;
     } finally {
         client.release();
     }
 }
 
-async function handleAdminGenerateCode(ctx, orgIndex) {
-    const userId = ctx.from.id.toString();
-    if (userId !== ADMIN_ID) return;
-
-    await clearPreviousMessages(ctx, userId);
-
+async function validateInviteCode(code) {
     const client = await pool.connect();
     try {
-        const res = await client.query('SELECT DISTINCT organization FROM users WHERE organization IS NOT NULL');
-        const organizations = res.rows.map(row => row.organization);
-        const selectedOrg = organizations[orgIndex];
-
-        if (!selectedOrg) {
-            const message = await ctx.reply('Ошибка: организация не найдена.');
-            ctx.state.userStates[userId].messageIds.push(message.message_id);
-            return;
-        }
-
-        const code = await generateInviteCode(userId, selectedOrg);
-        const message = await ctx.reply(
-            `Пригласительный код для "${selectedOrg}": \`${code}\`\nПередайте его пользователю для регистрации.`,
-            { parse_mode: 'Markdown', reply_markup: Markup.inlineKeyboard([[Markup.button.callback('↩️ Назад', 'profile')]]) }
-        );
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        const res = await client.query(`
+            SELECT organization, isUsed 
+            FROM invite_codes 
+            WHERE code = $1
+        `, [code]);
+        if (res.rows.length === 0) return null;
+        const { organization, isused } = res.rows[0];
+        return isused ? null : organization;
     } finally {
         client.release();
     }
 }
 
-module.exports = (bot) => {
-    bot.action('generate_invite_code', handleGenerateInviteCode);
-    bot.action('admin_invite_code_menu', handleAdminInviteCodeMenu);
-    bot.action(/admin_generate_code_(\d+)/, async (ctx) => {
-        const orgIndex = parseInt(ctx.match[1], 10);
-        await handleAdminGenerateCode(ctx, orgIndex);
-    });
-};
+async function markInviteCodeAsUsed(code, userId) {
+    const client = await pool.connect();
+    try {
+        await client.query(`
+            UPDATE invite_codes 
+            SET isUsed = TRUE, usedBy = $1
+            WHERE code = $2
+        `, [userId, code]);
+    } finally {
+        client.release();
+    }
+}
+
+async function getAllInviteCodes() {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`
+            SELECT code, organization, isUsed, createdBy, createdAt 
+            FROM invite_codes 
+            ORDER BY createdAt DESC
+        `);
+        return res.rows.map(row => ({
+            code: row.code,
+            organization: row.organization,
+            isUsed: row.isused,
+            createdBy: row.createdby,
+            createdAt: row.createdat
+        }));
+    } finally {
+        client.release();
+    }
+}
+
+async function loadInviteCode(userId) {
+    const client = await pool.connect();
+    try {
+        const res = await client.query(`
+            SELECT code, organization, createdBy, usedBy 
+            FROM invite_codes 
+            WHERE usedBy = $1 
+            ORDER BY createdAt DESC 
+            LIMIT 1
+        `, [userId]);
+        return res.rows.length > 0 ? res.rows[0] : null;
+    } finally {
+        client.release();
+    }
+}
+
+module.exports = { generateInviteCode, validateInviteCode, markInviteCodeAsUsed, getAllInviteCodes, loadInviteCode };

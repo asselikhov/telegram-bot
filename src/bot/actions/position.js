@@ -2,7 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { BASE_POSITIONS_LIST, ADMIN_ID } = require('../../config/config');
 const { clearPreviousMessages } = require('../utils');
-const { loadInviteCode } = require('../../database/inviteCodeModel'); // Добавляем функцию для получения данных о коде
+const { loadInviteCode } = require('../../database/inviteCodeModel');
 
 function getPositionsList(userId) {
     const positions = [...BASE_POSITIONS_LIST];
@@ -109,7 +109,6 @@ module.exports = (bot) => {
             const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
             state.messageIds.push(message.message_id);
 
-            // Получаем данные о последнем использованном коде
             const inviteCodeData = await loadInviteCode(userId);
             const creatorId = inviteCodeData?.createdBy;
             const creator = creatorId ? users[creatorId] : null;

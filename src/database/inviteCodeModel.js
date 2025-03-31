@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 async function generateInviteCode(userId, organization) {
     const client = await pool.connect();
     try {
-        const code = uuidv4().slice(0, 8); // Генерируем короткий уникальный код
+        const code = uuidv4().slice(0, 8); // Генерируем уникальный код длиной 8 символов
         await client.query(`
             INSERT INTO invite_codes (code, organization, createdBy)
             VALUES ($1, $2, $3)
@@ -25,20 +25,20 @@ async function validateInviteCode(code) {
         `, [code]);
         if (res.rows.length === 0) return null;
         const { organization, isused } = res.rows[0];
-        return isused ? null : organization;
+        return isused ? null : organization; // Возвращаем организацию, если код не использован
     } finally {
         client.release();
     }
 }
 
-async function markInviteCodeAsUsed(code, userId) { // Добавляем userId как аргумент
+async function markInviteCodeAsUsed(code, userId) {
     const client = await pool.connect();
     try {
         await client.query(`
             UPDATE invite_codes 
             SET isUsed = TRUE, usedBy = $1
             WHERE code = $2
-        `, [userId, code]);
+        `, [userId, code]); // Помечаем код как использованный и сохраняем userId
     } finally {
         client.release();
     }
@@ -64,7 +64,7 @@ async function getAllInviteCodes() {
     }
 }
 
-async function loadInviteCode(userId) { // Новая функция для получения данных о последнем коде
+async function loadInviteCode(userId) {
     const client = await pool.connect();
     try {
         const res = await client.query(`
@@ -73,7 +73,7 @@ async function loadInviteCode(userId) { // Новая функция для по
             WHERE usedBy = $1 
             ORDER BY createdAt DESC 
             LIMIT 1
-        `, [userId]);
+        `, [userId]); // Получаем последний использованный код для userId
         return res.rows.length > 0 ? res.rows[0] : null;
     } finally {
         client.release();

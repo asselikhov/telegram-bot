@@ -3,6 +3,7 @@ const { loadUsers, saveUser, deleteUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
 const { showMainMenu } = require('./menu');
 const { ADMIN_ID } = require('../../config/config');
+const { loadInviteCode } = require('../../database/inviteCodeModel'); // Добавляем импорт
 
 async function showAdminPanel(ctx) {
     const userId = ctx.from.id.toString();
@@ -61,6 +62,12 @@ module.exports = (bot) => {
 
         if (!user || user.isApproved) return;
 
+        // Получаем данные о последнем использованном коде
+        const inviteCodeData = await loadInviteCode(reviewUserId);
+        const creatorId = inviteCodeData?.createdBy;
+        const creator = creatorId ? users[creatorId] : null;
+        const creatorFullName = creator ? creator.fullName : 'Неизвестно';
+
         await clearPreviousMessages(ctx, userId);
         const userData = `
 Заявка на регистрацию:
@@ -68,6 +75,7 @@ module.exports = (bot) => {
 - Объекты: ${user.selectedObjects.join(', ')}
 - Должность: ${user.position}
 - ФИО: ${user.fullName}
+- Пригласительный код создан: ${creatorFullName}
         `.trim();
 
         const message = await ctx.reply(userData, Markup.inlineKeyboard([
