@@ -65,7 +65,7 @@ module.exports = (bot) => {
         const inviteCodeData = await loadInviteCode(reviewUserId);
         console.log('[review] Полные данные inviteCodeData для userId', reviewUserId, ':', inviteCodeData);
 
-        const creatorId = inviteCodeData?.createdBy;
+        const creatorId = inviteCodeData?.createdby; // Используем createdby вместо createdBy
         console.log('[review] ID создателя кода:', creatorId, 'для пользователя:', reviewUserId);
 
         let creatorFullName;
@@ -78,8 +78,8 @@ module.exports = (bot) => {
         console.log('[review] Создатель:', creatorFullName);
 
         // Форматирование времени использования
-        const usedAt = inviteCodeData?.usedAt
-            ? new Date(inviteCodeData.usedAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })
+        const usedAt = inviteCodeData?.usedat // Используем usedat вместо usedAt
+            ? new Date(inviteCodeData.usedat).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })
             : 'Не указано';
 
         // Обработка selectedObjects
