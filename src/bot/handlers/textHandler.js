@@ -257,7 +257,7 @@ ${report.workDone}
 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 ${report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
-    `.trim();
+        `.trim();
 
         const groupChatId = OBJECT_GROUPS[report.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
         const userOrg = users[userId].organization;
@@ -333,6 +333,37 @@ ${report.materials}
         await showMainMenu(ctx);
     });
 
+    bot.action('delete_all_photos', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'editPhotos') return;
+
+        // Очистка предыдущих сообщений и медиагруппы
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
+                    console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
+                );
+            }
+            state.mediaGroupIds = [];
+        }
+        await clearPreviousMessages(ctx, userId);
+
+        // Удаление всех фото из отчета
+        state.report.photos = [];
+
+        // Отправка нового сообщения с кнопкой "Готово"
+        const newMessage = await ctx.reply(
+            'Все фото удалены. Отправьте новые или нажмите "Готово" для завершения.',
+            Markup.inlineKeyboard([
+                [Markup.button.callback('Готово', 'finish_edit_report')]
+            ])
+        );
+        state.messageIds = [newMessage.message_id];
+
+        console.log(`[textHandler.js] Все фото удалены для userId ${userId}, новое сообщение отправлено: ${newMessage.message_id}`);
+    });
+
     bot.action('finish_edit_report', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
@@ -380,7 +411,7 @@ ${newReport.workDone}
 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
 ${newReport.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
-    `.trim();
+        `.trim();
 
         const oldReportId = state.report.originalReportId;
         if (oldReportId) {
@@ -448,3 +479,4 @@ ${newReport.materials}
         state.step = null;
         state.report = {};
     });
+};
