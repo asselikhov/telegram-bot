@@ -183,12 +183,12 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             reportId,
             userId,
             objectName: state.report.objectName,
-            date: formattedDate, // Сохраняем в формате DD.MM.YYYY
+            date: formattedDate,
             timestamp,
             workDone: state.report.workDone,
             materials: state.report.materials,
-            groupMessageIds: {}, // Объект для хранения message_id по chatId
-            messageLink: null, // Добавляем поле для ссылки на сообщение
+            groupMessageIds: {},
+            messageLink: null,
             fullName: users[userId].fullName,
             photos: state.report.photos || []
         };
@@ -272,18 +272,18 @@ ${report.materials}
         const users = await loadUsers();
 
         const newTimestamp = new Date().toISOString();
-        const formattedDate = parseAndFormatDate(state.report.date); // Преобразуем старую дату в DD.MM.YYYY
+        const formattedDate = parseAndFormatDate(state.report.date);
         const newReportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`; // Например, 31_03_2025_2
         const newReport = {
             reportId: newReportId,
             userId,
             objectName: state.report.objectName,
-            date: formattedDate, // Сохраняем в DD.MM.YYYY
+            date: formattedDate,
             timestamp: newTimestamp,
             workDone: state.report.workDone,
             materials: state.report.materials,
             groupMessageIds: {},
-            messageLink: null, // Добавляем поле для ссылки
+            messageLink: null,
             fullName: users[userId].fullName,
             photos: state.report.photos
         };
@@ -313,7 +313,7 @@ ${newReport.materials}
                 }
                 const client = await require('../../database/db').pool.connect();
                 try {
-                    await client.query('DELETE FROM reports WHERE reportId = $1', [oldReportId]);
+                    await client.query('DELETE FROM reports WHERE reportid = $1', [oldReportId]);
                 } finally {
                     client.release();
                 }
