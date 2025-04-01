@@ -14,6 +14,7 @@ const objectsActions = require('./actions/objects');
 const statusActions = require('./actions/status');
 const { loadUsers } = require('../database/userModel');
 const { loadUserReports } = require('../database/reportModel');
+const { formatDate } = require('../utils'); // Импортируем formatDate
 
 const bot = new Telegraf(BOT_TOKEN);
 
@@ -71,7 +72,8 @@ bot.action(/.*/, (ctx, next) => {
 
 async function sendReportReminders() {
   const moscowTime = new Date().toLocaleString('en-US', { timeZone: 'Europe/Moscow' });
-  const currentDate = moscowTime.split(',')[0].split('/').reverse().join('-');
+  const currentDate = new Date(moscowTime);
+  const formattedDate = formatDate(currentDate); // Формат DD.MM.YYYY
 
   const users = await loadUsers();
   const producers = Object.entries(users).filter(([_, user]) =>
@@ -82,7 +84,7 @@ async function sendReportReminders() {
 
   for (const [userId, user] of producers) {
     const reports = await loadUserReports(userId);
-    const todayReports = Object.values(reports).filter(report => report.date === currentDate);
+    const todayReports = Object.values(reports).filter(report => report.date === formattedDate);
 
     for (const objectName of user.selectedObjects) {
       const hasReport = todayReports.some(report => report.objectName === objectName);
@@ -91,7 +93,7 @@ async function sendReportReminders() {
         if (groupChatId) {
           const reminderText = `
 ⚠️ Напоминание
-${user.fullName}, вы не предоставили отчет за ${currentDate}.
+${user.fullName}, вы не предоставили отчет за ${formattedDate}.
 
 Пожалуйста, внесите данные.
                  `.trim();
