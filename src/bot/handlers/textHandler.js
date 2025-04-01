@@ -125,11 +125,12 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             case 'materials':
                 state.report.materials = ctx.message.text.trim();
                 state.step = 'photos';
+                state.mediaGroupIds = []; // Инициализация
                 const photoMessage = await ctx.reply(
                     '📸 Прикрепите изображения к отчету или нажмите "Готово" для завершения',
                     Markup.inlineKeyboard([[Markup.button.callback('Готово', 'finish_report')]])
                 );
-                state.messageIds.push(photoMessage.message_id);
+                state.messageIds = [photoMessage.message_id];
                 break;
 
             case 'editWorkDone':
@@ -141,6 +142,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             case 'editMaterials':
                 state.report.materials = ctx.message.text.trim();
                 state.step = 'editPhotos';
+                state.mediaGroupIds = []; // Инициализация
                 const editMessage = await ctx.reply(
                     '📸 Прикрепите новые изображения к отчету или нажмите "Готово" для завершения',
                     Markup.inlineKeyboard([
@@ -148,7 +150,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                         [Markup.button.callback('Готово', 'finish_edit_report')]
                     ])
                 );
-                state.messageIds.push(editMessage.message_id);
+                state.messageIds = [editMessage.message_id];
                 break;
 
             default:
@@ -188,7 +190,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const mediaGroup = state.report.photos.map((photoId, index) => ({
             type: 'photo',
             media: photoId,
-            caption: index === 0 ? `Добавлено ${state.report.photos.length} фото:` : undefined // Подпись только для первого фото
+            caption: index === 0 ? `Добавлено ${state.report.photos.length} фото:` : undefined
         }));
         const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
         state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
@@ -211,6 +213,13 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         if (!state || state.step !== 'photos') return;
 
         await clearPreviousMessages(ctx, userId);
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
+                    console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
+                );
+            }
+        }
         const users = await loadUsers();
 
         const date = new Date();
@@ -323,7 +332,15 @@ ${report.materials}
         const state = ctx.state.userStates[userId];
         if (!state || state.step !== 'editPhotos') return;
 
-        // Очистка предыдущих сообщений
+        // Очистка предыдущих сообщений и медиагруппы
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
+                    console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
+                );
+            }
+            state.mediaGroupIds = [];
+        }
         await clearPreviousMessages(ctx, userId);
 
         // Удаление всех фото из отчета
@@ -336,7 +353,7 @@ ${report.materials}
                 [Markup.button.callback('Готово', 'finish_edit_report')]
             ])
         );
-        state.messageIds = [newMessage.message_id]; // Обновляем messageIds только новым сообщением
+        state.messageIds = [newMessage.message_id];
 
         console.log(`[textHandler.js] Все фото удалены для userId ${userId}, новое сообщение отправлено: ${newMessage.message_id}`);
     });
@@ -346,7 +363,16 @@ ${report.materials}
         const state = ctx.state.userStates[userId];
         if (!state || state.step !== 'editPhotos') return;
 
+        // Очистка предыдущих сообщений и медиагруппы
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
+                    console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
+                );
+            }
+        }
         await clearPreviousMessages(ctx, userId);
+
         const users = await loadUsers();
 
         const newTimestamp = new Date().toISOString();
