@@ -241,9 +241,6 @@ async function downloadReportFile(ctx, objectIndex) {
     });
     ctx.state.userStates[userId].lastReportMessageId = documentMessage.message_id;
     console.log(`[downloadReportFile] Excel-файл с отчетами для "${objectName}" отправлен пользователю ${userId}, message_id: ${documentMessage.message_id}, отчетов: ${objectReports.length}`);
-
-    // Возвращаем кнопки выбора объекта
-    await showDownloadReport(ctx, Math.floor(objectIndex / 10));
 }
 
 async function createReport(ctx) {
