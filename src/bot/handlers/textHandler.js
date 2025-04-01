@@ -7,6 +7,9 @@ const { showProfile, showMainMenu } = require('./menu');
 const { saveReport, loadUserReports } = require('../../database/reportModel');
 const { ORGANIZATIONS_LIST, GENERAL_GROUP_CHAT_IDS, OBJECT_GROUPS, ADMIN_ID } = require('../../config/config');
 
+// Хранилище для дебаунсинга по media_group_id
+const processingMediaGroups = new Map();
+
 module.exports = (bot) => {
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
@@ -164,9 +167,23 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const state = ctx.state.userStates[userId];
         if (!state || (state.step !== 'photos' && state.step !== 'editPhotos')) return;
 
-        // Добавляем новое фото в отчет
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+        const mediaGroupId = ctx.message.media_group_id || null;
+
+        // Добавляем фото в отчет
         state.report.photos.push(photoId);
+
+        // Если это часть медиагруппы, ждем завершения всех событий
+        if (mediaGroupId) {
+            if (processingMediaGroups.has(mediaGroupId)) {
+                // Уже обрабатывается, пропускаем
+                return;
+            }
+            processingMediaGroups.set(mediaGroupId, true);
+
+            // Ждем 500 мс, чтобы все фото из альбома были обработаны
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
 
         // Удаляем предыдущую медиагруппу, если она была
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
@@ -175,17 +192,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
                 );
             }
-            state.mediaGroupIds = []; // Очищаем массив
-        }
-
-        // Удаляем предыдущее текстовое сообщение, если оно было
-        if (state.messageIds && state.messageIds.length > 0) {
-            for (const msgId of state.messageIds) {
-                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
-                    console.log(`[textHandler.js] Не удалось удалить текстовое сообщение ${msgId}: ${e.message}`)
-                );
-            }
-            state.messageIds = []; // Очищаем массив перед добавлением нового ID
+            state.mediaGroupIds = [];
         }
 
         // Отправляем новую медиагруппу с текущими фото
@@ -197,16 +204,37 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
         state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
 
-        // Отправляем текстовое сообщение с кнопкой "Готово" ниже медиагруппы
-        const textMessage = await ctx.reply(
-            'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.',
-            Markup.inlineKeyboard([
-                [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
-            ])
-        );
-        state.messageIds = [textMessage.message_id]; // Заменяем массив, а не добавляем
+        // Обновляем или создаем текстовое сообщение
+        const text = 'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.';
+        const keyboard = Markup.inlineKeyboard([
+            [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
+        ]);
 
-        console.log(`[textHandler.js] Медиагруппа отправлена для userId ${userId}: ${state.mediaGroupIds}, текст: ${textMessage.message_id}`);
+        if (state.messageIds && state.messageIds.length > 0) {
+            const existingMessageId = state.messageIds[0];
+            try {
+                await ctx.telegram.editMessageText(ctx.chat.id, existingMessageId, null, text, keyboard);
+                console.log(`[textHandler.js] Текстовое сообщение ${existingMessageId} обновлено для userId ${userId}`);
+            } catch (e) {
+                console.log(`[textHandler.js] Не удалось отредактировать сообщение ${existingMessageId}: ${e.message}`);
+                // Если редактирование не удалось, удаляем старое и создаем новое
+                await ctx.telegram.deleteMessage(ctx.chat.id, existingMessageId).catch(() => {});
+                const newMessage = await ctx.reply(text, keyboard);
+                state.messageIds = [newMessage.message_id];
+                console.log(`[textHandler.js] Новое сообщение создано: ${newMessage.message_id}`);
+            }
+        } else {
+            const newMessage = await ctx.reply(text, keyboard);
+            state.messageIds = [newMessage.message_id];
+            console.log(`[textHandler.js] Первое сообщение создано: ${newMessage.message_id}`);
+        }
+
+        // Очищаем флаг обработки медиагруппы
+        if (mediaGroupId) {
+            processingMediaGroups.delete(mediaGroupId);
+        }
+
+        console.log(`[textHandler.js] Медиагруппа отправлена для userId ${userId}: ${state.mediaGroupIds}, текст: ${state.messageIds[0]}`);
     });
 
     bot.action('finish_report', async (ctx) => {
@@ -461,7 +489,7 @@ ${newReport.materials}
             for (const chatId of allChatIds) {
                 try {
                     const message = await ctx.telegram.sendMessage(chatId, newReportText);
-                    newReport.groupMessageIds[chatId] = message.message_id;
+                    report.groupMessageIds[chatId] = message.message_id;
                     if (chatId === newGroupChatId) {
                         newReport.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id}`;
                     }
