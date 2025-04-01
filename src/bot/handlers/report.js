@@ -397,7 +397,33 @@ async function editReport(ctx, reportId) {
         report: { ...report, originalReportId: reportId },
         messageIds: ctx.state.userStates[userId].messageIds || []
     };
-    await ctx.reply('💡 Введите новую информацию о выполненных работах:');
+    const message = await ctx.reply('💡 Введите новую информацию о выполненных работах:');
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
+}
+
+async function deleteAllPhotos(ctx, reportId) {
+    const userId = ctx.from.id.toString();
+    const userState = ctx.state.userStates[userId];
+
+    if (!userState || !userState.report || userState.report.originalReportId !== reportId) {
+        await clearPreviousMessages(ctx, userId);
+        return ctx.reply('Ошибка: не удалось найти данные для редактирования.');
+    }
+
+    // Удаляем все предыдущие сообщения
+    await clearPreviousMessages(ctx, userId);
+
+    // Удаляем все фото из отчета в состоянии
+    userState.report.photos = [];
+
+    // Отправляем новое сообщение с кнопкой "Готово"
+    const message = await ctx.reply(
+        'Все фото удалены. Отправьте новые или нажмите "Готово" для завершения.',
+        Markup.inlineKeyboard([
+            [Markup.button.callback('Готово', `finish_edit_${reportId}`)]
+        ])
+    );
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 module.exports = (bot) => {
@@ -419,7 +445,8 @@ module.exports = (bot) => {
             report: { objectName: selectedObject, photos: [] },
             messageIds: ctx.state.userStates[userId].messageIds || []
         };
-        await ctx.reply('💡 Введите информацию о выполненных работах:');
+        const message = await ctx.reply('💡 Введите информацию о выполненных работах:');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
     bot.action('view_reports', showReportObjects);
@@ -442,4 +469,5 @@ module.exports = (bot) => {
     });
     bot.action(/select_report_time_(.+)/, (ctx) => showReportDetails(ctx, ctx.match[1]));
     bot.action(/edit_report_(.+)/, (ctx) => editReport(ctx, ctx.match[1]));
+    bot.action(/delete_all_photos_(.+)/, (ctx) => deleteAllPhotos(ctx, ctx.match[1]));
 };
