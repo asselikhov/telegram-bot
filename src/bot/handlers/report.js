@@ -267,7 +267,9 @@ async function showReportObjects(ctx) {
 
     if (Object.keys(reports).length === 0) {
         console.log(`[showReportObjects] Отчеты для userId ${userId} не найдены`);
-        return ctx.reply('У вас пока нет отчетов.');
+        const message = await ctx.reply('У вас пока нет отчетов.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
