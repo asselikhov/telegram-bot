@@ -11,6 +11,33 @@ async function loadUserReports(userId) {
         const reports = {};
         res.rows.forEach((row, index) => {
             console.log(`[loadUserReports] Обработка строки ${index}: reportid=${row.reportid}, objectname=${row.objectname}, userid=${row.userid}`);
+            let groupMessageIds = row.groupmessageids;
+            let photos = row.photos;
+
+            // Обработка groupmessageids
+            if (groupMessageIds && typeof groupMessageIds === 'string') {
+                try {
+                    groupMessageIds = JSON.parse(groupMessageIds);
+                } catch (e) {
+                    console.error(`[loadUserReports] Ошибка парсинга groupmessageids для reportid=${row.reportid}: ${e.message}`);
+                    groupMessageIds = {};
+                }
+            } else if (!groupMessageIds) {
+                groupMessageIds = {};
+            }
+
+            // Обработка photos
+            if (photos && typeof photos === 'string') {
+                try {
+                    photos = JSON.parse(photos);
+                } catch (e) {
+                    console.error(`[loadUserReports] Ошибка парсинга photos для reportid=${row.reportid}: ${e.message}`);
+                    photos = [];
+                }
+            } else if (!photos) {
+                photos = [];
+            }
+
             reports[row.reportid] = {
                 reportId: row.reportid,
                 userId: row.userid,
@@ -19,10 +46,10 @@ async function loadUserReports(userId) {
                 timestamp: row.timestamp,
                 workDone: row.workdone,
                 materials: row.materials,
-                groupMessageIds: row.groupmessageids ? JSON.parse(row.groupmessageids) : {},
+                groupMessageIds,
                 messageLink: row.messagelink,
                 fullName: row.fullname,
-                photos: row.photos ? JSON.parse(row.photos) : []
+                photos
             };
         });
         console.log(`[loadUserReports] Загружено ${Object.keys(reports).length} отчетов для userId ${userId}`);
@@ -78,6 +105,31 @@ async function loadAllReports() {
         const res = await client.query('SELECT * FROM reports');
         const reports = {};
         res.rows.forEach(row => {
+            let groupMessageIds = row.groupmessageids;
+            let photos = row.photos;
+
+            if (groupMessageIds && typeof groupMessageIds === 'string') {
+                try {
+                    groupMessageIds = JSON.parse(groupMessageIds);
+                } catch (e) {
+                    console.error(`[loadAllReports] Ошибка парсинга groupmessageids для reportid=${row.reportid}: ${e.message}`);
+                    groupMessageIds = {};
+                }
+            } else if (!groupMessageIds) {
+                groupMessageIds = {};
+            }
+
+            if (photos && typeof photos === 'string') {
+                try {
+                    photos = JSON.parse(photos);
+                } catch (e) {
+                    console.error(`[loadAllReports] Ошибка парсинга photos для reportid=${row.reportid}: ${e.message}`);
+                    photos = [];
+                }
+            } else if (!photos) {
+                photos = [];
+            }
+
             reports[row.reportid] = {
                 reportId: row.reportid,
                 userId: row.userid,
@@ -86,10 +138,10 @@ async function loadAllReports() {
                 timestamp: row.timestamp,
                 workDone: row.workdone,
                 materials: row.materials,
-                groupMessageIds: row.groupmessageids ? JSON.parse(row.groupmessageids) : {},
+                groupMessageIds,
                 messageLink: row.messagelink,
                 fullName: row.fullname,
-                photos: row.photos ? JSON.parse(row.photos) : []
+                photos
             };
         });
         console.log(`[loadAllReports] Загружено ${Object.keys(reports).length} отчетов`);
