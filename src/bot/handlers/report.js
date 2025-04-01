@@ -54,6 +54,12 @@ async function showDownloadReport(ctx, page = 0) {
     ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
+// Вспомогательная функция для преобразования DD.MM.YYYY в Date
+function parseDateFromDDMMYYYY(dateString) {
+    const [day, month, year] = dateString.split('.').map(Number);
+    return new Date(year, month - 1, day);
+}
+
 async function downloadReportFile(ctx, objectIndex) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
@@ -115,10 +121,14 @@ async function downloadReportFile(ctx, objectIndex) {
     objectReports.sort((a, b) => {
         const dateA = parseAndFormatDate(a.date);
         const dateB = parseAndFormatDate(b.date);
-        if (dateA === dateB) {
+        const dateObjA = parseDateFromDDMMYYYY(dateA);
+        const dateObjB = parseDateFromDDMMYYYY(dateB);
+
+        const dateCompare = dateObjB.getTime() - dateObjA.getTime();
+        if (dateCompare === 0) {
             return b.timestamp.localeCompare(a.timestamp);
         }
-        return dateB.localeCompare(dateA);
+        return dateCompare;
     });
 
     let currentRow = 3;
