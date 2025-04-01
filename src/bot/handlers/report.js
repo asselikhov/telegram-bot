@@ -221,7 +221,7 @@ async function createReport(ctx) {
 
 async function showReportObjects(ctx) {
     const userId = ctx.from.id.toString();
-    const users Sixty-fourawait loadUsers();
+    const users = await loadUsers();
     const reports = await loadUserReports(userId).catch(err => {
         console.error(`[showReportObjects] Ошибка загрузки отчетов для userId ${userId}: ${err.message}`);
         return {};
