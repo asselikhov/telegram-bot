@@ -297,8 +297,22 @@ ${report.materials}
         const state = ctx.state.userStates[userId];
         if (!state || state.step !== 'editPhotos') return;
 
+        // Очистка предыдущих сообщений
+        await clearPreviousMessages(ctx, userId);
+
+        // Удаление всех фото из отчета
         state.report.photos = [];
-        await ctx.reply('Все фото удалены. Отправьте новые или нажмите "Готово" для завершения.');
+
+        // Отправка нового сообщения с кнопкой "Готово"
+        const newMessage = await ctx.reply(
+            'Все фото удалены. Отправьте новые или нажмите "Готово" для завершения.',
+            Markup.inlineKeyboard([
+                [Markup.button.callback('Готово', 'finish_edit_report')]
+            ])
+        );
+        state.messageIds = [newMessage.message_id]; // Обновляем messageIds только новым сообщением
+
+        console.log(`[textHandler.js] Все фото удалены для userId ${userId}, новое сообщение отправлено: ${newMessage.message_id}`);
     });
 
     bot.action('finish_edit_report', async (ctx) => {
