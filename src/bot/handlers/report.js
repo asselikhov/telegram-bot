@@ -18,7 +18,7 @@ async function showDownloadReport(ctx, page = 0) {
     const availableObjects = ORGANIZATION_OBJECTS[userOrganization] || [];
 
     if (!availableObjects.length) {
-        console.log(`[showDownloadReport] Для организации ${userOrganization} нет доступных объектов`);
+        THEIRconsole.log(`[showDownloadReport] Для организации ${userOrganization} нет доступных объектов`);
         return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
     }
 
@@ -60,7 +60,9 @@ async function showDownloadReport(ctx, page = 0) {
         `Выберите объект для выгрузки отчета (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    }
 }
 
 async function downloadReportFile(ctx, objectIndex) {
@@ -263,7 +265,9 @@ async function createReport(ctx) {
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    }
 }
 
 async function showReportObjects(ctx) {
@@ -281,7 +285,9 @@ async function showReportObjects(ctx) {
     if (Object.keys(reports).length === 0) {
         console.log(`[showReportObjects] Отчеты для userId ${userId} не найдены`);
         const message = await ctx.reply('У вас пока нет отчетов.');
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
+            ctx.state.userStates[userId].messageIds.push(message.message_id);
+        }
         return;
     }
 
@@ -294,7 +300,9 @@ async function showReportObjects(ctx) {
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
     const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    }
     console.log(`[showReportObjects] Сообщение с выбором объектов отправлено для userId ${userId}`);
 }
 
@@ -347,7 +355,9 @@ async function showReportDates(ctx, objectIndex, page = 0) {
         `Выберите дату для объекта "${objectName}" (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    }
 }
 
 async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
@@ -404,7 +414,9 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
         `Выберите время отчета для "${objectName}" за ${selectedDate} (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    }
 }
 
 async function showReportDetails(ctx, reportId) {
@@ -472,7 +484,7 @@ async function editReport(ctx, reportId) {
 
 // Функция для удаления выгруженного отчета
 async function clearLastReport(ctx, userId) {
-    if (ctx.state.userStates[userId].lastReportMessageId) {
+    if (ctx.state.userStates[userId]?.lastReportMessageId) {
         try {
             await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.userStates[userId].lastReportMessageId);
             console.log(`[clearLastReport] Сообщение с отчетом ${ctx.state.userStates[userId].lastReportMessageId} удалено для userId ${userId}`);
@@ -488,6 +500,17 @@ module.exports = (bot) => {
     bot.command('start', async (ctx) => {
         const userId = ctx.from.id.toString();
 
+        // Инициализация состояния, если его нет
+        if (!ctx.state.userStates[userId]) {
+            ctx.state.userStates[userId] = {
+                step: null,
+                selectedObjects: [],
+                report: {},
+                messageIds: [],
+                lastReportMessageId: null
+            };
+        }
+
         // Удаляем выгруженный отчет, если он есть
         await clearLastReport(ctx, userId);
 
@@ -502,13 +525,26 @@ module.exports = (bot) => {
                 [Markup.button.callback('👤 Личный кабинет', 'profile')]
             ])
         );
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
+            ctx.state.userStates[userId].messageIds.push(message.message_id);
+        }
     });
 
     // Обработка кнопки "Вернуться в главное меню"
     bot.action('main_menu', async (ctx) => {
         const userId = ctx.from.id.toString();
 
+        // Инициализация состояния, если его нет
+        if (!ctx.state.userStates[userId]) {
+            ctx.state.userStates[userId] = {
+                step: null,
+                selectedObjects: [],
+                report: {},
+                messageIds: [],
+                lastReportMessageId: null
+            };
+        }
+
         // Удаляем выгруженный отчет, если он есть
         await clearLastReport(ctx, userId);
 
@@ -523,7 +559,9 @@ module.exports = (bot) => {
                 [Markup.button.callback('👤 Личный кабинет', 'profile')]
             ])
         );
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
+            ctx.state.userStates[userId].messageIds.push(message.message_id);
+        }
     });
 
     bot.action('download_report', async (ctx) => {
