@@ -62,6 +62,7 @@ async function showDownloadReport(ctx, page = 0) {
     );
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
     }
 }
 
@@ -92,7 +93,6 @@ async function downloadReportFile(ctx, objectIndex) {
         return ctx.reply(`Отчеты для объекта "${objectName}" не найдены.`);
     }
 
-    // Удаляем только предыдущее сообщение с документом, если оно есть
     if (ctx.state.userStates[userId].lastReportMessageId) {
         try {
             await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.userStates[userId].lastReportMessageId);
@@ -236,7 +236,6 @@ async function downloadReportFile(ctx, objectIndex) {
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `${objectName}_reports_${formatDate(new Date())}.xlsx`;
 
-    // Отправляем документ и сохраняем message_id
     const documentMessage = await ctx.replyWithDocument({
         source: buffer,
         filename: filename
@@ -267,6 +266,7 @@ async function createReport(ctx) {
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
     }
 }
 
@@ -287,6 +287,7 @@ async function showReportObjects(ctx) {
         const message = await ctx.reply('У вас пока нет отчетов.');
         if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
             ctx.state.userStates[userId].messageIds.push(message.message_id);
+            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
         }
         return;
     }
@@ -302,6 +303,7 @@ async function showReportObjects(ctx) {
     const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
     }
     console.log(`[showReportObjects] Сообщение с выбором объектов отправлено для userId ${userId}`);
 }
@@ -357,6 +359,7 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     );
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
     }
 }
 
@@ -416,6 +419,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     );
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
     }
 }
 
@@ -482,7 +486,6 @@ async function editReport(ctx, reportId) {
     await ctx.reply('💡 Введите новую информацию о выполненных работах:');
 }
 
-// Функция для удаления выгруженного отчета
 async function clearLastReport(ctx, userId) {
     console.log(`[clearLastReport] Проверка отчета для userId ${userId}, lastReportMessageId: ${ctx.state.userStates[userId]?.lastReportMessageId}`);
     if (ctx.state.userStates[userId]?.lastReportMessageId) {
@@ -492,18 +495,16 @@ async function clearLastReport(ctx, userId) {
         } catch (err) {
             console.error(`[clearLastReport] Не удалось удалить сообщение с отчетом ${ctx.state.userStates[userId].lastReportMessageId}: ${err.message}`);
         }
-        ctx.state.userStates[userId].lastReportMessageId = null; // Сбрасываем идентификатор
+        ctx.state.userStates[userId].lastReportMessageId = null;
     } else {
         console.log(`[clearLastReport] Нет отчета для удаления для userId ${userId}`);
     }
 }
 
 module.exports = (bot) => {
-    // Обработка команды /start
     bot.command('start', async (ctx) => {
         const userId = ctx.from.id.toString();
 
-        // Инициализация состояния, если его нет
         if (!ctx.state.userStates[userId]) {
             ctx.state.userStates[userId] = {
                 step: null,
@@ -514,10 +515,7 @@ module.exports = (bot) => {
             };
         }
 
-        // Удаляем выгруженный отчет, если он есть
         await clearLastReport(ctx, userId);
-
-        // Очищаем предыдущие сообщения и показываем главное меню
         await clearPreviousMessages(ctx, userId);
         const message = await ctx.reply(
             '🚀 ГЛАВНОЕ МЕНЮ \n➖➖➖➖➖➖➖➖➖➖➖  \nВыберите действие ниже:',
@@ -530,14 +528,13 @@ module.exports = (bot) => {
         );
         if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
             ctx.state.userStates[userId].messageIds.push(message.message_id);
+            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
         }
     });
 
-    // Обработка кнопки "Вернуться в главное меню"
     bot.action('main_menu', async (ctx) => {
         const userId = ctx.from.id.toString();
 
-        // Инициализация состояния, если его нет
         if (!ctx.state.userStates[userId]) {
             ctx.state.userStates[userId] = {
                 step: null,
@@ -549,11 +546,7 @@ module.exports = (bot) => {
         }
 
         console.log(`[main_menu] Начало обработки для userId ${userId}, состояние:`, ctx.state.userStates[userId]);
-
-        // Удаляем выгруженный отчет, если он есть
         await clearLastReport(ctx, userId);
-
-        // Очищаем предыдущие сообщения и показываем главное меню
         await clearPreviousMessages(ctx, userId);
         const message = await ctx.reply(
             '🚀 ГЛАВНОЕ МЕНЮ \n➖➖➖➖➖➖➖➖➖➖➖  \nВыберите действие ниже:',
@@ -566,6 +559,7 @@ module.exports = (bot) => {
         );
         if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
             ctx.state.userStates[userId].messageIds.push(message.message_id);
+            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
         }
     });
 
