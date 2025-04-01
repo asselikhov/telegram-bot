@@ -115,7 +115,10 @@ async function downloadReportFile(ctx, objectIndex) {
     objectReports.sort((a, b) => {
         const dateA = parseAndFormatDate(a.date);
         const dateB = parseAndFormatDate(b.date);
-        return dateA === dateB ? a.userId.localeCompare(b.userId) : dateA.localeCompare(dateB);
+        if (dateA === dateB) {
+            return b.timestamp.localeCompare(a.timestamp);
+        }
+        return dateB.localeCompare(dateA);
     });
 
     let currentRow = 3;
