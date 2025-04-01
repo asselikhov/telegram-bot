@@ -5,11 +5,12 @@ async function loadUserReports(userId) {
     const client = await pool.connect();
     try {
         console.log(`[loadUserReports] Запрос отчетов для userId: ${userId} (тип: ${typeof userId})`);
-        const res = await client.query('SELECT * FROM reports WHERE userid = $1::bigint', [userId]);
+        const res = await client.query('SELECT * FROM reports WHERE userid = $1', [userId]);
+        console.log(`[loadUserReports] Найдено строк: ${res.rowCount}`);
+        console.log(`[loadUserReports] Сырые данные строк: ${JSON.stringify(res.rows, null, 2)}`);
         const reports = {};
-        console.log(`[loadUserReports] Найдено строк: ${res.rows.length}`);
-        res.rows.forEach(row => {
-            console.log(`[loadUserReports] Обработка строки: reportid=${row.reportid}, objectname=${row.objectname}`);
+        res.rows.forEach((row, index) => {
+            console.log(`[loadUserReports] Обработка строки ${index}: reportid=${row.reportid}, objectname=${row.objectname}, userid=${row.userid}`);
             reports[row.reportid] = {
                 reportId: row.reportid,
                 userId: row.userid,
@@ -40,9 +41,9 @@ async function saveReport(userId, report) {
     try {
         await client.query(`
             INSERT INTO reports (reportid, userid, objectname, date, timestamp, workdone, materials, groupmessageids, messagelink, fullname, photos)
-            VALUES ($1, $2::bigint, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (reportid) DO UPDATE
-            SET userid = $2::bigint, objectname = $3, date = $4, timestamp = $5, workdone = $6, materials = $7, groupmessageids = $8, messagelink = $9, fullname = $10, photos = $11
+            SET userid = $2, objectname = $3, date = $4, timestamp = $5, workdone = $6, materials = $7, groupmessageids = $8, messagelink = $9, fullname = $10, photos = $11
         `, [reportId, reportUserId || userId, objectName, date, timestamp, workDone, materials, JSON.stringify(groupMessageIds || {}), messageLink || null, fullName, JSON.stringify(photos || [])]);
         console.log(`[saveReport] Отчет ${reportId} успешно сохранён для userId ${userId}`);
     } catch (err) {
@@ -57,7 +58,7 @@ async function getReportText(objectName) {
     const client = await pool.connect();
     try {
         const res = await client.query(
-            'SELECT r.*, u.fullname, u.position, u.organization FROM reports r JOIN users u ON r.userid = u.userid::bigint WHERE r.objectname = $1 ORDER BY r.timestamp',
+            'SELECT r.*, u.fullname, u.position, u.organization FROM reports r JOIN users u ON r.userid = u.userid WHERE r.objectname = $1 ORDER BY r.timestamp',
             [objectName]
         );
         if (res.rows.length === 0) return '';
