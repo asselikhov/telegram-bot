@@ -320,7 +320,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
         return [Markup.button.callback(time, `select_report_time_${reportId}`)];
     }).reverse();
 
-    const buttons = [];
+    const buttons лю[];
     const paginationButtons = [];
     if (totalPages > 1) {
         if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `report_timestamps_page_${objectIndex}_${dateIndex}_${pageNum - 1}`));
@@ -395,7 +395,7 @@ async function editReport(ctx, reportId) {
     ctx.state.userStates[userId] = {
         step: 'editWorkDone',
         report: { ...report, originalReportId: reportId },
-        messageIds: ctx.state.userStates[userId].messageIds || []
+        messageIds: []
     };
     const message = await ctx.reply('💡 Введите новую информацию о выполненных работах:');
     ctx.state.userStates[userId].messageIds.push(message.message_id);
@@ -410,23 +410,52 @@ async function deleteAllPhotos(ctx, reportId) {
         return ctx.reply('Ошибка: не удалось найти данные для редактирования.');
     }
 
-    // Удаляем все предыдущие сообщения
     await clearPreviousMessages(ctx, userId);
-
-    // Удаляем все фото из отчета в состоянии
     userState.report.photos = [];
+    userState.step = 'editPhotos';
 
-    // Отправляем новое сообщение с кнопкой "Готово"
     const message = await ctx.reply(
         'Все фото удалены. Отправьте новые или нажмите "Готово" для завершения.',
         Markup.inlineKeyboard([
             [Markup.button.callback('Готово', `finish_edit_${reportId}`)]
         ])
     );
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    ctx.state.userStates[userId].messageIds = [message.message_id];
+}
+
+// Обработка текста для шагов редактирования
+function setupTextHandler(bot) {
+    bot.on('text', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const userState = ctx.state.userStates[userId];
+
+        if (!userState || !userState.report) return;
+
+        if (userState.step === 'editWorkDone') {
+            userState.report.workDone = ctx.message.text;
+            userState.step = 'editMaterials';
+            await clearPreviousMessages(ctx, userId);
+            const message = await ctx.reply('💡 Введите новую информацию о поставленных материалах:');
+            ctx.state.userStates[userId].messageIds = [message.message_id];
+        } else if (userState.step === 'editMaterials') {
+            userState.report.materials = ctx.message.text;
+            userState.step = 'editPhotos';
+            await clearPreviousMessages(ctx, userId);
+            const message = await ctx.reply(
+                '📸 Прикрепите новые изображения к отчету или нажмите "Готово" для завершения',
+                Markup.inlineKeyboard([
+                    [Markup.button.callback('Удалить все фото', `delete_all_photos_${userState.report.originalReportId}`)],
+                    [Markup.button.callback('Готово', `finish_edit_${userState.report.originalReportId}`)]
+                ])
+            );
+            ctx.state.userStates[userId].messageIds = [message.message_id];
+        }
+    });
 }
 
 module.exports = (bot) => {
+    setupTextHandler(bot);
+
     bot.action('download_report', async (ctx) => await showDownloadReport(ctx, 0));
     bot.action(/download_report_page_(\d+)/, async (ctx) => await showDownloadReport(ctx, parseInt(ctx.match[1], 10)));
     bot.action(/download_report_file_(\d+)/, (ctx) => downloadReportFile(ctx, parseInt(ctx.match[1], 10)));
@@ -443,7 +472,7 @@ module.exports = (bot) => {
         ctx.state.userStates[userId] = {
             step: 'workDone',
             report: { objectName: selectedObject, photos: [] },
-            messageIds: ctx.state.userStates[userId].messageIds || []
+            messageIds: []
         };
         const message = await ctx.reply('💡 Введите информацию о выполненных работах:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
