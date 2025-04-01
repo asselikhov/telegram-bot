@@ -62,7 +62,7 @@ async function showDownloadReport(ctx, page = 0) {
     );
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
     }
 }
 
@@ -266,7 +266,7 @@ async function createReport(ctx) {
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
     }
 }
 
@@ -287,7 +287,7 @@ async function showReportObjects(ctx) {
         const message = await ctx.reply('У вас пока нет отчетов.');
         if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
             ctx.state.userStates[userId].messageIds.push(message.message_id);
-            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
+            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
         }
         return;
     }
@@ -303,7 +303,7 @@ async function showReportObjects(ctx) {
     const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
     }
     console.log(`[showReportObjects] Сообщение с выбором объектов отправлено для userId ${userId}`);
 }
@@ -359,7 +359,7 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     );
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
     }
 }
 
@@ -419,7 +419,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     );
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
     }
 }
 
@@ -528,7 +528,7 @@ module.exports = (bot) => {
         );
         if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
             ctx.state.userStates[userId].messageIds.push(message.message_id);
-            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
+            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
         }
     });
 
@@ -559,8 +559,9 @@ module.exports = (bot) => {
         );
         if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
             ctx.state.userStates[userId].messageIds.push(message.message_id);
-            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)]; // Удаляем дубли
+            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
         }
+        console.log(`[main_menu] Завершено для userId ${userId}, новое сообщение: ${message.message_id}`);
     });
 
     bot.action('download_report', async (ctx) => {
