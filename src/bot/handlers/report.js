@@ -76,7 +76,14 @@ async function downloadReportFile(ctx, objectIndex) {
     }
 
     const allReports = await loadAllReports();
-    const objectReports = Object.values(allReports).filter(report => report.objectName === objectName);
+    console.log(`[downloadReportFile] Загружено ${Object.keys(allReports).length} отчетов для проверки объекта "${objectName}"`);
+    const objectReports = Object.values(allReports).filter(report => {
+        const match = report.objectName === objectName;
+        if (!match) {
+            console.log(`[downloadReportFile] Отчет ${report.reportId} не совпадает: "${report.objectName}" !== "${objectName}"`);
+        }
+        return match;
+    });
 
     if (objectReports.length === 0) {
         console.log(`[downloadReportFile] Отчеты для объекта "${objectName}" не найдены`);
@@ -127,7 +134,7 @@ async function downloadReportFile(ctx, objectIndex) {
         const dateA = parseAndFormatDate(a.date);
         const dateB = parseAndFormatDate(b.date);
         if (dateA === dateB) return a.userId.localeCompare(b.userId);
-        return dateB.localeCompare(dateA); // Сравниваем как строки DD.MM.YYYY
+        return dateB.localeCompare(dateA);
     });
 
     let currentRow = 3;
@@ -159,14 +166,13 @@ async function downloadReportFile(ctx, objectIndex) {
         worksheet.getCell(`C${currentRow}`).style = paddedCellStyle;
         worksheet.getCell(`D${currentRow}`).style = centeredCellStyle;
 
-        // Добавляем гиперссылку внутри текста "X фото", если есть messageLink
         const photosCell = worksheet.getCell(`E${currentRow}`);
         if (report.photos && report.photos.length > 0 && report.messageLink) {
             photosCell.value = {
                 text: photosCount,
                 hyperlink: report.messageLink
             };
-            photosCell.style = centeredCellStyle; // Сохраняем стиль без выделения
+            photosCell.style = centeredCellStyle;
         } else {
             photosCell.style = centeredCellStyle;
         }
@@ -249,16 +255,24 @@ async function createReport(ctx) {
 
 async function showReportObjects(ctx) {
     const userId = ctx.from.id.toString();
+    console.log(`[showReportObjects] Вызов для userId ${userId}`);
+
     const users = await loadUsers();
-    const reports = await loadUserReports(userId);
+    const reports = await loadUserReports(userId).catch(err => {
+        console.error(`[showReportObjects] Ошибка загрузки отчетов для userId ${userId}: ${err.message}`);
+        return {};
+    });
 
     await clearPreviousMessages(ctx, userId);
 
     if (Object.keys(reports).length === 0) {
+        console.log(`[showReportObjects] Отчеты для userId ${userId} не найдены`);
         return ctx.reply('У вас пока нет отчетов.');
     }
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
+    console.log(`[showReportObjects] Найдено ${uniqueObjects.length} уникальных объектов: ${uniqueObjects.join(', ')}`);
+
     const buttons = uniqueObjects.map((obj, index) =>
         [Markup.button.callback(obj, `select_report_object_${index}`)]
     );
@@ -266,6 +280,7 @@ async function showReportObjects(ctx) {
 
     const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
     ctx.state.userStates[userId].messageIds.push(message.message_id);
+    console.log(`[showReportObjects] Сообщение с выбором объектов отправлено для userId ${userId}`);
 }
 
 async function showReportDates(ctx, objectIndex, page = 0) {
