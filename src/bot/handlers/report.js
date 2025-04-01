@@ -18,7 +18,7 @@ async function showDownloadReport(ctx, page = 0) {
     const availableObjects = ORGANIZATION_OBJECTS[userOrganization] || [];
 
     if (!availableObjects.length) {
-        THEIRconsole.log(`[showDownloadReport] Для организации ${userOrganization} нет доступных объектов`);
+        console.log(`[showDownloadReport] Для организации ${userOrganization} нет доступных объектов`);
         return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
     }
 
@@ -484,6 +484,7 @@ async function editReport(ctx, reportId) {
 
 // Функция для удаления выгруженного отчета
 async function clearLastReport(ctx, userId) {
+    console.log(`[clearLastReport] Проверка отчета для userId ${userId}, lastReportMessageId: ${ctx.state.userStates[userId]?.lastReportMessageId}`);
     if (ctx.state.userStates[userId]?.lastReportMessageId) {
         try {
             await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.userStates[userId].lastReportMessageId);
@@ -492,6 +493,8 @@ async function clearLastReport(ctx, userId) {
             console.error(`[clearLastReport] Не удалось удалить сообщение с отчетом ${ctx.state.userStates[userId].lastReportMessageId}: ${err.message}`);
         }
         ctx.state.userStates[userId].lastReportMessageId = null; // Сбрасываем идентификатор
+    } else {
+        console.log(`[clearLastReport] Нет отчета для удаления для userId ${userId}`);
     }
 }
 
@@ -544,6 +547,8 @@ module.exports = (bot) => {
                 lastReportMessageId: null
             };
         }
+
+        console.log(`[main_menu] Начало обработки для userId ${userId}, состояние:`, ctx.state.userStates[userId]);
 
         // Удаляем выгруженный отчет, если он есть
         await clearLastReport(ctx, userId);
