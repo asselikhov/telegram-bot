@@ -6,8 +6,6 @@ const { showObjectSelection } = require('../actions/objects');
 const { showProfile } = require('./menu');
 const { saveReport, loadUserReports } = require('../../database/reportModel');
 const { ORGANIZATIONS_LIST, GENERAL_GROUP_CHAT_IDS, OBJECT_GROUPS, ADMIN_ID } = require('../../config/config');
-
-// Предполагаем, что showMainMenu экспортируется из menu.js
 const { showMainMenu } = require('./menu');
 
 module.exports = (bot) => {
@@ -82,8 +80,8 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     await saveUser(userId, users[userId]);
                     console.log(`ФИО обновлено для userId ${userId}: ${newFullName}`);
 
-                    state.step = null; // Сбрасываем шаг
-                    state.messageIds = []; // Очищаем messageIds
+                    state.step = null;
+                    state.messageIds = [];
 
                     await ctx.reply(`Ваше ФИО изменено на "${newFullName}"`);
                     await showProfile(ctx);
@@ -191,9 +189,9 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const users = await loadUsers();
 
         const date = new Date();
-        const formattedDate = formatDate(date); // DD.MM.YYYY
+        const formattedDate = formatDate(date);
         const timestamp = date.toISOString();
-        const reportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`; // Например, 31_03_2025_1
+        const reportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`;
         const report = {
             reportId,
             userId,
@@ -264,7 +262,6 @@ ${report.materials}
         await saveUser(userId, users[userId]);
         await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`);
 
-        // Очищаем состояние и возвращаем главное меню
         delete ctx.state.userStates[userId];
         await showMainMenu(ctx);
     });
@@ -288,7 +285,7 @@ ${report.materials}
 
         const newTimestamp = new Date().toISOString();
         const formattedDate = parseAndFormatDate(state.report.date);
-        const newReportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`; // Например, 31_03_2025_2
+        const newReportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`;
         const newReport = {
             reportId: newReportId,
             userId,

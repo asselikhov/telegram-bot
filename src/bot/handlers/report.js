@@ -423,39 +423,7 @@ async function deleteAllPhotos(ctx, reportId) {
     ctx.state.userStates[userId].messageIds = [message.message_id];
 }
 
-// Обработка текста для шагов редактирования
-function setupTextHandler(bot) {
-    bot.on('text', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        const userState = ctx.state.userStates[userId];
-
-        if (!userState || !userState.report) return;
-
-        if (userState.step === 'editWorkDone') {
-            userState.report.workDone = ctx.message.text;
-            userState.step = 'editMaterials';
-            await clearPreviousMessages(ctx, userId);
-            const message = await ctx.reply('💡 Введите новую информацию о поставленных материалах:');
-            ctx.state.userStates[userId].messageIds = [message.message_id];
-        } else if (userState.step === 'editMaterials') {
-            userState.report.materials = ctx.message.text;
-            userState.step = 'editPhotos';
-            await clearPreviousMessages(ctx, userId);
-            const message = await ctx.reply(
-                '📸 Прикрепите новые изображения к отчету или нажмите "Готово" для завершения',
-                Markup.inlineKeyboard([
-                    [Markup.button.callback('Удалить все фото', `delete_all_photos_${userState.report.originalReportId}`)],
-                    [Markup.button.callback('Готово', `finish_edit_${userState.report.originalReportId}`)]
-                ])
-            );
-            ctx.state.userStates[userId].messageIds = [message.message_id];
-        }
-    });
-}
-
 module.exports = (bot) => {
-    setupTextHandler(bot);
-
     bot.action('download_report', async (ctx) => await showDownloadReport(ctx, 0));
     bot.action(/download_report_page_(\d+)/, async (ctx) => await showDownloadReport(ctx, parseInt(ctx.match[1], 10)));
     bot.action(/download_report_file_(\d+)/, (ctx) => downloadReportFile(ctx, parseInt(ctx.match[1], 10)));
