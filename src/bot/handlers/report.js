@@ -1,4 +1,4 @@
-console.log('[DEBUG] report.js загружен, версия: 2024-04-01 09:31');
+console.log('[DEBUG] report.js загружен, версия: 2024-04-01 10:31');
 const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
@@ -63,8 +63,9 @@ async function showDownloadReport(ctx, page = 0) {
     );
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
     }
+    ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+    console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
 }
 
 async function downloadReportFile(ctx, objectIndex) {
@@ -267,8 +268,9 @@ async function createReport(ctx) {
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
     }
+    ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+    console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
 }
 
 async function showReportObjects(ctx) {
@@ -288,8 +290,9 @@ async function showReportObjects(ctx) {
         const message = await ctx.reply('У вас пока нет отчетов.');
         if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
             ctx.state.userStates[userId].messageIds.push(message.message_id);
-            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
         }
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+        console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
         return;
     }
 
@@ -304,8 +307,9 @@ async function showReportObjects(ctx) {
     const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
     }
+    ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+    console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
     console.log(`[showReportObjects] Сообщение с выбором объектов отправлено для userId ${userId}`);
 }
 
@@ -360,8 +364,9 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     );
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
     }
+    ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+    console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
 }
 
 async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
@@ -420,8 +425,9 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     );
     if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
     }
+    ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+    console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
 }
 
 async function showReportDetails(ctx, reportId) {
@@ -529,12 +535,14 @@ module.exports = (bot) => {
         );
         if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
             ctx.state.userStates[userId].messageIds.push(message.message_id);
-            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
         }
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+        console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
     });
 
     bot.action('main_menu', async (ctx) => {
         const userId = ctx.from.id.toString();
+
         if (!ctx.state.userStates[userId]) {
             ctx.state.userStates[userId] = {
                 step: null,
@@ -544,6 +552,7 @@ module.exports = (bot) => {
                 lastReportMessageId: null
             };
         }
+
         console.log(`[main_menu] Начало обработки для userId ${userId}, состояние:`, ctx.state.userStates[userId]);
         await clearLastReport(ctx, userId);
         await clearPreviousMessages(ctx, userId);
@@ -558,8 +567,9 @@ module.exports = (bot) => {
         );
         if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
             ctx.state.userStates[userId].messageIds.push(message.message_id);
-            ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
         }
+        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+        console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
         console.log(`[main_menu] Завершено для userId ${userId}, новое сообщение: ${message.message_id}`);
     });
 
