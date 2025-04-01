@@ -162,21 +162,32 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const state = ctx.state.userStates[userId];
         if (!state || (state.step !== 'photos' && state.step !== 'editPhotos')) return;
 
-        if (state.messageIds.length > 0) {
-            const lastMessageId = state.messageIds.pop();
-            await ctx.telegram.deleteMessage(ctx.chat.id, lastMessageId).catch(e =>
-                console.log(`Не удалось удалить сообщение ${lastMessageId}: ${e.message}`)
-            );
-        }
-
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
         state.report.photos.push(photoId);
 
-        const newMessage = await ctx.reply(
-            'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.',
-            Markup.inlineKeyboard([[Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]])
-        );
-        state.messageIds.push(newMessage.message_id);
+        const finishAction = state.step === 'photos' ? 'finish_report' : 'finish_edit_report';
+        const messageText = 'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.';
+        const keyboard = Markup.inlineKeyboard([[Markup.button.callback('Готово', finishAction)]]);
+
+        if (state.messageIds.length > 0) {
+            // Если уже есть сообщение, редактируем его
+            const lastMessageId = state.messageIds[0]; // Используем только первое сообщение
+            try {
+                await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, messageText, keyboard);
+                console.log(`[textHandler.js] Сообщение ${lastMessageId} обновлено для userId ${userId}`);
+            } catch (e) {
+                console.log(`[textHandler.js] Не удалось обновить сообщение ${lastMessageId}: ${e.message}`);
+                // Если редактирование не удалось (например, сообщение удалено), отправляем новое
+                await clearPreviousMessages(ctx, userId);
+                const newMessage = await ctx.reply(messageText, keyboard);
+                state.messageIds = [newMessage.message_id];
+            }
+        } else {
+            // Если сообщения еще нет, отправляем первое
+            const newMessage = await ctx.reply(messageText, keyboard);
+            state.messageIds = [newMessage.message_id];
+            console.log(`[textHandler.js] Новое сообщение отправлено для userId ${userId}: ${newMessage.message_id}`);
+        }
     });
 
     bot.action('finish_report', async (ctx) => {
