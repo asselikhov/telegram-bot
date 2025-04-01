@@ -320,7 +320,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
         return [Markup.button.callback(time, `select_report_time_${reportId}`)];
     }).reverse();
 
-    const buttons лю[];
+    const buttons = [];
     const paginationButtons = [];
     if (totalPages > 1) {
         if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `report_timestamps_page_${objectIndex}_${dateIndex}_${pageNum - 1}`));
