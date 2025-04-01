@@ -36,8 +36,9 @@ module.exports = (bot) => {
 
                 // Добавляем все фото в отчет
                 state.report.photos = [...state.report.photos, ...group.photos];
+                console.log(`[textHandler.js] Собранные фото для медиагруппы: ${state.report.photos.length} - ${state.report.photos}`);
 
-                // Удаляем предыдущую медиагруппу
+                // Удаляем предыдущую медиагруппу, если она была
                 if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
                     for (const msgId of state.mediaGroupIds) {
                         await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
@@ -47,7 +48,7 @@ module.exports = (bot) => {
                     state.mediaGroupIds = [];
                 }
 
-                // Отправляем новую медиагруппу
+                // Сначала отправляем медиагруппу
                 const mediaGroup = state.report.photos.map((photoId, index) => ({
                     type: 'photo',
                     media: photoId,
@@ -55,8 +56,9 @@ module.exports = (bot) => {
                 }));
                 const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
                 state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
+                console.log(`[textHandler.js] Медиагруппа отправлена для userId ${userId}: ${state.mediaGroupIds}`);
 
-                // Обновляем или создаем текстовое сообщение
+                // Затем обновляем или создаем текстовое сообщение
                 const text = 'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.';
                 const keyboard = Markup.inlineKeyboard([
                     [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
@@ -65,27 +67,31 @@ module.exports = (bot) => {
                 if (state.messageIds && state.messageIds.length > 0) {
                     const existingMessageId = state.messageIds[0];
                     try {
-                        await ctx.telegram.editMessageText(ctx.chat.id, existingMessageId, null, text, keyboard);
-                        console.log(`[textHandler.js] Текстовое сообщение ${existingMessageId} обновлено для userId ${userId}`);
+                        // Удаляем старое текстовое сообщение
+                        await ctx.telegram.deleteMessage(ctx.chat.id, existingMessageId).catch(e =>
+                            console.log(`[textHandler.js] Не удалось удалить старое сообщение ${existingMessageId}: ${e.message}`)
+                        );
                     } catch (e) {
-                        console.log(`[textHandler.js] Не удалось отредактировать сообщение ${existingMessageId}: ${e.message}`);
-                        await ctx.telegram.deleteMessage(ctx.chat.id, existingMessageId).catch(() => {});
-                        const newMessage = await ctx.reply(text, keyboard);
-                        state.messageIds = [newMessage.message_id];
-                        console.log(`[textHandler.js] Новое сообщение создано: ${newMessage.message_id}`);
+                        console.log(`[textHandler.js] Ошибка при удалении сообщения ${existingMessageId}: ${e.message}`);
                     }
+                    // Создаем новое сообщение после медиагруппы
+                    const newMessage = await ctx.reply(text, keyboard);
+                    state.messageIds = [newMessage.message_id];
+                    console.log(`[textHandler.js] Новое текстовое сообщение создано для userId ${userId}: ${newMessage.message_id}`);
                 } else {
                     const newMessage = await ctx.reply(text, keyboard);
                     state.messageIds = [newMessage.message_id];
-                    console.log(`[textHandler.js] Первое сообщение создано: ${newMessage.message_id}`);
+                    console.log(`[textHandler.js] Первое текстовое сообщение создано для userId ${userId}: ${newMessage.message_id}`);
                 }
 
-                console.log(`[textHandler.js] Медиагруппа отправлена для userId ${userId}: ${state.mediaGroupIds}, текст: ${state.messageIds[0]}`);
+                console.log(`[textHandler.js] Обработка завершена для userId ${userId}, медиагруппа: ${state.mediaGroupIds}, текст: ${state.messageIds[0]}`);
                 mediaGroups.delete(mediaGroupId);
             }, 500); // Ждем 500 мс после последнего фото в группе
         }
         await next();
     });
+
+    // Остальной код остается без изменений (bot.on('text', ...), bot.on('photo', ...), bot.action(...))
 
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
@@ -238,7 +244,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         }
     });
 
-    // Обработка одиночных фото
     bot.on('photo', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
@@ -247,7 +252,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
         state.report.photos.push(photoId);
 
-        // Удаляем предыдущую медиагруппу, если она была
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
                 await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
@@ -257,7 +261,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             state.mediaGroupIds = [];
         }
 
-        // Отправляем новую медиагруппу с текущими фото
         const mediaGroup = state.report.photos.map((photoId, index) => ({
             type: 'photo',
             media: photoId,
@@ -266,7 +269,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
         state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
 
-        // Обновляем или создаем текстовое сообщение
         const text = 'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.';
         const keyboard = Markup.inlineKeyboard([
             [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
@@ -275,19 +277,19 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         if (state.messageIds && state.messageIds.length > 0) {
             const existingMessageId = state.messageIds[0];
             try {
-                await ctx.telegram.editMessageText(ctx.chat.id, existingMessageId, null, text, keyboard);
-                console.log(`[textHandler.js] Текстовое сообщение ${existingMessageId} обновлено для userId ${userId}`);
+                await ctx.telegram.deleteMessage(ctx.chat.id, existingMessageId).catch(e =>
+                    console.log(`[textHandler.js] Не удалось удалить старое сообщение ${existingMessageId}: ${e.message}`)
+                );
             } catch (e) {
-                console.log(`[textHandler.js] Не удалось отредактировать сообщение ${existingMessageId}: ${e.message}`);
-                await ctx.telegram.deleteMessage(ctx.chat.id, existingMessageId).catch(() => {});
-                const newMessage = await ctx.reply(text, keyboard);
-                state.messageIds = [newMessage.message_id];
-                console.log(`[textHandler.js] Новое сообщение создано: ${newMessage.message_id}`);
+                console.log(`[textHandler.js] Ошибка при удалении сообщения ${existingMessageId}: ${e.message}`);
             }
+            const newMessage = await ctx.reply(text, keyboard);
+            state.messageIds = [newMessage.message_id];
+            console.log(`[textHandler.js] Новое текстовое сообщение создано для userId ${userId}: ${newMessage.message_id}`);
         } else {
             const newMessage = await ctx.reply(text, keyboard);
             state.messageIds = [newMessage.message_id];
-            console.log(`[textHandler.js] Первое сообщение создано: ${newMessage.message_id}`);
+            console.log(`[textHandler.js] Первое текстовое сообщение создано для userId ${userId}: ${newMessage.message_id}`);
         }
 
         console.log(`[textHandler.js] Медиагруппа отправлена для userId ${userId}: ${state.mediaGroupIds}, текст: ${state.messageIds[0]}`);
@@ -298,7 +300,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const state = ctx.state.userStates[userId];
         if (!state || state.step !== 'photos') return;
 
-        // Очистка предыдущих сообщений и медиагруппы
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
                 await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
@@ -313,7 +314,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const users = await loadUsers();
 
         const date = new Date();
-        const formattedDate = formatDate(date); // DD.MM.YYYY
+        const formattedDate = formatDate(date);
         const timestamp = date.toISOString();
         const reportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`;
         const report = {
@@ -351,11 +352,9 @@ ${report.materials}
         ];
         const allChatIds = [groupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
 
-        // Временное сообщение для пользователя
         const tempMessage = await ctx.reply('⏳ Отправка отчета в группы...');
         const userMessageIds = [tempMessage.message_id];
 
-        // Отправка фото в чат пользователя (если есть), чтобы потом удалить
         let userMediaGroupIds = [];
         if (report.photos.length > 0) {
             const mediaGroup = report.photos.map((photoId, index) => ({
@@ -366,7 +365,6 @@ ${report.materials}
             const userMediaGroup = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
             userMediaGroupIds = userMediaGroup.map(msg => msg.message_id);
 
-            // Отправка в группы
             for (const chatId of allChatIds) {
                 try {
                     const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
@@ -379,7 +377,6 @@ ${report.materials}
                 }
             }
         } else {
-            // Отправка текста в группы
             for (const chatId of allChatIds) {
                 try {
                     const message = await ctx.telegram.sendMessage(chatId, reportText);
@@ -393,15 +390,12 @@ ${report.materials}
             }
         }
 
-        // Сохранение отчета в базе данных
         await saveReport(userId, report);
         await saveUser(userId, users[userId]);
 
-        // Отправка финального сообщения пользователю
         const finalMessage = await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`);
         userMessageIds.push(finalMessage.message_id);
 
-        // Удаление всех сообщений из чата пользователя
         const allUserMessageIds = [...userMessageIds, ...userMediaGroupIds];
         for (const msgId of allUserMessageIds) {
             try {
@@ -412,7 +406,6 @@ ${report.materials}
             }
         }
 
-        // Очистка состояния и возврат в главное меню
         delete ctx.state.userStates[userId];
         await showMainMenu(ctx);
     });
@@ -422,7 +415,6 @@ ${report.materials}
         const state = ctx.state.userStates[userId];
         if (!state || state.step !== 'editPhotos') return;
 
-        // Очистка предыдущих сообщений и медиагруппы
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
                 await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
@@ -433,10 +425,8 @@ ${report.materials}
         }
         await clearPreviousMessages(ctx, userId);
 
-        // Удаление всех фото из отчета
         state.report.photos = [];
 
-        // Отправка нового сообщения с кнопкой "Готово"
         const newMessage = await ctx.reply(
             'Все фото удалены. Отправьте новые или нажмите "Готово" для завершения.',
             Markup.inlineKeyboard([
@@ -453,7 +443,6 @@ ${report.materials}
         const state = ctx.state.userStates[userId];
         if (!state || state.step !== 'editPhotos') return;
 
-        // Очистка предыдущих сообщений и медиагруппы
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
                 await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
