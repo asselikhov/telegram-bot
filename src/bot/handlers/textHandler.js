@@ -69,13 +69,28 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 break;
 
             case 'editFullNameInput':
-                const newFullName = ctx.message.text.trim();
-                users[userId].fullName = newFullName;
-                await saveUser(userId, users[userId]);
-                console.log(`ФИО обновлено для userId ${userId}: ${newFullName}`);
-                state.step = null;
-                await ctx.reply(`Ваше ФИО изменено на "${newFullName}"`);
-                await showProfile(ctx);
+                try {
+                    const newFullName = ctx.message.text.trim();
+                    if (!newFullName) {
+                        const message = await ctx.reply('ФИО не может быть пустым. Введите снова:');
+                        state.messageIds.push(message.message_id);
+                        return;
+                    }
+
+                    await clearPreviousMessages(ctx, userId);
+                    users[userId].fullName = newFullName;
+                    await saveUser(userId, users[userId]);
+                    console.log(`ФИО обновлено для userId ${userId}: ${newFullName}`);
+
+                    state.step = null; // Сбрасываем шаг
+                    state.messageIds = []; // Очищаем messageIds
+
+                    await ctx.reply(`Ваше ФИО изменено на "${newFullName}"`);
+                    await showProfile(ctx);
+                } catch (error) {
+                    console.error(`[textHandler.js] Ошибка при обновлении ФИО для userId ${userId}: ${error.message}`);
+                    await ctx.reply('Произошла ошибка при изменении ФИО. Попробуйте снова.');
+                }
                 break;
 
             case 'customOrganizationInput':
