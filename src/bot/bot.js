@@ -14,7 +14,7 @@ const objectsActions = require('./actions/objects');
 const statusActions = require('./actions/status');
 const { loadUsers } = require('../database/userModel');
 const { loadUserReports } = require('../database/reportModel');
-const { formatDate } = require('../utils'); // Импортируем formatDate
+const { formatDate } = require('./utils'); // Импортируем formatDate
 
 const bot = new Telegraf(BOT_TOKEN);
 
