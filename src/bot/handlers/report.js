@@ -535,7 +535,6 @@ module.exports = (bot) => {
 
     bot.action('main_menu', async (ctx) => {
         const userId = ctx.from.id.toString();
-
         if (!ctx.state.userStates[userId]) {
             ctx.state.userStates[userId] = {
                 step: null,
@@ -545,7 +544,6 @@ module.exports = (bot) => {
                 lastReportMessageId: null
             };
         }
-
         console.log(`[main_menu] Начало обработки для userId ${userId}, состояние:`, ctx.state.userStates[userId]);
         await clearLastReport(ctx, userId);
         await clearPreviousMessages(ctx, userId);
