@@ -90,7 +90,15 @@ async function downloadReportFile(ctx, objectIndex) {
         return ctx.reply(`Отчеты для объекта "${objectName}" не найдены.`);
     }
 
-    await clearPreviousMessages(ctx, userId);
+    // Удаляем только предыдущее сообщение с документом, если оно есть
+    if (ctx.state.userStates[userId].lastReportMessageId) {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.userStates[userId].lastReportMessageId);
+            console.log(`[downloadReportFile] Предыдущее сообщение с отчетом ${ctx.state.userStates[userId].lastReportMessageId} удалено`);
+        } catch (err) {
+            console.error(`[downloadReportFile] Не удалось удалить предыдущее сообщение ${ctx.state.userStates[userId].lastReportMessageId}: ${err.message}`);
+        }
+    }
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Отчеты');
@@ -110,7 +118,7 @@ async function downloadReportFile(ctx, objectIndex) {
         alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
-    const paddedCellStyle = {
+    const paddedexpectations = {
         font: { name: 'Arial', size: 9 },
         alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
@@ -174,7 +182,7 @@ async function downloadReportFile(ctx, objectIndex) {
             };
             photosCell.style = {
                 ...centeredCellStyle,
-                font: { ...centeredCellStyle.font, color: { argb: 'FF0000FF' }, underline: true } // Синий цвет и подчёркивание для ссылки
+                font: { ...centeredCellStyle.font, color: { argb: 'FF0000FF' }, underline: true }
             };
         } else {
             photosCell.style = centeredCellStyle;
@@ -226,11 +234,16 @@ async function downloadReportFile(ctx, objectIndex) {
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `${objectName}_reports_${formatDate(new Date())}.xlsx`;
 
-    await ctx.replyWithDocument({
+    // Отправляем документ и сохраняем message_id
+    const documentMessage = await ctx.replyWithDocument({
         source: buffer,
         filename: filename
     });
-    console.log(`[downloadReportFile] Excel-файл с отчетами для "${objectName}" отправлен пользователю ${userId}, отчетов: ${objectReports.length}`);
+    ctx.state.userStates[userId].lastReportMessageId = documentMessage.message_id;
+    console.log(`[downloadReportFile] Excel-файл с отчетами для "${objectName}" отправлен пользователю ${userId}, message_id: ${documentMessage.message_id}, отчетов: ${objectReports.length}`);
+
+    // Возвращаем кнопки выбора объекта
+    await showDownloadReport(ctx, Math.floor(objectIndex / 10));
 }
 
 async function createReport(ctx) {
