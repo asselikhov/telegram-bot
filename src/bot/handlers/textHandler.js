@@ -3,10 +3,9 @@ const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 const { loadInviteCode, markInviteCodeAsUsed, validateInviteCode } = require('../../database/inviteCodeModel');
 const { showObjectSelection } = require('../actions/objects');
-const { showProfile } = require('./menu');
+const { showProfile, showMainMenu } = require('./menu');
 const { saveReport, loadUserReports } = require('../../database/reportModel');
 const { ORGANIZATIONS_LIST, GENERAL_GROUP_CHAT_IDS, OBJECT_GROUPS, ADMIN_ID } = require('../../config/config');
-const { showMainMenu } = require('./menu');
 
 module.exports = (bot) => {
     bot.on('text', async (ctx) => {
@@ -189,7 +188,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const users = await loadUsers();
 
         const date = new Date();
-        const formattedDate = formatDate(date);
+        const formattedDate = formatDate(date); // DD.MM.YYYY
         const timestamp = date.toISOString();
         const reportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`;
         const report = {
@@ -227,12 +226,22 @@ ${report.materials}
         ];
         const allChatIds = [groupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
 
+        // Временное сообщение для пользователя
+        const tempMessage = await ctx.reply('⏳ Отправка отчета в группы...');
+        const userMessageIds = [tempMessage.message_id];
+
+        // Отправка фото в чат пользователя (если есть), чтобы потом удалить
+        let userMediaGroupIds = [];
         if (report.photos.length > 0) {
             const mediaGroup = report.photos.map((photoId, index) => ({
                 type: 'photo',
                 media: photoId,
                 caption: index === 0 ? reportText.slice(0, 1024) : undefined
             }));
+            const userMediaGroup = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
+            userMediaGroupIds = userMediaGroup.map(msg => msg.message_id);
+
+            // Отправка в группы
             for (const chatId of allChatIds) {
                 try {
                     const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
@@ -245,6 +254,7 @@ ${report.materials}
                 }
             }
         } else {
+            // Отправка текста в группы
             for (const chatId of allChatIds) {
                 try {
                     const message = await ctx.telegram.sendMessage(chatId, reportText);
@@ -258,10 +268,26 @@ ${report.materials}
             }
         }
 
+        // Сохранение отчета в базе данных
         await saveReport(userId, report);
         await saveUser(userId, users[userId]);
-        await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`);
 
+        // Отправка финального сообщения пользователю
+        const finalMessage = await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`);
+        userMessageIds.push(finalMessage.message_id);
+
+        // Удаление всех сообщений из чата пользователя
+        const allUserMessageIds = [...userMessageIds, ...userMediaGroupIds];
+        for (const msgId of allUserMessageIds) {
+            try {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId);
+                console.log(`Удалено сообщение ${msgId} из чата пользователя ${userId}`);
+            } catch (e) {
+                console.log(`Не удалось удалить сообщение ${msgId} из чата ${ctx.chat.id}: ${e.message}`);
+            }
+        }
+
+        // Очистка состояния и возврат в главное меню
         delete ctx.state.userStates[userId];
         await showMainMenu(ctx);
     });
