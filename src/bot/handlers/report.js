@@ -1,18 +1,16 @@
-console.log('[DEBUG] report.js загружен, версия: 2024-04-01 12:01');
+console.log('[DEBUG] report.js загружен, версия: 2024-04-01 13:01');
 const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, loadAllReports } = require('../../database/reportModel');
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
-const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
+const { formatDate, parseAndFormatDate } = require('../utils');
 
 // Универсальная функция для очистки всех сообщений
 async function clearAllMessages(ctx, userId) {
     const state = ctx.state.userStates[userId];
     const messageIds = state.messageIds || [];
-    const lastReportMessageId = state.lastReportMessageId;
 
-    // Удаляем все сообщения из messageIds
     if (messageIds.length > 0) {
         console.log(`[clearAllMessages] Найдено ${messageIds.length} сообщений для удаления:`, messageIds);
         for (const msgId of messageIds) {
@@ -24,17 +22,6 @@ async function clearAllMessages(ctx, userId) {
             }
         }
         state.messageIds = [];
-    }
-
-    // Удаляем сообщение с отчетом, если есть
-    if (lastReportMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, lastReportMessageId);
-            console.log(`[clearAllMessages] Сообщение с отчетом ${lastReportMessageId} удалено`);
-        } catch (err) {
-            console.error(`[clearAllMessages] Не удалось удалить сообщение с отчетом ${lastReportMessageId}: ${err.message}`);
-        }
-        state.lastReportMessageId = null;
     }
 
     console.log(`[clearAllMessages] Очистка завершена для userId ${userId}, состояние:`, state);
@@ -280,7 +267,7 @@ async function downloadReportFile(ctx, objectIndex) {
         source: buffer,
         filename: filename
     });
-    ctx.state.userStates[userId].lastReportMessageId = documentMessage.message_id;
+    ctx.state.userStates[userId].messageIds.push(documentMessage.message_id);
     console.log(`[downloadReportFile] Excel-файл с отчетами для "${objectName}" отправлен пользователю ${userId}, message_id: ${documentMessage.message_id}, отчетов: ${objectReports.length}`);
 }
 
@@ -499,8 +486,11 @@ ${report.materials}
     ];
 
     if (report.photos && report.photos.length > 0) {
-        await ctx.telegram.sendMediaGroup(ctx.chat.id, report.photos.map(photoId => ({ type: 'photo', media: photoId })));
+        const mediaGroup = await ctx.telegram.sendMediaGroup(ctx.chat.id, report.photos.map(photoId => ({ type: 'photo', media: photoId })));
+        mediaGroup.forEach(msg => ctx.state.userStates[userId].messageIds.push(msg.message_id));
+        console.log(`[showReportDetails] Отправлено ${mediaGroup.length} изображений, messageIds:`, ctx.state.userStates[userId].messageIds);
     }
+
     const message = await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
     ctx.state.userStates[userId].messageIds.push(message.message_id);
     console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
@@ -539,8 +529,7 @@ module.exports = (bot) => {
                 step: null,
                 selectedObjects: [],
                 report: {},
-                messageIds: [],
-                lastReportMessageId: null
+                messageIds: []
             };
         }
 
@@ -565,8 +554,7 @@ module.exports = (bot) => {
                 step: null,
                 selectedObjects: [],
                 report: {},
-                messageIds: [],
-                lastReportMessageId: null
+                messageIds: []
             };
         }
 
