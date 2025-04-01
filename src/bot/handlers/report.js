@@ -1,8 +1,8 @@
-console.log('[DEBUG] report.js загружен, версия: 2024-04-01 13:01');
+console.log('[DEBUG] report.js загружен, версия: 2024-04-01 14:01');
 const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { loadUserReports, loadAllReports } = require('../../database/reportModel');
+const { loadUserReports, loadAllReports, saveReport } = require('../../database/reportModel');
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
 const { formatDate, parseAndFormatDate } = require('../utils');
 
@@ -25,6 +25,14 @@ async function clearAllMessages(ctx, userId) {
     }
 
     console.log(`[clearAllMessages] Очистка завершена для userId ${userId}, состояние:`, state);
+}
+
+// Очистка фотографий и отображение финального сообщения
+async function finalizeReport(ctx, userId) {
+    await clearAllMessages(ctx, userId);
+    const message = await ctx.reply('Ваш отчет опубликован');
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    console.log(`[finalizeReport] Отчет опубликован, message_id: ${message.message_id}, messageIds:`, ctx.state.userStates[userId].messageIds);
 }
 
 async function showDownloadReport(ctx, page = 0) {
@@ -580,6 +588,7 @@ module.exports = (bot) => {
         await showDownloadReport(ctx, page);
     });
     bot.action(/download_report_file_(\d+)/, (ctx) => downloadReportFile(ctx, parseInt(ctx.match[1], 10)));
+
     bot.action('create_report', createReport);
     bot.action(/select_object_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
@@ -592,12 +601,67 @@ module.exports = (bot) => {
 
         ctx.state.userStates[userId] = {
             step: 'workDone',
-            report: { objectName: selectedObject, photos: [] },
+            report: { objectName: selectedObject, photos: [], userId, fullName: users[userId].fullName },
             messageIds: ctx.state.userStates[userId].messageIds || []
         };
         const message = await ctx.reply('💡 Введите информацию о выполненных работах:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
         console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
+    });
+
+    // Обработка текстового ввода для создания отчета
+    bot.on('text', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || !state.step) return;
+
+        if (state.step === 'workDone') {
+            state.report.workDone = ctx.message.text;
+            state.step = 'materials';
+            await clearAllMessages(ctx, userId);
+            const message = await ctx.reply('💡 Введите информацию о поставленных материалах:');
+            state.messageIds.push(message.message_id);
+            console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, state.messageIds);
+        } else if (state.step === 'materials') {
+            state.report.materials = ctx.message.text;
+            state.step = 'photos';
+            await clearAllMessages(ctx, userId);
+            const message = await ctx.reply('📸 Пришлите фотографии (или напишите "нет", чтобы пропустить):');
+            state.messageIds.push(message.message_id);
+            console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, state.messageIds);
+        } else if (state.step === 'photos' && ctx.message.text.toLowerCase() === 'нет') {
+            state.report.date = formatDate(new Date());
+            state.report.timestamp = new Date().toISOString();
+            await saveReport(state.report);
+            delete ctx.state.userStates[userId];
+            await finalizeReport(ctx, userId);
+        }
+    });
+
+    // Обработка фотографий
+    bot.on('photo', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'photos') return;
+
+        const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+        state.report.photos.push(photoId);
+        const message = await ctx.reply('📸 Пришлите ещё фотографию или напишите "готово", чтобы завершить:');
+        state.messageIds.push(ctx.message.message_id);
+        state.messageIds.push(message.message_id);
+        console.log(`[DEBUG] Добавлена фотография, messageIds:`, state.messageIds);
+    });
+
+    bot.hears('готово', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'photos') return;
+
+        state.report.date = formatDate(new Date());
+        state.report.timestamp = new Date().toISOString();
+        await saveReport(state.report);
+        delete ctx.state.userStates[userId];
+        await finalizeReport(ctx, userId);
     });
 
     bot.action('view_reports', showReportObjects);
