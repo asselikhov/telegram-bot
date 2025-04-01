@@ -1,20 +1,62 @@
 const { pool } = require('./db');
 const { formatDate } = require('../bot/utils');
 
+// Функция для удаления "100" из chatId в ссылке
+function normalizeMessageLink(messageLink) {
+    if (!messageLink || typeof messageLink !== 'string') return messageLink;
+    const match = messageLink.match(/https:\/\/t\.me\/c\/(\d+)\/(\d+)/);
+    if (!match) return messageLink;
+    const chatId = match[1];
+    const messageId = match[2];
+    const normalizedChatId = chatId.startsWith('100') ? chatId.slice(3) : chatId;
+    return `https://t.me/c/${normalizedChatId}/${messageId}`;
+}
+
+async function saveReport(userId, report) {
+    const { reportId, userId: reportUserId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
+    const client = await pool.connect();
+    try {
+        const normalizedMessageLink = normalizeMessageLink(messageLink);
+        await client.query(`
+            INSERT INTO reports (reportid, userid, objectname, date, timestamp, workdone, materials, groupmessageids, messagelink, fullname, photos)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ON CONFLICT (reportid) DO UPDATE
+            SET userid = $2, objectname = $3, date = $4, timestamp = $5, workdone = $6, materials = $7, groupmessageids = $8, messagelink = $9, fullname = $10, photos = $11
+        `, [
+            reportId,
+            reportUserId || userId,
+            objectName,
+            date,
+            timestamp,
+            workDone,
+            materials,
+            JSON.stringify(groupMessageIds || {}),
+            normalizedMessageLink || null,
+            fullName,
+            JSON.stringify(photos || [])
+        ]);
+        console.log(`[saveReport] Отчет ${reportId} успешно сохранён для userId ${userId} с messagelink: ${normalizedMessageLink}`);
+    } catch (err) {
+        console.error(`[saveReport] Ошибка сохранения отчета ${reportId} для userId ${userId}: ${err.message}`);
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
+// Остальные функции остаются без изменений (пример для полноты)
 async function loadUserReports(userId) {
     const client = await pool.connect();
     try {
         console.log(`[loadUserReports] Запрос отчетов для userId: ${userId} (тип: ${typeof userId})`);
         const res = await client.query('SELECT * FROM reports WHERE userid = $1', [userId]);
         console.log(`[loadUserReports] Найдено строк: ${res.rowCount}`);
-        console.log(`[loadUserReports] Сырые данные строк: ${JSON.stringify(res.rows, null, 2)}`);
         const reports = {};
         res.rows.forEach((row, index) => {
             console.log(`[loadUserReports] Обработка строки ${index}: reportid=${row.reportid}, objectname=${row.objectname}, userid=${row.userid}`);
             let groupMessageIds = row.groupmessageids;
             let photos = row.photos;
 
-            // Обработка groupmessageids
             if (groupMessageIds && typeof groupMessageIds === 'string') {
                 try {
                     groupMessageIds = JSON.parse(groupMessageIds);
@@ -26,7 +68,6 @@ async function loadUserReports(userId) {
                 groupMessageIds = {};
             }
 
-            // Обработка photos
             if (photos && typeof photos === 'string') {
                 try {
                     photos = JSON.parse(photos);
@@ -57,25 +98,6 @@ async function loadUserReports(userId) {
     } catch (err) {
         console.error(`[loadUserReports] Ошибка загрузки отчетов для userId ${userId}: ${err.message}`);
         return {};
-    } finally {
-        client.release();
-    }
-}
-
-async function saveReport(userId, report) {
-    const { reportId, userId: reportUserId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
-    const client = await pool.connect();
-    try {
-        await client.query(`
-            INSERT INTO reports (reportid, userid, objectname, date, timestamp, workdone, materials, groupmessageids, messagelink, fullname, photos)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT (reportid) DO UPDATE
-            SET userid = $2, objectname = $3, date = $4, timestamp = $5, workdone = $6, materials = $7, groupmessageids = $8, messagelink = $9, fullname = $10, photos = $11
-        `, [reportId, reportUserId || userId, objectName, date, timestamp, workDone, materials, JSON.stringify(groupMessageIds || {}), messageLink || null, fullName, JSON.stringify(photos || [])]);
-        console.log(`[saveReport] Отчет ${reportId} успешно сохранён для userId ${userId}`);
-    } catch (err) {
-        console.error(`[saveReport] Ошибка сохранения отчета ${reportId} для userId ${userId}: ${err.message}`);
-        throw err;
     } finally {
         client.release();
     }
