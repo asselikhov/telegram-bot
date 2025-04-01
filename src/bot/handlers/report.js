@@ -1,4 +1,4 @@
-console.log('[DEBUG] report.js загружен, версия: 2024-04-01 11:01');
+console.log('[DEBUG] report.js загружен, версия: 2024-04-01 12:01');
 const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
@@ -6,13 +6,50 @@ const { loadUserReports, loadAllReports } = require('../../database/reportModel'
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 
+// Универсальная функция для очистки всех сообщений
+async function clearAllMessages(ctx, userId) {
+    const state = ctx.state.userStates[userId];
+    const messageIds = state.messageIds || [];
+    const lastReportMessageId = state.lastReportMessageId;
+
+    // Удаляем все сообщения из messageIds
+    if (messageIds.length > 0) {
+        console.log(`[clearAllMessages] Найдено ${messageIds.length} сообщений для удаления:`, messageIds);
+        for (const msgId of messageIds) {
+            try {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId);
+                console.log(`[clearAllMessages] Сообщение ${msgId} успешно удалено`);
+            } catch (err) {
+                console.error(`[clearAllMessages] Не удалось удалить сообщение ${msgId}: ${err.message}`);
+            }
+        }
+        state.messageIds = [];
+    }
+
+    // Удаляем сообщение с отчетом, если есть
+    if (lastReportMessageId) {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, lastReportMessageId);
+            console.log(`[clearAllMessages] Сообщение с отчетом ${lastReportMessageId} удалено`);
+        } catch (err) {
+            console.error(`[clearAllMessages] Не удалось удалить сообщение с отчетом ${lastReportMessageId}: ${err.message}`);
+        }
+        state.lastReportMessageId = null;
+    }
+
+    console.log(`[clearAllMessages] Очистка завершена для userId ${userId}, состояние:`, state);
+}
+
 async function showDownloadReport(ctx, page = 0) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
 
     if (!users[userId]?.isApproved) {
         console.log(`[showDownloadReport] Пользователь ${userId} не одобрен`);
-        return ctx.reply('У вас нет прав для выгрузки отчетов.');
+        await clearAllMessages(ctx, userId);
+        const message = await ctx.reply('У вас нет прав для выгрузки отчетов.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
     const userOrganization = users[userId].organization;
@@ -20,11 +57,14 @@ async function showDownloadReport(ctx, page = 0) {
 
     if (!availableObjects.length) {
         console.log(`[showDownloadReport] Для организации ${userOrganization} нет доступных объектов`);
-        return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
+        await clearAllMessages(ctx, userId);
+        const message = await ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
     const pageNum = typeof page === 'number' ? page : 0;
-    await clearPreviousMessages(ctx, userId);
+    await clearAllMessages(ctx, userId);
 
     const itemsPerPage = 10;
     const totalObjects = availableObjects.length;
@@ -36,7 +76,9 @@ async function showDownloadReport(ctx, page = 0) {
 
     if (currentObjects.length === 0) {
         console.log(`[showDownloadReport] Нет объектов для отображения на странице ${pageNum}`);
-        return ctx.reply('Ошибка: нет объектов для отображения.');
+        const message = await ctx.reply('Ошибка: нет объектов для отображения.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
     const buttons = currentObjects.map((obj, index) =>
@@ -61,10 +103,7 @@ async function showDownloadReport(ctx, page = 0) {
         `Выберите объект для выгрузки отчета (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
-    if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
-    }
-    ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
     console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
 }
 
@@ -77,7 +116,10 @@ async function downloadReportFile(ctx, objectIndex) {
 
     if (!objectName) {
         console.log(`[downloadReportFile] Объект с индексом ${objectIndex} не найден для организации ${userOrganization}`);
-        return ctx.reply('Ошибка: объект не найден.');
+        await clearAllMessages(ctx, userId);
+        const message = await ctx.reply('Ошибка: объект не найден.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
     const allReports = await loadAllReports();
@@ -92,17 +134,13 @@ async function downloadReportFile(ctx, objectIndex) {
 
     if (objectReports.length === 0) {
         console.log(`[downloadReportFile] Отчеты для объекта "${objectName}" не найдены`);
-        return ctx.reply(`Отчеты для объекта "${objectName}" не найдены.`);
+        await clearAllMessages(ctx, userId);
+        const message = await ctx.reply(`Отчеты для объекта "${objectName}" не найдены.`);
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
-    if (ctx.state.userStates[userId].lastReportMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.userStates[userId].lastReportMessageId);
-            console.log(`[downloadReportFile] Предыдущее сообщение с отчетом ${ctx.state.userStates[userId].lastReportMessageId} удалено`);
-        } catch (err) {
-            console.error(`[downloadReportFile] Не удалось удалить предыдущее сообщение ${ctx.state.userStates[userId].lastReportMessageId}: ${err.message}`);
-        }
-    }
+    await clearAllMessages(ctx, userId);
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Отчеты');
@@ -250,14 +288,19 @@ async function createReport(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     if (users[userId].position !== 'Производитель работ' || !users[userId].isApproved) {
-        return ctx.reply('У вас нет прав для создания отчетов.');
+        await clearAllMessages(ctx, userId);
+        const message = await ctx.reply('У вас нет прав для создания отчетов.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
-    await clearPreviousMessages(ctx, userId);
+    await clearAllMessages(ctx, userId);
 
     const userObjects = users[userId].selectedObjects;
     if (!userObjects || userObjects.length === 0) {
-        return ctx.reply('У вас не выбрано ни одного объекта в личном кабинете.');
+        const message = await ctx.reply('У вас не выбрано ни одного объекта в личном кабинете.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
     const buttons = userObjects.map((obj, index) =>
@@ -266,10 +309,7 @@ async function createReport(ctx) {
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
-    if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
-    }
-    ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
     console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
 }
 
@@ -283,16 +323,12 @@ async function showReportObjects(ctx) {
         return {};
     });
 
-    await clearPreviousMessages(ctx, userId);
+    await clearAllMessages(ctx, userId);
 
     if (Object.keys(reports).length === 0) {
         console.log(`[showReportObjects] Отчеты для userId ${userId} не найдены`);
         const message = await ctx.reply('У вас пока нет отчетов.');
-        if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
-            ctx.state.userStates[userId].messageIds.push(message.message_id);
-        }
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
-        console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
         return;
     }
 
@@ -305,12 +341,8 @@ async function showReportObjects(ctx) {
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
     const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
-    if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
-    }
-    ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
     console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
-    console.log(`[showReportObjects] Сообщение с выбором объектов отправлено для userId ${userId}`);
 }
 
 async function showReportDates(ctx, objectIndex, page = 0) {
@@ -319,7 +351,7 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const objectName = uniqueObjects[objectIndex];
 
-    await clearPreviousMessages(ctx, userId);
+    await clearAllMessages(ctx, userId);
 
     const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
     const sortedReports = objectReports.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
@@ -335,7 +367,9 @@ async function showReportDates(ctx, objectIndex, page = 0) {
 
     if (currentDates.length === 0) {
         console.log(`[showReportDates] Нет дат для отображения на странице ${pageNum} для объекта ${objectName}`);
-        return ctx.reply('Ошибка: нет дат для отображения.');
+        const message = await ctx.reply('Ошибка: нет дат для отображения.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
     const dateButtons = currentDates.map((date, index) =>
@@ -362,10 +396,7 @@ async function showReportDates(ctx, objectIndex, page = 0) {
         `Выберите дату для объекта "${objectName}" (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
-    if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
-    }
-    ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
     console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
 }
 
@@ -381,7 +412,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     const uniqueDates = [...new Set(sortedReports.map(([, r]) => parseAndFormatDate(r.date)))];
     const selectedDate = uniqueDates[dateIndex];
 
-    await clearPreviousMessages(ctx, userId);
+    await clearAllMessages(ctx, userId);
 
     const dateReports = sortedReports.filter(([_, r]) => parseAndFormatDate(r.date) === selectedDate);
 
@@ -395,7 +426,9 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
 
     if (currentReports.length === 0) {
         console.log(`[showReportTimestamps] Нет отчетов для отображения на странице ${pageNum} для даты ${selectedDate}`);
-        return ctx.reply('Ошибка: нет отчетов для отображения.');
+        const message = await ctx.reply('Ошибка: нет отчетов для отображения.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
     const timeButtons = currentReports.map(([reportId, report]) => {
@@ -423,10 +456,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
         `Выберите время отчета для "${objectName}" за ${selectedDate} (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
-    if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
-    }
-    ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
     console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
 }
 
@@ -435,11 +465,13 @@ async function showReportDetails(ctx, reportId) {
     const reports = await loadUserReports(userId);
     const report = reports[reportId];
 
-    await clearPreviousMessages(ctx, userId);
+    await clearAllMessages(ctx, userId);
 
     if (!report) {
         console.log(`[showReportDetails] Отчёт с ID ${reportId} не найден`);
-        return ctx.reply('Ошибка: отчёт не найден.');
+        const message = await ctx.reply('Ошибка: отчёт не найден.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
     const formattedDate = parseAndFormatDate(report.date);
@@ -469,7 +501,9 @@ ${report.materials}
     if (report.photos && report.photos.length > 0) {
         await ctx.telegram.sendMediaGroup(ctx.chat.id, report.photos.map(photoId => ({ type: 'photo', media: photoId })));
     }
-    await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
 }
 
 async function editReport(ctx, reportId) {
@@ -478,40 +512,28 @@ async function editReport(ctx, reportId) {
     const report = reports[reportId];
 
     if (!report) {
-        await clearPreviousMessages(ctx, userId);
+        await clearAllMessages(ctx, userId);
         console.log(`[editReport] Ошибка: отчёт с ID ${reportId} не найден`);
-        return ctx.reply('Ошибка: не удалось найти отчёт для редактирования.');
+        const message = await ctx.reply('Ошибка: не удалось найти отчёт для редактирования.');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        return;
     }
 
-    await clearPreviousMessages(ctx, userId);
+    await clearAllMessages(ctx, userId);
 
     ctx.state.userStates[userId] = {
         step: 'editWorkDone',
         report: { ...report, originalReportId: reportId },
         messageIds: ctx.state.userStates[userId].messageIds || []
     };
-    await ctx.reply('💡 Введите новую информацию о выполненных работах:');
-}
-
-async function clearLastReport(ctx, userId) {
-    console.log(`[clearLastReport] Проверка отчета для userId ${userId}, lastReportMessageId: ${ctx.state.userStates[userId]?.lastReportMessageId}`);
-    if (ctx.state.userStates[userId]?.lastReportMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.userStates[userId].lastReportMessageId);
-            console.log(`[clearLastReport] Сообщение с отчетом ${ctx.state.userStates[userId].lastReportMessageId} удалено для userId ${userId}`);
-        } catch (err) {
-            console.error(`[clearLastReport] Не удалось удалить сообщение с отчетом ${ctx.state.userStates[userId].lastReportMessageId}: ${err.message}`);
-        }
-        ctx.state.userStates[userId].lastReportMessageId = null;
-    } else {
-        console.log(`[clearLastReport] Нет отчета для удаления для userId ${userId}`);
-    }
+    const message = await ctx.reply('💡 Введите новую информацию о выполненных работах:');
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
 }
 
 module.exports = (bot) => {
     bot.command('start', async (ctx) => {
         const userId = ctx.from.id.toString();
-
         if (!ctx.state.userStates[userId]) {
             ctx.state.userStates[userId] = {
                 step: null,
@@ -522,8 +544,7 @@ module.exports = (bot) => {
             };
         }
 
-        await clearLastReport(ctx, userId);
-        await clearPreviousMessages(ctx, userId);
+        await clearAllMessages(ctx, userId);
         const message = await ctx.reply(
             '🚀 ГЛАВНОЕ МЕНЮ \n➖➖➖➖➖➖➖➖➖➖➖  \nВыберите действие ниже:',
             Markup.inlineKeyboard([
@@ -533,10 +554,7 @@ module.exports = (bot) => {
                 [Markup.button.callback('👤 Личный кабинет', 'profile')]
             ])
         );
-        if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
-            ctx.state.userStates[userId].messageIds.push(message.message_id);
-        }
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
         console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
     });
 
@@ -551,9 +569,8 @@ module.exports = (bot) => {
                 lastReportMessageId: null
             };
         }
-        console.log(`[main_menu] Начало обработки для userId ${userId}, состояние:`, ctx.state.userStates[userId]);
-        await clearLastReport(ctx, userId);
-        await clearPreviousMessages(ctx, userId);
+
+        await clearAllMessages(ctx, userId);
         const message = await ctx.reply(
             '🚀 ГЛАВНОЕ МЕНЮ \n➖➖➖➖➖➖➖➖➖➖➖  \nВыберите действие ниже:',
             Markup.inlineKeyboard([
@@ -563,12 +580,8 @@ module.exports = (bot) => {
                 [Markup.button.callback('👤 Личный кабинет', 'profile')]
             ])
         );
-        if (!ctx.state.userStates[userId].messageIds.includes(message.message_id)) {
-            ctx.state.userStates[userId].messageIds.push(message.message_id);
-        }
-        ctx.state.userStates[userId].messageIds = [...new Set(ctx.state.userStates[userId].messageIds)];
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
         console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
-        console.log(`[main_menu] Завершено для userId ${userId}, новое сообщение: ${message.message_id}`);
     });
 
     bot.action('download_report', async (ctx) => {
@@ -587,14 +600,16 @@ module.exports = (bot) => {
         const selectedObject = users[userId].selectedObjects[objectIndex];
         if (!selectedObject) return;
 
-        await clearPreviousMessages(ctx, userId);
+        await clearAllMessages(ctx, userId);
 
         ctx.state.userStates[userId] = {
             step: 'workDone',
             report: { objectName: selectedObject, photos: [] },
             messageIds: ctx.state.userStates[userId].messageIds || []
         };
-        await ctx.reply('💡 Введите информацию о выполненных работах:');
+        const message = await ctx.reply('💡 Введите информацию о выполненных работах:');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        console.log(`[DEBUG] messageIds после добавления ${message.message_id}:`, ctx.state.userStates[userId].messageIds);
     });
 
     bot.action('view_reports', showReportObjects);
