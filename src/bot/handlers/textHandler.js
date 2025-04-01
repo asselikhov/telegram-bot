@@ -162,52 +162,47 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const state = ctx.state.userStates[userId];
         if (!state || (state.step !== 'photos' && state.step !== 'editPhotos')) return;
 
-        // Добавляем фото в отчет
+        // Добавляем новое фото в отчет
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
         state.report.photos.push(photoId);
 
-        // Если сообщение уже существует, редактируем его
-        if (state.messageIds.length > 0) {
-            const existingMessageId = state.messageIds[0];
-            try {
-                await ctx.telegram.editMessageText(
-                    ctx.chat.id,
-                    existingMessageId,
-                    null,
-                    `Фото добавлено (${state.report.photos.length}). Отправьте еще или нажмите "Готово" для завершения.`,
-                    {
-                        reply_markup: {
-                            inline_keyboard: [
-                                [{ text: 'Готово', callback_data: state.step === 'photos' ? 'finish_report' : 'finish_edit_report' }]
-                            ]
-                        }
-                    }
+        // Удаляем предыдущую медиагруппу, если она была
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
+                    console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
                 );
-                console.log(`[textHandler.js] Сообщение ${existingMessageId} обновлено для userId ${userId}, фото: ${state.report.photos.length}`);
-            } catch (e) {
-                console.log(`[textHandler.js] Не удалось отредактировать сообщение ${existingMessageId}: ${e.message}`);
-                // Если редактирование не удалось (например, сообщение удалено), создаем новое
-                await clearPreviousMessages(ctx, userId);
-                const newMessage = await ctx.reply(
-                    `Фото добавлено (${state.report.photos.length}). Отправьте еще или нажмите "Готово" для завершения.`,
-                    Markup.inlineKeyboard([
-                        [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
-                    ])
-                );
-                state.messageIds = [newMessage.message_id];
-                console.log(`[textHandler.js] Новое сообщение создано для userId ${userId}: ${newMessage.message_id}`);
             }
-        } else {
-            // Если сообщения еще нет, создаем новое
-            const newMessage = await ctx.reply(
-                `Фото добавлено (${state.report.photos.length}). Отправьте еще или нажмите "Готово" для завершения.`,
-                Markup.inlineKeyboard([
-                    [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
-                ])
-            );
-            state.messageIds = [newMessage.message_id];
-            console.log(`[textHandler.js] Первое сообщение создано для userId ${userId}: ${newMessage.message_id}`);
         }
+
+        // Удаляем предыдущее текстовое сообщение, если оно было
+        if (state.messageIds && state.messageIds.length > 0) {
+            for (const msgId of state.messageIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
+                    console.log(`[textHandler.js] Не удалось удалить текстовое сообщение ${msgId}: ${e.message}`)
+                );
+            }
+        }
+
+        // Отправляем новую медиагруппу с текущими фото
+        const mediaGroup = state.report.photos.map((photoId, index) => ({
+            type: 'photo',
+            media: photoId,
+            caption: index === 0 ? `Добавлено ${state.report.photos.length} фото:` : undefined // Подпись только для первого фото
+        }));
+        const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
+        state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
+
+        // Отправляем текстовое сообщение с кнопкой "Готово" ниже медиагруппы
+        const textMessage = await ctx.reply(
+            'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.',
+            Markup.inlineKeyboard([
+                [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
+            ])
+        );
+        state.messageIds = [textMessage.message_id];
+
+        console.log(`[textHandler.js] Медиагруппа отправлена для userId ${userId}: ${state.mediaGroupIds}, текст: ${textMessage.message_id}`);
     });
 
     bot.action('finish_report', async (ctx) => {
