@@ -1,4 +1,4 @@
-console.log('[DEBUG] report.js загружен, версия: 2024-04-01 10:31');
+console.log('[DEBUG] report.js загружен, версия: 2024-04-01 11:01');
 const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
@@ -542,7 +542,6 @@ module.exports = (bot) => {
 
     bot.action('main_menu', async (ctx) => {
         const userId = ctx.from.id.toString();
-
         if (!ctx.state.userStates[userId]) {
             ctx.state.userStates[userId] = {
                 step: null,
@@ -552,7 +551,6 @@ module.exports = (bot) => {
                 lastReportMessageId: null
             };
         }
-
         console.log(`[main_menu] Начало обработки для userId ${userId}, состояние:`, ctx.state.userStates[userId]);
         await clearLastReport(ctx, userId);
         await clearPreviousMessages(ctx, userId);

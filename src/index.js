@@ -1,4 +1,5 @@
 const { initializeDatabase } = require('./database/db');
+delete require.cache[require.resolve('./bot/handlers/report.js')];
 const bot = require('./bot/bot');
 require('./server/server');
 
