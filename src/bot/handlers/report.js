@@ -470,7 +470,62 @@ async function editReport(ctx, reportId) {
     await ctx.reply('💡 Введите новую информацию о выполненных работах:');
 }
 
+// Функция для удаления выгруженного отчета
+async function clearLastReport(ctx, userId) {
+    if (ctx.state.userStates[userId].lastReportMessageId) {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, ctx.state.userStates[userId].lastReportMessageId);
+            console.log(`[clearLastReport] Сообщение с отчетом ${ctx.state.userStates[userId].lastReportMessageId} удалено для userId ${userId}`);
+        } catch (err) {
+            console.error(`[clearLastReport] Не удалось удалить сообщение с отчетом ${ctx.state.userStates[userId].lastReportMessageId}: ${err.message}`);
+        }
+        ctx.state.userStates[userId].lastReportMessageId = null; // Сбрасываем идентификатор
+    }
+}
+
 module.exports = (bot) => {
+    // Обработка команды /start
+    bot.command('start', async (ctx) => {
+        const userId = ctx.from.id.toString();
+
+        // Удаляем выгруженный отчет, если он есть
+        await clearLastReport(ctx, userId);
+
+        // Очищаем предыдущие сообщения и показываем главное меню
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply(
+            '🚀 ГЛАВНОЕ МЕНЮ \n➖➖➖➖➖➖➖➖➖➖➖  \nВыберите действие ниже:',
+            Markup.inlineKeyboard([
+                [Markup.button.callback('📝 Создать отчет', 'create_report')],
+                [Markup.button.callback('📋 Мои отчеты', 'view_reports')],
+                [Markup.button.callback('📤 Выгрузить отчет', 'download_report')],
+                [Markup.button.callback('👤 Личный кабинет', 'profile')]
+            ])
+        );
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+
+    // Обработка кнопки "Вернуться в главное меню"
+    bot.action('main_menu', async (ctx) => {
+        const userId = ctx.from.id.toString();
+
+        // Удаляем выгруженный отчет, если он есть
+        await clearLastReport(ctx, userId);
+
+        // Очищаем предыдущие сообщения и показываем главное меню
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply(
+            '🚀 ГЛАВНОЕ МЕНЮ \n➖➖➖➖➖➖➖➖➖➖➖  \nВыберите действие ниже:',
+            Markup.inlineKeyboard([
+                [Markup.button.callback('📝 Создать отчет', 'create_report')],
+                [Markup.button.callback('📋 Мои отчеты', 'view_reports')],
+                [Markup.button.callback('📤 Выгрузить отчет', 'download_report')],
+                [Markup.button.callback('👤 Личный кабинет', 'profile')]
+            ])
+        );
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+
     bot.action('download_report', async (ctx) => {
         await showDownloadReport(ctx, 0);
     });
