@@ -175,6 +175,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
                 );
             }
+            state.mediaGroupIds = []; // Очищаем массив
         }
 
         // Удаляем предыдущее текстовое сообщение, если оно было
@@ -184,6 +185,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     console.log(`[textHandler.js] Не удалось удалить текстовое сообщение ${msgId}: ${e.message}`)
                 );
             }
+            state.messageIds = []; // Очищаем массив перед добавлением нового ID
         }
 
         // Отправляем новую медиагруппу с текущими фото
@@ -202,7 +204,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
             ])
         );
-        state.messageIds = [textMessage.message_id];
+        state.messageIds = [textMessage.message_id]; // Заменяем массив, а не добавляем
 
         console.log(`[textHandler.js] Медиагруппа отправлена для userId ${userId}: ${state.mediaGroupIds}, текст: ${textMessage.message_id}`);
     });
