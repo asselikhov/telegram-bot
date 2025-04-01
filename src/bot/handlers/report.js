@@ -1,3 +1,4 @@
+console.log('[DEBUG] report.js загружен, версия: 2024-04-01 09:31');
 const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
