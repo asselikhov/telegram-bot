@@ -7,6 +7,9 @@ const { showProfile } = require('./menu');
 const { saveReport, loadUserReports } = require('../../database/reportModel');
 const { ORGANIZATIONS_LIST, GENERAL_GROUP_CHAT_IDS, OBJECT_GROUPS, ADMIN_ID } = require('../../config/config');
 
+// Предполагаем, что showMainMenu экспортируется из menu.js
+const { showMainMenu } = require('./menu');
+
 module.exports = (bot) => {
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
@@ -184,7 +187,8 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             timestamp,
             workDone: state.report.workDone,
             materials: state.report.materials,
-            groupMessageIds: {},
+            groupMessageIds: {}, // Объект для хранения message_id по chatId
+            messageLink: null, // Добавляем поле для ссылки на сообщение
             fullName: users[userId].fullName,
             photos: state.report.photos || []
         };
@@ -220,6 +224,9 @@ ${report.materials}
                 try {
                     const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
                     report.groupMessageIds[chatId] = messages[0].message_id;
+                    if (chatId === groupChatId) {
+                        report.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${messages[0].message_id}`;
+                    }
                 } catch (e) {
                     console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
                 }
@@ -229,6 +236,9 @@ ${report.materials}
                 try {
                     const message = await ctx.telegram.sendMessage(chatId, reportText);
                     report.groupMessageIds[chatId] = message.message_id;
+                    if (chatId === groupChatId) {
+                        report.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id}`;
+                    }
                 } catch (e) {
                     console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
                 }
@@ -238,8 +248,10 @@ ${report.materials}
         await saveReport(userId, report);
         await saveUser(userId, users[userId]);
         await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`);
-        state.step = null;
-        state.report = {};
+
+        // Очищаем состояние и возвращаем главное меню
+        delete ctx.state.userStates[userId];
+        await showMainMenu(ctx);
     });
 
     bot.action('delete_all_photos', async (ctx) => {
@@ -271,6 +283,7 @@ ${report.materials}
             workDone: state.report.workDone,
             materials: state.report.materials,
             groupMessageIds: {},
+            messageLink: null, // Добавляем поле для ссылки
             fullName: users[userId].fullName,
             photos: state.report.photos
         };
@@ -325,6 +338,9 @@ ${newReport.materials}
                 try {
                     const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
                     newReport.groupMessageIds[chatId] = messages[0].message_id;
+                    if (chatId === newGroupChatId) {
+                        newReport.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${messages[0].message_id}`;
+                    }
                 } catch (e) {
                     console.log(`Не удалось отправить обновленный отчет в чат ${chatId}: ${e.message}`);
                 }
@@ -334,6 +350,9 @@ ${newReport.materials}
                 try {
                     const message = await ctx.telegram.sendMessage(chatId, newReportText);
                     newReport.groupMessageIds[chatId] = message.message_id;
+                    if (chatId === newGroupChatId) {
+                        newReport.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id}`;
+                    }
                 } catch (e) {
                     console.log(`Не удалось отправить обновленный отчет в чат ${chatId}: ${e.message}`);
                 }

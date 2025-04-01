@@ -141,8 +141,9 @@ async function downloadReportFile(ctx, objectIndex) {
     for (let i = 0; i < objectReports.length; i++) {
         const report = objectReports[i];
         const user = users[report.userId] || {};
-        const itrText = `${user.position || 'Не указано'}\n${user.organization || 'Не указано'}\n${report.fullName || user.fullName || 'Не указано'}`;
-        const photosText = report.photos && report.photos.length > 0 ? `${report.photos.length} фото` : 'Нет';
+        const position = user.position === 'Инженер пто' ? 'Инженер ПТО' : user.position;
+        const itrText = `${position || 'Не указано'}\n${user.organization || 'Не указано'}\n${report.fullName || user.fullName || 'Не указано'}`;
+        const photosCount = report.photos && report.photos.length > 0 ? `${report.photos.length} фото` : 'Нет';
         const formattedDate = parseAndFormatDate(report.date);
 
         worksheet.getRow(currentRow).values = [
@@ -150,20 +151,31 @@ async function downloadReportFile(ctx, objectIndex) {
             report.workDone,
             report.materials,
             itrText,
-            photosText
+            photosCount
         ];
 
         worksheet.getCell(`A${currentRow}`).style = centeredCellStyle;
         worksheet.getCell(`B${currentRow}`).style = paddedCellStyle;
         worksheet.getCell(`C${currentRow}`).style = paddedCellStyle;
         worksheet.getCell(`D${currentRow}`).style = centeredCellStyle;
-        worksheet.getCell(`E${currentRow}`).style = centeredCellStyle;
+
+        // Добавляем гиперссылку внутри текста "X фото", если есть messageLink
+        const photosCell = worksheet.getCell(`E${currentRow}`);
+        if (report.photos && report.photos.length > 0 && report.messageLink) {
+            photosCell.value = {
+                text: photosCount,
+                hyperlink: report.messageLink
+            };
+            photosCell.style = centeredCellStyle; // Сохраняем стиль без выделения
+        } else {
+            photosCell.style = centeredCellStyle;
+        }
 
         const maxLines = Math.max(
             report.workDone.split('\n').length,
             report.materials.split('\n').length,
             itrText.split('\n').length,
-            photosText.split('\n').length
+            photosCount.split('\n').length
         );
         worksheet.getRow(currentRow).height = Math.max(15, maxLines * 15);
 
@@ -265,7 +277,6 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     await clearPreviousMessages(ctx, userId);
 
     const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
-    // Сортируем отчеты по timestamp по возрастанию
     const sortedReports = objectReports.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     const uniqueDates = [...new Set(sortedReports.map(r => parseAndFormatDate(r.date)))];
 
@@ -282,7 +293,6 @@ async function showReportDates(ctx, objectIndex, page = 0) {
         return ctx.reply('Ошибка: нет дат для отображения.');
     }
 
-    // Создаем кнопки в порядке возрастания, затем разворачиваем для отображения снизу вверх
     const dateButtons = currentDates.map((date, index) =>
         [Markup.button.callback(date, `select_report_date_${objectIndex}_${startIndex + index}`)]
     ).reverse();
@@ -300,7 +310,7 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     if (paginationButtons.length > 0) {
         buttons.push(paginationButtons);
     }
-    buttons.push(...dateButtons); // Даты добавляются после пагинации, чтобы быть ниже
+    buttons.push(...dateButtons);
     buttons.push([Markup.button.callback('↩️ Назад', 'view_reports')]);
 
     const message = await ctx.reply(
@@ -318,7 +328,6 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     const objectName = uniqueObjects[objectIndex];
     const objectReports = Object.entries(reports).filter(([_, r]) => r.objectName === objectName);
 
-    // Сортируем отчеты по timestamp по возрастанию
     const sortedReports = objectReports.sort((a, b) => a[1].timestamp.localeCompare(b[1].timestamp));
     const uniqueDates = [...new Set(sortedReports.map(([, r]) => parseAndFormatDate(r.date)))];
     const selectedDate = uniqueDates[dateIndex];
@@ -340,7 +349,6 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
         return ctx.reply('Ошибка: нет отчетов для отображения.');
     }
 
-    // Создаем кнопки в порядке возрастания, затем разворачиваем для отображения снизу вверх
     const timeButtons = currentReports.map(([reportId, report]) => {
         const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
         return [Markup.button.callback(time, `select_report_time_${reportId}`)];
@@ -359,7 +367,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     if (paginationButtons.length > 0) {
         buttons.push(paginationButtons);
     }
-    buttons.push(...timeButtons); // Время добавляется после пагинации, чтобы быть ниже
+    buttons.push(...timeButtons);
     buttons.push([Markup.button.callback('↩️ Назад', `select_report_object_${objectIndex}`)]);
 
     const message = await ctx.reply(

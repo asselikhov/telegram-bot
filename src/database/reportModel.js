@@ -13,8 +13,8 @@ async function loadUserReports(userId) {
                 timestamp: row.timestamp,
                 workDone: row.workdone,
                 materials: row.materials,
-                groupMessageId: row.groupmessageid,
-                generalMessageId: row.generalmessageid,
+                groupMessageIds: row.groupmessageids ? JSON.parse(row.groupmessageids) : {}, // Обновляем на объект
+                messageLink: row.messagelink, // Добавляем новое поле
                 fullName: row.fullname,
                 userId: row.userid,
                 photos: row.photos ? JSON.parse(row.photos) : []
@@ -27,15 +27,15 @@ async function loadUserReports(userId) {
 }
 
 async function saveReport(userId, report) {
-    const { reportId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName, photos } = report;
+    const { reportId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
     const client = await pool.connect();
     try {
         await client.query(`
-            INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName, photos)
+            INSERT INTO reports (reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT (reportId) DO UPDATE
-            SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageId = $8, generalMessageId = $9, fullName = $10, photos = $11
-        `, [reportId, userId, objectName, date, timestamp, workDone, materials, groupMessageId, generalMessageId, fullName, JSON.stringify(photos || [])]);
+            SET userId = $2, objectName = $3, date = $4, timestamp = $5, workDone = $6, materials = $7, groupMessageIds = $8, messageLink = $9, fullName = $10, photos = $11
+        `, [reportId, userId, objectName, date, timestamp, workDone, materials, JSON.stringify(groupMessageIds || {}), messageLink || null, fullName, JSON.stringify(photos || [])]);
     } finally {
         client.release();
     }
@@ -73,8 +73,8 @@ async function loadAllReports() {
                 timestamp: row.timestamp,
                 workDone: row.workdone,
                 materials: row.materials,
-                groupMessageId: row.groupmessageid,
-                generalMessageId: row.generalmessageid,
+                groupMessageIds: row.groupmessageids ? JSON.parse(row.groupmessageids) : {}, // Обновляем на объект
+                messageLink: row.messagelink, // Добавляем новое поле
                 fullName: row.fullname,
                 photos: row.photos ? JSON.parse(row.photos) : []
             };
