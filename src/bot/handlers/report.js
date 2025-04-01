@@ -172,7 +172,10 @@ async function downloadReportFile(ctx, objectIndex) {
                 text: photosCount,
                 hyperlink: report.messageLink
             };
-            photosCell.style = centeredCellStyle;
+            photosCell.style = {
+                ...centeredCellStyle,
+                font: { ...centeredCellStyle.font, color: { argb: 'FF0000FF' }, underline: true } // Синий цвет и подчёркивание для ссылки
+            };
         } else {
             photosCell.style = centeredCellStyle;
         }
