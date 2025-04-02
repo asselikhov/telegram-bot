@@ -92,9 +92,9 @@ module.exports = (bot) => {
                 users[userId].fullName = newFullName;
                 await saveUser(userId, users[userId]);
                 state.step = null;
-                const msg = await ctx.reply(`ФИО изменено на "${newFullName}"`);
-                state.lastMessageId = msg.message_id;
-                await showProfile(ctx); // Обновляем профиль с новыми данными
+                const msgFullName = await ctx.reply(`ФИО изменено на "${newFullName}"`); // Переименовал msg
+                state.lastMessageId = msgFullName.message_id;
+                await showProfile(ctx);
                 break;
 
             case 'workDone':
@@ -155,8 +155,8 @@ module.exports = (bot) => {
                 users[userId].fullName = fullName;
                 await saveUser(userId, users[userId]);
                 state.step = null;
-                const msg = await ctx.reply('Регистрация завершена. Ожидайте одобрения администратора.');
-                state.lastMessageId = msg.message_id;
+                const registrationMsg = await ctx.reply('Регистрация завершена. Ожидайте одобрения администратора.');
+                state.lastMessageId = registrationMsg.message_id;
                 break;
         }
     });
