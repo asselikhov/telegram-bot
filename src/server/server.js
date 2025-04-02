@@ -6,14 +6,11 @@ const app = express();
 
 app.use(express.json());
 app.get('/', (req, res) => res.send('Telegram bot is running'));
-app.use(bot.webhookCallback('/telegram-webhook'));
+app.use('/telegram-webhook', bot.webhookCallback('/telegram-webhook')); // Упрощен путь
 
-app.listen(PORT, () => {
-    console.log(`Сервер запущен на порту ${PORT}`);
+app.listen(PORT, async () => {
     const webhookUrl = `https://${process.env.RENDER_EXTERNAL_HOSTNAME}/telegram-webhook`;
-    bot.telegram.setWebhook(webhookUrl)
-        .then(() => console.log('Вебхук установлен'))
-        .catch(err => console.error('Ошибка установки вебхука:', err));
+    await bot.telegram.setWebhook(webhookUrl).catch(err => {});
 });
 
 module.exports = app;
