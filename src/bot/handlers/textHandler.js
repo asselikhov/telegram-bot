@@ -9,7 +9,7 @@ const { saveReport, loadUserReports } = require('../../database/reportModel');
 const { ORGANIZATIONS_LIST, GENERAL_GROUP_CHAT_IDS, OBJECT_GROUPS, ADMIN_ID } = require('../../config/config');
 
 const mediaGroups = new Map();
-const reportCache = new NodeCache({ stdTTL: 300 }); // Кэш для отчетов
+const reportCache = new NodeCache({ stdTTL: 300 });
 
 module.exports = (bot) => {
     bot.use(async (ctx, next) => {
@@ -35,7 +35,7 @@ module.exports = (bot) => {
                 state.report.photos = [...(state.report.photos || []), ...group.photos];
                 await updatePhotoMessage(ctx, userId, state);
                 mediaGroups.delete(mediaGroupId);
-            }, 1000); // Задержка 1 секунда
+            }, 1000);
         }
         await next();
     });
@@ -92,7 +92,9 @@ module.exports = (bot) => {
                 users[userId].fullName = newFullName;
                 await saveUser(userId, users[userId]);
                 state.step = null;
-                await showProfile(ctx);
+                const msg = await ctx.reply(`ФИО изменено на "${newFullName}"`);
+                state.lastMessageId = msg.message_id;
+                await showProfile(ctx); // Обновляем профиль с новыми данными
                 break;
 
             case 'workDone':
@@ -237,7 +239,7 @@ module.exports = (bot) => {
         await Promise.all(sendPromises);
         await saveReport(userId, report);
         await saveUser(userId, users[userId]);
-        reportCache.del(`user_${userId}`); // Сброс кэша отчетов
+        reportCache.del(`user_${userId}`);
 
         await ctx.telegram.editMessageText(ctx.chat.id, state.lastMessageId, null, `✅ Отчет опубликован:\n${reportText}${report.photos.length ? '\n(С изображениями)' : ''}`);
         delete ctx.state.userStates[userId];
@@ -296,10 +298,10 @@ module.exports = (bot) => {
 
         await Promise.all(sendPromises);
         await saveReport(userId, report);
-        reportCache.del(`user_${userId}`); // Сброс кэша отчетов
+        reportCache.del(`user_${userId}`);
 
         await ctx.telegram.editMessageText(ctx.chat.id, state.lastMessageId, null, `✅ Отчет обновлен:\n${reportText}${report.photos.length ? '\n(С изображениями)' : ''}`);
         delete ctx.state.userStates[userId];
-        await require('./menu').showProfile(ctx);
+        await showProfile(ctx);
     });
 };

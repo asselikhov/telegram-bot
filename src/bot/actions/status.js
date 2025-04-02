@@ -5,33 +5,37 @@ const { clearPreviousMessages } = require('../utils');
 module.exports = (bot) => {
     bot.action('edit_status', async (ctx) => {
         const userId = ctx.from.id.toString();
-        await clearPreviousMessages(ctx, userId); // Удаляем только последнее сообщение
+        await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].step = 'selectStatus';
-        await ctx.reply('Выберите новый статус:', Markup.inlineKeyboard([
+        const message = await ctx.reply('Выберите новый статус:', Markup.inlineKeyboard([
             [Markup.button.callback('В работе', 'status_work')],
             [Markup.button.callback('В отпуске', 'status_vacation')],
             [Markup.button.callback('↩️ Назад', 'profile')]
         ]));
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
     });
 
     bot.action('status_work', async (ctx) => {
         const userId = ctx.from.id.toString();
-        const users = await loadUsers(); // Используется кэш
+        const users = await loadUsers();
 
         await clearPreviousMessages(ctx, userId);
         users[userId].status = 'В работе';
-        await saveUser(userId, users[userId]); // Кэш обновляется внутри saveUser
+        await saveUser(userId, users[userId]);
         ctx.state.userStates[userId].step = null;
 
         const lastMessageId = ctx.state.userStates[userId].lastMessageId;
         if (lastMessageId) {
-            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Статус обновлён на "В работе".', {
-                reply_markup: Markup.inlineKeyboard([]).reply_markup
-            }).catch(() => ctx.reply('Статус обновлён на "В работе".'));
+            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Статус обновлен на "В работе".', Markup.inlineKeyboard([]))
+                .catch(async () => {
+                    const message = await ctx.reply('Статус обновлен на "В работе".');
+                    ctx.state.userStates[userId].lastMessageId = message.message_id;
+                });
         } else {
-            await ctx.reply('Статус обновлён на "В работе".');
+            const message = await ctx.reply('Статус обновлен на "В работе".');
+            ctx.state.userStates[userId].lastMessageId = message.message_id;
         }
-        await require('../handlers/menu').showProfile(ctx);
+        await require('../handlers/menu').showProfile(ctx); // Обновляем профиль
     });
 
     bot.action('status_vacation', async (ctx) => {
@@ -45,13 +49,16 @@ module.exports = (bot) => {
 
         const lastMessageId = ctx.state.userStates[userId].lastMessageId;
         if (lastMessageId) {
-            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Статус обновлён на "В отпуске".', {
-                reply_markup: Markup.inlineKeyboard([]).reply_markup
-            }).catch(() => ctx.reply('Статус обновлён на "В отпуске".'));
+            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Статус обновлен на "В отпуске".', Markup.inlineKeyboard([]))
+                .catch(async () => {
+                    const message = await ctx.reply('Статус обновлен на "В отпуске".');
+                    ctx.state.userStates[userId].lastMessageId = message.message_id;
+                });
         } else {
-            await ctx.reply('Статус обновлён на "В отпуске".');
+            const message = await ctx.reply('Статус обновлен на "В отпуске".');
+            ctx.state.userStates[userId].lastMessageId = message.message_id;
         }
-        await require('../handlers/menu').showProfile(ctx);
+        await require('../handlers/menu').showProfile(ctx); // Обновляем профиль
     });
 
     bot.action('profile', async (ctx) => {

@@ -8,7 +8,8 @@ async function showOrganizationSelection(ctx, userId) {
     await clearPreviousMessages(ctx, userId);
     const buttons = ORGANIZATIONS_LIST.map((org, index) => [Markup.button.callback(org, `select_organization_${index}_${userId}`)]);
     buttons.push([Markup.button.callback('Ввести свою организацию', `custom_organization_${userId}`)]);
-    await ctx.reply('Выберите вашу организацию:', Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply('Выберите вашу организацию:', Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].lastMessageId = message.message_id;
 }
 
 module.exports = (bot) => {
@@ -31,7 +32,8 @@ module.exports = (bot) => {
         const userId = ctx.match[1];
         await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].step = 'customOrganizationInput';
-        await ctx.reply('Введите название вашей организации:');
+        const message = await ctx.reply('Введите название вашей организации:');
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
     });
 
     bot.action('edit_organization', async (ctx) => {
@@ -41,10 +43,12 @@ module.exports = (bot) => {
             const buttons = ORGANIZATIONS_LIST.map((org, index) => [
                 Markup.button.callback(org, `admin_select_org_${index}`)
             ]).concat([[Markup.button.callback('↩️ Назад', 'profile')]]);
-            await ctx.reply('Выберите новую организацию:', Markup.inlineKeyboard(buttons));
+            const message = await ctx.reply('Выберите новую организацию:', Markup.inlineKeyboard(buttons));
+            ctx.state.userStates[userId].lastMessageId = message.message_id;
         } else {
             ctx.state.userStates[userId].step = 'enterInviteCode';
-            await ctx.reply('Введите код для смены организации:');
+            const message = await ctx.reply('Введите код для смены организации:');
+            ctx.state.userStates[userId].lastMessageId = message.message_id;
         }
     });
 
@@ -61,8 +65,10 @@ module.exports = (bot) => {
         users[userId].organization = selectedOrg;
         users[userId].selectedObjects = [];
         await saveUser(userId, users[userId]);
-        await ctx.reply(`Организация изменена на "${selectedOrg}".`);
-        await require('../handlers/menu').showProfile(ctx);
+        const message = await ctx.reply(`Организация изменена на "${selectedOrg}". Выберите новые объекты:`);
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
+        ctx.state.userStates[userId].step = 'editObjects'; // Переходим к выбору объектов
+        await require('./objects').showObjectSelection(ctx, userId, []);
     });
 };
 

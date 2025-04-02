@@ -13,7 +13,8 @@ async function showPositionSelection(ctx, userId) {
     await clearPreviousMessages(ctx, userId);
     const positions = getPositionsList(userId);
     const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_initial_position_${index}_${userId}`)]);
-    await ctx.reply('Выберите вашу должность:', Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply('Выберите вашу должность:', Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].lastMessageId = message.message_id;
 }
 
 module.exports = (bot) => {
@@ -28,7 +29,8 @@ module.exports = (bot) => {
         users[userId].position = selectedPosition;
         await saveUser(userId, users[userId]);
         ctx.state.userStates[userId].step = 'enterFullName';
-        await ctx.reply('Введите ваше ФИО:');
+        const message = await ctx.reply('Введите ваше ФИО:');
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
     });
 
     bot.action('edit_position', async (ctx) => {
@@ -37,7 +39,8 @@ module.exports = (bot) => {
         const positions = getPositionsList(userId);
         const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_position_${index}`)]);
         buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
-        await ctx.reply('Выберите новую должность:', Markup.inlineKeyboard(buttons));
+        const message = await ctx.reply('Выберите новую должность:', Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
     });
 
     bot.action(/select_position_(\d+)/, async (ctx) => {
@@ -50,8 +53,9 @@ module.exports = (bot) => {
         const users = await loadUsers();
         users[userId].position = selectedPosition;
         await saveUser(userId, users[userId]);
-        await ctx.reply(`Должность изменена на "${selectedPosition}"`);
-        await require('../handlers/menu').showProfile(ctx);
+        const message = await ctx.reply(`Должность изменена на "${selectedPosition}"`);
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
+        await require('../handlers/menu').showProfile(ctx); // Обновляем профиль
     });
 };
 

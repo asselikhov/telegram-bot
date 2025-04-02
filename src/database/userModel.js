@@ -1,13 +1,13 @@
 const { pool } = require('./db');
 const NodeCache = require('node-cache');
 
-const userCache = new NodeCache({ stdTTL: 300 }); // Кэш на 5 минут
+const userCache = new NodeCache({ stdTTL: 300 });
 
 async function loadUsers() {
     const cachedUsers = userCache.get('users');
     if (cachedUsers) return cachedUsers;
 
-    const res = await pool.query('SELECT userid, fullname, position, organization, selectedobjects, status, isapproved, nextreportid, reports FROM users');
+    const res = await pool.query('SELECT userid, fullname, position, organization, selectedobjects, status, isapproved, nextreportid FROM users');
     const users = {};
     res.rows.forEach(row => {
         let selectedObjects = [];
@@ -35,8 +35,8 @@ async function loadUsers() {
 
 async function saveUser(userId, userData) {
     await pool.query(`
-        INSERT INTO users (userid, fullname, position, organization, selectedobjects, status, isapproved, nextreportid, reports)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO users (userid, fullname, position, organization, selectedobjects, status, isapproved, nextreportid)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         ON CONFLICT (userid) 
         DO UPDATE SET 
             fullname = EXCLUDED.fullname,
@@ -45,8 +45,7 @@ async function saveUser(userId, userData) {
             selectedobjects = EXCLUDED.selectedobjects,
             status = EXCLUDED.status,
             isapproved = EXCLUDED.isapproved,
-            nextreportid = EXCLUDED.nextreportid,
-            reports = EXCLUDED.reports
+            nextreportid = EXCLUDED.nextreportid
     `, [
         userId,
         userData.fullName,
@@ -55,18 +54,17 @@ async function saveUser(userId, userData) {
         JSON.stringify(userData.selectedObjects),
         userData.status,
         userData.isApproved,
-        userData.nextReportId,
-        userData.reports
+        userData.nextReportId
     ]);
 
-    const users = await loadUsers(); // Обновляем кэш
-    userCache.set('users', users);
+    userCache.del('users'); // Сбрасываем кэш после каждого сохранения
+    await loadUsers(); // Принудительно обновляем кэш
 }
 
 async function deleteUser(userId) {
     await pool.query('DELETE FROM users WHERE userid = $1', [userId]);
-    const users = await loadUsers();
-    userCache.set('users', users);
+    userCache.del('users');
+    await loadUsers();
 }
 
 module.exports = { loadUsers, saveUser, deleteUser };

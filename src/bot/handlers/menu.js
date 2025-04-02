@@ -16,23 +16,31 @@ async function showMainMenu(ctx) {
 Выберите действие ниже:  
     `.trim();
 
-    const buttons = [
-        [Markup.button.callback('👤 Личный кабинет', 'profile')]
-    ];
+    const buttons = [[Markup.button.callback('👤 Личный кабинет', 'profile')]];
     if (user.isApproved && user.position === 'Производитель работ') buttons.splice(1, 0, [Markup.button.callback('📝 Создать отчет', 'create_report')]);
     if (user.isApproved) buttons.splice(1, 0, [Markup.button.callback('📤 Выгрузить отчет', 'download_report')]);
     if (userId === ADMIN_ID) buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);
 
-    await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
+    const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
+    if (lastMessageId) {
+        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, menuText, Markup.inlineKeyboard(buttons))
+            .catch(async () => {
+                const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
+                ctx.state.userStates[userId].lastMessageId = message.message_id;
+            });
+    } else {
+        const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
+    }
 }
 
 async function showProfile(ctx) {
     const userId = ctx.from.id.toString();
-    const users = await loadUsers();
+    const users = await loadUsers(); // Получаем актуальные данные из БД/кэша
     const user = users[userId] || {};
 
     const availableObjects = ORGANIZATION_OBJECTS[user.organization] || [];
-    const filteredObjects = user.selectedObjects.filter(obj => availableObjects.includes(obj));
+    const filteredObjects = (user.selectedObjects || []).filter(obj => availableObjects.includes(obj));
     const objectsList = filteredObjects.length > 0 ? filteredObjects.map(obj => `· ${obj}`).join('\n') : 'Не выбраны';
 
     await clearPreviousMessages(ctx, userId);
@@ -58,9 +66,13 @@ ${statusEmoji} ${user.status || 'Не указан'}
     const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
     if (lastMessageId) {
         await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, profileText, Markup.inlineKeyboard(buttons))
-            .catch(() => ctx.reply(profileText, Markup.inlineKeyboard(buttons)));
+            .catch(async () => {
+                const message = await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
+                ctx.state.userStates[userId].lastMessageId = message.message_id;
+            });
     } else {
-        await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
+        const message = await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
     }
 }
 
@@ -77,7 +89,17 @@ async function showEditData(ctx) {
         [Markup.button.callback('↩️ Назад', 'profile')]
     ];
 
-    await ctx.reply('Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons));
+    const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
+    if (lastMessageId) {
+        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons))
+            .catch(async () => {
+                const message = await ctx.reply('Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons));
+                ctx.state.userStates[userId].lastMessageId = message.message_id;
+            });
+    } else {
+        const message = await ctx.reply('Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
+    }
 }
 
 module.exports = (bot) => {
@@ -89,7 +111,8 @@ module.exports = (bot) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].step = 'editFullNameInput';
-        await ctx.reply('Введите новое ФИО:');
+        const message = await ctx.reply('Введите новое ФИО:');
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
     });
 };
 

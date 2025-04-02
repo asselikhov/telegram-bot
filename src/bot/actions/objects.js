@@ -50,14 +50,15 @@ module.exports = (bot) => {
         const state = ctx.state.userStates[userId];
         if (!state?.selectedObjects?.length) return;
 
+        await clearPreviousMessages(ctx, userId);
         const users = await loadUsers();
         users[userId].selectedObjects = state.selectedObjects;
         await saveUser(userId, users[userId]);
-        await clearPreviousMessages(ctx, userId);
 
         if (state.step === 'editObjects') {
-            await ctx.reply('Объекты обновлены.');
-            await require('../handlers/menu').showProfile(ctx);
+            const message = await ctx.reply('Объекты обновлены.');
+            ctx.state.userStates[userId].lastMessageId = message.message_id;
+            await require('../handlers/menu').showProfile(ctx); // Обновляем профиль
         } else {
             state.step = 'selectPosition';
             const { showPositionSelection } = require('./position');
@@ -69,8 +70,8 @@ module.exports = (bot) => {
     bot.action('edit_object', async (ctx) => {
         const userId = ctx.from.id.toString();
         const users = await loadUsers();
-        ctx.state.userStates[userId] = { step: 'editObjects', selectedObjects: [...users[userId].selectedObjects], lastMessageId: null };
-        await showObjectSelection(ctx, userId, users[userId].selectedObjects);
+        ctx.state.userStates[userId] = { step: 'editObjects', selectedObjects: [...(users[userId].selectedObjects || [])], lastMessageId: null };
+        await showObjectSelection(ctx, userId, users[userId].selectedObjects || []);
     });
 };
 
