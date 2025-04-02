@@ -38,18 +38,6 @@ function debounceAction(userId, action, delay = 100) {
     });
 }
 
-async function clearPreviousMessages(ctx, userId) {
-    const userState = ctx.state.userStates[userId];
-    if (userState?.lastMessageId) {
-        try {
-            await ctx.telegram.deleteMessage(ctx.chat.id, userState.lastMessageId);
-            userState.lastMessageId = null;
-        } catch (error) {
-            console.error(`Failed to delete message ${userState.lastMessageId}:`, error);
-        }
-    }
-}
-
 function parseDateFromDDMMYYYY(dateString) {
     const [day, month, year] = dateString.split('.').map(Number);
     return new Date(year, month - 1, day);
@@ -68,8 +56,6 @@ async function showDownloadReport(ctx, page = 0) {
     const totalPages = Math.ceil(availableObjects.length / itemsPerPage);
     const startIndex = page * itemsPerPage;
     const currentObjects = availableObjects.slice(startIndex, startIndex + itemsPerPage);
-
-    await clearPreviousMessages(ctx, userId);
 
     const buttons = currentObjects.map((obj, index) => [
         Markup.button.callback(obj, `download_report_file_${availableObjects.indexOf(obj)}`)
@@ -102,9 +88,17 @@ async function downloadReportFile(ctx, objectIndex) {
     const objectName = ORGANIZATION_OBJECTS[users[userId].organization]?.[objectIndex];
     if (!objectName) return;
 
-    await clearPreviousMessages(ctx, userId);
-    const message = await ctx.reply('⏳ Генерация отчета...');
-    ctx.state.userStates[userId].lastMessageId = message.message_id;
+    const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
+    if (lastMessageId) {
+        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, '⏳ Генерация отчета...', {})
+            .catch(async () => {
+                const message = await ctx.reply('⏳ Генерация отчета...');
+                ctx.state.userStates[userId].lastMessageId = message.message_id;
+            });
+    } else {
+        const message = await ctx.reply('⏳ Генерация отчета...');
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
+    }
 
     await reportQueue.add({ userId, objectName, chatId: ctx.chat.id });
     console.log(`Report job added to queue for ${objectName}`);
@@ -119,18 +113,20 @@ async function createReport(ctx) {
     const userObjects = user.selectedObjects;
     if (!userObjects?.length) return;
 
-    await clearPreviousMessages(ctx, userId);
-    const loadingMessage = await ctx.reply('⏳ Загрузка...');
-    ctx.state.userStates[userId] = { lastMessageId: loadingMessage.message_id };
-
     const buttons = userObjects.map((obj, index) => [Markup.button.callback(obj, `select_object_${index}`)]);
     buttons.push([Markup.button.callback('↩️', 'main_menu')]);
 
-    await ctx.telegram.editMessageText(ctx.chat.id, loadingMessage.message_id, null, 'Выберите объект:', Markup.inlineKeyboard(buttons))
-        .catch(async () => {
-            const message = await ctx.reply('Выберите объект:', Markup.inlineKeyboard(buttons));
-            ctx.state.userStates[userId].lastMessageId = message.message_id;
-        });
+    const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
+    if (lastMessageId) {
+        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите объект:', Markup.inlineKeyboard(buttons))
+            .catch(async () => {
+                const message = await ctx.reply('Выберите объект:', Markup.inlineKeyboard(buttons));
+                ctx.state.userStates[userId].lastMessageId = message.message_id;
+            });
+    } else {
+        const message = await ctx.reply('Выберите объект:', Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
+    }
 }
 
 async function showReportObjects(ctx) {
@@ -138,10 +134,18 @@ async function showReportObjects(ctx) {
     const cachedReports = reportCache.get(`user_${userId}`) || await loadUserReports(userId);
     reportCache.set(`user_${userId}`, cachedReports);
 
-    await clearPreviousMessages(ctx, userId);
     if (!Object.keys(cachedReports).length) {
-        const message = await ctx.reply('У вас пока нет отчетов.');
-        ctx.state.userStates[userId].lastMessageId = message.message_id;
+        const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
+        if (lastMessageId) {
+            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'У вас пока нет отчетов.', {})
+                .catch(async () => {
+                    const message = await ctx.reply('У вас пока нет отчетов.');
+                    ctx.state.userStates[userId].lastMessageId = message.message_id;
+                });
+        } else {
+            const message = await ctx.reply('У вас пока нет отчетов.');
+            ctx.state.userStates[userId].lastMessageId = message.message_id;
+        }
         return;
     }
 
@@ -168,7 +172,6 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     const uniqueObjects = [...new Set(Object.values(cachedReports).map(r => r.objectName))];
     const objectName = uniqueObjects[objectIndex];
 
-    await clearPreviousMessages(ctx, userId);
     const objectReports = Object.values(cachedReports).filter(r => r.objectName === objectName);
     const uniqueDates = [...new Set(objectReports.map(r => parseAndFormatDate(r.date)))];
 
@@ -211,7 +214,6 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     const uniqueDates = [...new Set(objectReports.map(([, r]) => parseAndFormatDate(r.date)))];
     const selectedDate = uniqueDates[dateIndex];
 
-    await clearPreviousMessages(ctx, userId);
     const dateReports = objectReports.filter(([_, r]) => parseAndFormatDate(r.date) === selectedDate)
         .sort((a, b) => a[1].timestamp.localeCompare(b[1].timestamp));
 
@@ -249,8 +251,6 @@ async function showReportDetails(ctx, reportId) {
     const userId = ctx.from.id.toString();
     const cachedReports = reportCache.get(`user_${userId}`) || await loadUserReports(userId);
     const report = cachedReports[reportId];
-
-    await clearPreviousMessages(ctx, userId);
     if (!report) return;
 
     const formattedDate = parseAndFormatDate(report.date);
@@ -271,9 +271,19 @@ async function showReportDetails(ctx, reportId) {
         [Markup.button.callback('↩️', `select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(formattedDate)}`)]
     ];
 
-    if (report.photos?.length > 0) ctx.telegram.sendMediaGroup(ctx.chat.id, report.photos.map(photoId => ({ type: 'photo', media: photoId }))).catch(console.error);
-    const message = await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].lastMessageId = message.message_id;
+    const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
+    if (lastMessageId) {
+        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, reportText, Markup.inlineKeyboard(buttons))
+            .catch(async () => {
+                if (report.photos?.length > 0) ctx.telegram.sendMediaGroup(ctx.chat.id, report.photos.map(photoId => ({ type: 'photo', media: photoId }))).catch(console.error);
+                const message = await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
+                ctx.state.userStates[userId].lastMessageId = message.message_id;
+            });
+    } else {
+        if (report.photos?.length > 0) ctx.telegram.sendMediaGroup(ctx.chat.id, report.photos.map(photoId => ({ type: 'photo', media: photoId }))).catch(console.error);
+        const message = await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
+    }
 }
 
 async function editReport(ctx, reportId) {
@@ -282,10 +292,19 @@ async function editReport(ctx, reportId) {
     const report = cachedReports[reportId];
     if (!report) return;
 
-    await clearPreviousMessages(ctx, userId);
-    ctx.state.userStates[userId] = { step: 'editWorkDone', report: { ...report, originalReportId: reportId }, lastMessageId: null };
-    const message = await ctx.reply('💡 Введите новые работы:');
-    ctx.state.userStates[userId].lastMessageId = message.message_id;
+    const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
+    if (lastMessageId) {
+        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, '💡 Введите новые работы:', {})
+            .catch(async () => {
+                const message = await ctx.reply('💡 Введите новые работы:');
+                ctx.state.userStates[userId].lastMessageId = message.message_id;
+            });
+    } else {
+        const message = await ctx.reply('💡 Введите новые работы:');
+        ctx.state.userStates[userId].lastMessageId = message.message_id;
+    }
+    ctx.state.userStates[userId].step = 'editWorkDone';
+    ctx.state.userStates[userId].report = { ...report, originalReportId: reportId };
 }
 
 async function deleteAllPhotos(ctx, reportId) {
@@ -293,14 +312,26 @@ async function deleteAllPhotos(ctx, reportId) {
     const userState = ctx.state.userStates[userId];
     if (!userState?.report?.originalReportId === reportId) return;
 
-    await clearPreviousMessages(ctx, userId);
     userState.report.photos = [];
     userState.step = 'editPhotos';
 
-    const message = await ctx.reply('Фото удалены. Отправьте новые или "Готово":', Markup.inlineKeyboard([
-        [Markup.button.callback('Готово', `finish_edit_${reportId}`)]
-    ]));
-    ctx.state.userStates[userId].lastMessageId = message.message_id;
+    const lastMessageId = userState.lastMessageId;
+    if (lastMessageId) {
+        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Фото удалены. Отправьте новые или "Готово":', Markup.inlineKeyboard([
+            [Markup.button.callback('Готово', `finish_edit_${reportId}`)]
+        ]))
+            .catch(async () => {
+                const message = await ctx.reply('Фото удалены. Отправьте новые или "Готово":', Markup.inlineKeyboard([
+                    [Markup.button.callback('Готово', `finish_edit_${reportId}`)]
+                ]));
+                userState.lastMessageId = message.message_id;
+            });
+    } else {
+        const message = await ctx.reply('Фото удалены. Отправьте новые или "Готово":', Markup.inlineKeyboard([
+            [Markup.button.callback('Готово', `finish_edit_${reportId}`)]
+        ]));
+        userState.lastMessageId = message.message_id;
+    }
 }
 
 module.exports = (bot) => {
@@ -315,14 +346,19 @@ module.exports = (bot) => {
         const selectedObject = users[userId].selectedObjects[objectIndex];
         if (!selectedObject) return;
 
-        await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId] = {
-            step: 'workDone',
-            report: { objectName: selectedObject, photos: [], timestamp: new Date().toISOString(), userId, fullName: users[userId].fullName },
-            lastMessageId: null
-        };
-        const message = await ctx.reply('💡 Введите работы:');
-        ctx.state.userStates[userId].lastMessageId = message.message_id;
+        const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
+        if (lastMessageId) {
+            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, '💡 Введите работы:', {})
+                .catch(async () => {
+                    const message = await ctx.reply('💡 Введите работы:');
+                    ctx.state.userStates[userId].lastMessageId = message.message_id;
+                });
+        } else {
+            const message = await ctx.reply('💡 Введите работы:');
+            ctx.state.userStates[userId].lastMessageId = message.message_id;
+        }
+        ctx.state.userStates[userId].step = 'workDone';
+        ctx.state.userStates[userId].report = { objectName: selectedObject, photos: [], timestamp: new Date().toISOString(), userId, fullName: users[userId].fullName };
     });
 
     bot.on('text', async (ctx) => {
@@ -330,33 +366,72 @@ module.exports = (bot) => {
         const userState = ctx.state.userStates[userId];
         if (!userState || !userState.report) return;
 
-        await clearPreviousMessages(ctx, userId);
-
+        const lastMessageId = userState.lastMessageId;
         if (userState.step === 'workDone') {
             userState.report.workDone = ctx.message.text;
             userState.step = 'materials';
-            const message = await ctx.reply('💡 Введите материалы:');
-            userState.lastMessageId = message.message_id;
+            if (lastMessageId) {
+                await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, '💡 Введите материалы:', {})
+                    .catch(async () => {
+                        const message = await ctx.reply('💡 Введите материалы:');
+                        userState.lastMessageId = message.message_id;
+                    });
+            } else {
+                const message = await ctx.reply('💡 Введите материалы:');
+                userState.lastMessageId = message.message_id;
+            }
         } else if (userState.step === 'materials') {
             userState.report.materials = ctx.message.text;
             userState.step = 'photos';
             userState.report.date = formatDate(new Date());
-            const message = await ctx.reply('📸 Отправьте фото или "Готово":', Markup.inlineKeyboard([
-                [Markup.button.callback('Готово', 'finish_report')]
-            ]));
-            userState.lastMessageId = message.message_id;
+            if (lastMessageId) {
+                await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, '📸 Отправьте фото или "Готово":', Markup.inlineKeyboard([
+                    [Markup.button.callback('Готово', 'finish_report')]
+                ]))
+                    .catch(async () => {
+                        const message = await ctx.reply('📸 Отправьте фото или "Готово":', Markup.inlineKeyboard([
+                            [Markup.button.callback('Готово', 'finish_report')]
+                        ]));
+                        userState.lastMessageId = message.message_id;
+                    });
+            } else {
+                const message = await ctx.reply('📸 Отправьте фото или "Готово":', Markup.inlineKeyboard([
+                    [Markup.button.callback('Готово', 'finish_report')]
+                ]));
+                userState.lastMessageId = message.message_id;
+            }
         } else if (userState.step === 'editWorkDone') {
             userState.report.workDone = ctx.message.text;
             userState.step = 'editMaterials';
-            const message = await ctx.reply('💡 Введите новые материалы:');
-            userState.lastMessageId = message.message_id;
+            if (lastMessageId) {
+                await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, '💡 Введите новые материалы:', {})
+                    .catch(async () => {
+                        const message = await ctx.reply('💡 Введите новые материалы:');
+                        userState.lastMessageId = message.message_id;
+                    });
+            } else {
+                const message = await ctx.reply('💡 Введите новые материалы:');
+                userState.lastMessageId = message.message_id;
+            }
         } else if (userState.step === 'editMaterials') {
             userState.report.materials = ctx.message.text;
             userState.step = 'editPhotos';
-            const message = await ctx.reply('📸 Отправьте новые фото или "Готово":', Markup.inlineKeyboard([
-                [Markup.button.callback('Готово', `finish_edit_${userState.report.originalReportId}`)]
-            ]));
-            userState.lastMessageId = message.message_id;
+            if (lastMessageId) {
+                await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, '📸 Отправьте новые фото или "Готово":', Markup.inlineKeyboard([
+                    [Markup.button.callback('Готово', `finish_edit_${userState.report.originalReportId}`)]
+                ]))
+                    .catch(async () => {
+                        const message = await ctx.reply('📸 Отправьте новые фото или "Готово":', Markup.inlineKeyboard([
+                            [Markup.button.callback('Готово', `finish_edit_${userState.report.originalReportId}`)]
+                        ]));
+                        userState.lastMessageId = message.message_id;
+                    });
+            } else {
+                const message = await ctx.reply('📸 Отправьте новые фото или "Готово":', Markup.inlineKeyboard([
+                    [Markup.button.callback('Готово', `finish_edit_${userState.report.originalReportId}`)]
+                ]));
+                userState.lastMessageId = message.message_id;
+            }
         }
     });
 
@@ -368,10 +443,14 @@ module.exports = (bot) => {
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
         userState.report.photos.push(photoId);
 
-        await clearPreviousMessages(ctx, userId);
+        // Удаляем предыдущее сообщение, так как оно не редактируется из-за медиа
+        if (userState.lastMessageId) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, userState.lastMessageId).catch(console.error);
+            userState.lastMessageId = null;
+        }
 
         if (userState.report.photos.length > 0) {
-            ctx.telegram.sendMediaGroup(ctx.chat.id, userState.report.photos.map(photoId => ({
+            await ctx.telegram.sendMediaGroup(ctx.chat.id, userState.report.photos.map(photoId => ({
                 type: 'photo',
                 media: photoId
             }))).catch(console.error);
@@ -389,8 +468,6 @@ module.exports = (bot) => {
         const userState = ctx.state.userStates[userId];
         if (!userState || !userState.report) return;
 
-        await clearPreviousMessages(ctx, userId);
-
         const users = reportCache.get('users') || await loadUsers();
         const reportId = `${userId}_${users[userId].nextReportId || 1}`;
         userState.report.reportId = reportId;
@@ -401,8 +478,17 @@ module.exports = (bot) => {
         await saveUser(userId, users[userId]);
         reportCache.set('users', users);
 
-        const message = await ctx.reply('✅ Отчет сохранен!');
-        userState.lastMessageId = message.message_id;
+        const lastMessageId = userState.lastMessageId;
+        if (lastMessageId) {
+            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, '✅ Отчет сохранен!', {})
+                .catch(async () => {
+                    const message = await ctx.reply('✅ Отчет сохранен!');
+                    userState.lastMessageId = message.message_id;
+                });
+        } else {
+            const message = await ctx.reply('✅ Отчет сохранен!');
+            userState.lastMessageId = message.message_id;
+        }
 
         delete ctx.state.userStates[userId];
     });
@@ -413,12 +499,19 @@ module.exports = (bot) => {
         const userState = ctx.state.userStates[userId];
         if (!userState || !userState.report || userState.report.originalReportId !== reportId) return;
 
-        await clearPreviousMessages(ctx, userId);
-
         await saveReport(userId, { ...userState.report, reportId });
 
-        const message = await ctx.reply('✅ Отчет отредактирован!');
-        userState.lastMessageId = message.message_id;
+        const lastMessageId = userState.lastMessageId;
+        if (lastMessageId) {
+            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, '✅ Отчет отредактирован!', {})
+                .catch(async () => {
+                    const message = await ctx.reply('✅ Отчет отредактирован!');
+                    userState.lastMessageId = message.message_id;
+                });
+        } else {
+            const message = await ctx.reply('✅ Отчет отредактирован!');
+            userState.lastMessageId = message.message_id;
+        }
 
         delete ctx.state.userStates[userId];
     });
