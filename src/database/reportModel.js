@@ -43,8 +43,31 @@ async function loadUserReports(userId) {
     const res = await pool.query('SELECT reportid, userid, objectname, date, timestamp, workdone, materials, groupmessageids, messagelink, fullname, photos FROM reports WHERE userid = $1', [userId]);
     const reports = {};
     res.rows.forEach(row => {
-        let groupMessageIds = row.groupmessageids ? JSON.parse(row.groupmessageids) : {};
-        let photos = row.photos ? JSON.parse(row.photos) : [];
+        let groupMessageIds = row.groupmessageids;
+        let photos = row.photos;
+
+        if (typeof row.groupmessageids === 'string') {
+            try {
+                groupMessageIds = JSON.parse(row.groupmessageids);
+            } catch (error) {
+                console.error(`Failed to parse groupMessageIds for report ${row.reportid}:`, error);
+                groupMessageIds = {};
+            }
+        } else if (!groupMessageIds) {
+            groupMessageIds = {};
+        }
+
+        if (typeof row.photos === 'string') {
+            try {
+                photos = JSON.parse(row.photos);
+            } catch (error) {
+                console.error(`Failed to parse photos for report ${row.reportid}:`, error);
+                photos = [];
+            }
+        } else if (!photos) {
+            photos = [];
+        }
+
         reports[row.reportid] = {
             reportId: row.reportid,
             userId: row.userid,
@@ -88,8 +111,31 @@ async function loadAllReports() {
     const res = await pool.query('SELECT reportid, userid, objectname, date, timestamp, workdone, materials, groupmessageids, messagelink, fullname, photos FROM reports');
     const reports = {};
     res.rows.forEach(row => {
-        let groupMessageIds = row.groupmessageids ? JSON.parse(row.groupmessageids) : {};
-        let photos = row.photos ? JSON.parse(row.photos) : [];
+        let groupMessageIds = row.groupmessageids;
+        let photos = row.photos;
+
+        if (typeof row.groupmessageids === 'string') {
+            try {
+                groupMessageIds = JSON.parse(row.groupmessageids);
+            } catch (error) {
+                console.error(`Failed to parse groupMessageIds for report ${row.reportid}:`, error);
+                groupMessageIds = {};
+            }
+        } else if (!groupMessageIds) {
+            groupMessageIds = {};
+        }
+
+        if (typeof row.photos === 'string') {
+            try {
+                photos = JSON.parse(row.photos);
+            } catch (error) {
+                console.error(`Failed to parse photos for report ${row.reportid}:`, error);
+                photos = [];
+            }
+        } else if (!photos) {
+            photos = [];
+        }
+
         reports[row.reportid] = {
             reportId: row.reportid,
             userId: row.userid,
