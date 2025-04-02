@@ -1,4 +1,4 @@
-const { Markup } = require('telegraf');
+const { Markup, Telegraf } = require('telegraf');
 const Queue = require('bull');
 const ExcelJS = require('exceljs');
 const NodeCache = require('node-cache');
@@ -7,10 +7,18 @@ const { loadUserReports, loadAllReports, saveReport } = require('../../database/
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 
+// Инициализация Telegram-клиента
+const botToken = process.env.BOT_TOKEN;
+const telegram = new Telegraf(botToken).telegram;
+
 // Инициализация кэша и очереди с Redis
-const reportCache = new NodeCache({ stdTTL: 300 }); // Кэш на 5 минут
-const reportQueue = new Queue('report-generation', process.env.REDIS_URL || 'redis://localhost:6379', {
-    defaultJobOptions: { timeout: 60000 } // Тайм-аут 60 секунд для больших отчетов
+const reportCache = new NodeCache({ stdTTL: 300 });
+const reportQueue = new Queue('report-generation', process.env.REDIS_URL || 'redis://red-cvml61be5dus73f7v7v0:6379', {
+    defaultJobOptions: { timeout: 60000 }
+});
+
+reportQueue.on('error', (error) => {
+    console.error('Redis queue error:', error);
 });
 
 // Фоновая обработка генерации Excel
@@ -18,114 +26,120 @@ reportQueue.process(async (job) => {
     const { userId, objectName, chatId } = job.data;
     console.log(`Processing report for user ${userId}, object: ${objectName}`);
 
-    const users = await loadUsers();
-    const allReports = await loadAllReports();
-    const objectReports = Object.values(allReports).filter(report => report.objectName === objectName);
+    try {
+        const users = await loadUsers();
+        const allReports = await loadAllReports();
+        const objectReports = Object.values(allReports).filter(report => report.objectName === objectName);
 
-    if (objectReports.length === 0) {
-        await job.data.ctx.telegram.sendMessage(chatId, `Отчеты для объекта "${objectName}" не найдены.`);
-        console.log(`No reports found for ${objectName}`);
-        return;
-    }
-
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Отчеты');
-
-    const titleStyle = { font: { name: 'Arial', size: 12, bold: true }, alignment: { horizontal: 'center' } };
-    const headerStyle = {
-        font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } },
-        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } },
-        alignment: { horizontal: 'center', vertical: 'middle' },
-        border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
-    };
-    const centeredCellStyle = {
-        font: { name: 'Arial', size: 9 },
-        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
-        border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
-    };
-    const paddedCellStyle = {
-        font: { name: 'Arial', size: 9 },
-        alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
-        border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
-    };
-
-    worksheet.mergeCells('A1:E1');
-    worksheet.getCell('A1').value = objectName;
-    worksheet.getCell('A1').style = titleStyle;
-
-    worksheet.getRow(2).values = ['Дата', 'Выполненные работы', 'Поставленные материалы', 'ИТР', 'Изображения'];
-    worksheet.getRow(2).eachCell(cell => { cell.style = headerStyle; });
-    worksheet.columns = [
-        { key: 'date', width: 12 },
-        { key: 'workDone', width: 40 },
-        { key: 'materials', width: 40 },
-        { key: 'itr', width: 30 },
-        { key: 'photos', width: 20 }
-    ];
-
-    objectReports.sort((a, b) => {
-        const dateA = parseAndFormatDate(a.date);
-        const dateB = parseAndFormatDate(b.date);
-        const dateObjA = parseDateFromDDMMYYYY(dateA);
-        const dateObjB = parseDateFromDDMMYYYY(dateB);
-        const dateCompare = dateObjB - dateObjA;
-        return dateCompare === 0 ? b.timestamp.localeCompare(a.timestamp) : dateCompare;
-    });
-
-    let currentRow = 3;
-    let lastDate = null, lastUserId = null, dateStartRow = null, itrStartRow = null, dateCount = 0, itrCount = 0;
-
-    for (let i = 0; i < objectReports.length; i++) {
-        const report = objectReports[i];
-        const user = users[report.userId] || {};
-        const position = user.position === 'Инженер пто' ? 'Инженер ПТО' : user.position;
-        const itrText = `${position || 'Не указано'}\n${user.organization || 'Не указано'}\n${report.fullName || 'Не указано'}`;
-        const photosCount = report.photos?.length > 0 ? `${report.photos.length} фото` : 'Нет';
-        const formattedDate = parseAndFormatDate(report.date);
-
-        worksheet.getRow(currentRow).values = [formattedDate, report.workDone, report.materials, itrText, photosCount];
-        worksheet.getCell(`A${currentRow}`).style = centeredCellStyle;
-        worksheet.getCell(`B${currentRow}`).style = paddedCellStyle;
-        worksheet.getCell(`C${currentRow}`).style = paddedCellStyle;
-        worksheet.getCell(`D${currentRow}`).style = centeredCellStyle;
-
-        const photosCell = worksheet.getCell(`E${currentRow}`);
-        if (report.photos?.length > 0 && report.messageLink) {
-            photosCell.value = { text: photosCount, hyperlink: report.messageLink };
-            photosCell.style = { ...centeredCellStyle, font: { ...centeredCellStyle.font, color: { argb: 'FF0000FF' }, underline: true } };
-        } else {
-            photosCell.style = centeredCellStyle;
+        if (objectReports.length === 0) {
+            await telegram.sendMessage(chatId, `Отчеты для объекта "${objectName}" не найдены.`);
+            console.log(`No reports found for ${objectName}`);
+            return;
         }
 
-        const maxLines = Math.max(report.workDone.split('\n').length, report.materials.split('\n').length, itrText.split('\n').length, photosCount.split('\n').length);
-        worksheet.getRow(currentRow).height = Math.max(15, maxLines * 15);
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Отчеты');
 
-        if (lastDate !== formattedDate && lastDate !== null && dateCount > 1) worksheet.mergeCells(`A${dateStartRow}:A${currentRow - 1}`);
-        if (lastUserId !== report.userId && lastUserId !== null && itrCount > 1) worksheet.mergeCells(`D${itrStartRow}:D${currentRow - 1}`);
+        const titleStyle = { font: { name: 'Arial', size: 12, bold: true }, alignment: { horizontal: 'center' } };
+        const headerStyle = {
+            font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } },
+            alignment: { horizontal: 'center', vertical: 'middle' },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        const centeredCellStyle = {
+            font: { name: 'Arial', size: 9 },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        const paddedCellStyle = {
+            font: { name: 'Arial', size: 9 },
+            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
 
-        if (lastDate !== formattedDate) {
-            lastDate = formattedDate;
-            dateStartRow = currentRow;
-            dateCount = 1;
-        } else dateCount++;
+        worksheet.mergeCells('A1:E1');
+        worksheet.getCell('A1').value = objectName;
+        worksheet.getCell('A1').style = titleStyle;
 
-        if (lastUserId !== report.userId || lastDate !== formattedDate) {
-            lastUserId = report.userId;
-            itrStartRow = currentRow;
-            itrCount = 1;
-        } else itrCount++;
+        worksheet.getRow(2).values = ['Дата', 'Выполненные работы', 'Поставленные материалы', 'ИТР', 'Изображения'];
+        worksheet.getRow(2).eachCell(cell => { cell.style = headerStyle; });
+        worksheet.columns = [
+            { key: 'date', width: 12 },
+            { key: 'workDone', width: 40 },
+            { key: 'materials', width: 40 },
+            { key: 'itr', width: 30 },
+            { key: 'photos', width: 20 }
+        ];
 
-        if (i === objectReports.length - 1) {
-            if (dateCount > 1) worksheet.mergeCells(`A${dateStartRow}:A${currentRow}`);
-            if (itrCount > 1) worksheet.mergeCells(`D${itrStartRow}:D${currentRow}`);
+        objectReports.sort((a, b) => {
+            const dateA = parseAndFormatDate(a.date);
+            const dateB = parseAndFormatDate(b.date);
+            const dateObjA = parseDateFromDDMMYYYY(dateA);
+            const dateObjB = parseDateFromDDMMYYYY(dateB);
+            const dateCompare = dateObjB - dateObjA;
+            return dateCompare === 0 ? b.timestamp.localeCompare(a.timestamp) : dateCompare;
+        });
+
+        let currentRow = 3;
+        let lastDate = null, lastUserId = null, dateStartRow = null, itrStartRow = null, dateCount = 0, itrCount = 0;
+
+        for (let i = 0; i < objectReports.length; i++) {
+            const report = objectReports[i];
+            const user = users[report.userId] || {};
+            const position = user.position === 'Инженер пто' ? 'Инженер ПТО' : user.position;
+            const itrText = `${position || 'Не указано'}\n${user.organization || 'Не указано'}\n${report.fullName || 'Не указано'}`;
+            const photosCount = report.photos?.length > 0 ? `${report.photos.length} фото` : 'Нет';
+            const formattedDate = parseAndFormatDate(report.date);
+
+            worksheet.getRow(currentRow).values = [formattedDate, report.workDone, report.materials, itrText, photosCount];
+            worksheet.getCell(`A${currentRow}`).style = centeredCellStyle;
+            worksheet.getCell(`B${currentRow}`).style = paddedCellStyle;
+            worksheet.getCell(`C${currentRow}`).style = paddedCellStyle;
+            worksheet.getCell(`D${currentRow}`).style = centeredCellStyle;
+
+            const photosCell = worksheet.getCell(`E${currentRow}`);
+            if (report.photos?.length > 0 && report.messageLink) {
+                photosCell.value = { text: photosCount, hyperlink: report.messageLink };
+                photosCell.style = { ...centeredCellStyle, font: { ...centeredCellStyle.font, color: { argb: 'FF0000FF' }, underline: true } };
+            } else {
+                photosCell.style = centeredCellStyle;
+            }
+
+            const maxLines = Math.max(report.workDone.split('\n').length, report.materials.split('\n').length, itrText.split('\n').length, photosCount.split('\n').length);
+            worksheet.getRow(currentRow).height = Math.max(15, maxLines * 15);
+
+            if (lastDate !== formattedDate && lastDate !== null && dateCount > 1) worksheet.mergeCells(`A${dateStartRow}:A${currentRow - 1}`);
+            if (lastUserId !== report.userId && lastUserId !== null && itrCount > 1) worksheet.mergeCells(`D${itrStartRow}:D${currentRow - 1}`);
+
+            if (lastDate !== formattedDate) {
+                lastDate = formattedDate;
+                dateStartRow = currentRow;
+                dateCount = 1;
+            } else dateCount++;
+
+            if (lastUserId !== report.userId || lastDate !== formattedDate) {
+                lastUserId = report.userId;
+                itrStartRow = currentRow;
+                itrCount = 1;
+            } else itrCount++;
+
+            if (i === objectReports.length - 1) {
+                if (dateCount > 1) worksheet.mergeCells(`A${dateStartRow}:A${currentRow}`);
+                if (itrCount > 1) worksheet.mergeCells(`D${itrStartRow}:D${currentRow}`);
+            }
+            currentRow++;
         }
-        currentRow++;
-    }
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    const filename = `${objectName}_reports_${formatDate(new Date())}.xlsx`;
-    await job.data.ctx.telegram.sendDocument(chatId, { source: buffer, filename });
-    console.log(`Report generated and sent for ${objectName}`);
+        const buffer = await workbook.xlsx.writeBuffer();
+        console.log(`Generated buffer size: ${buffer.length} bytes`);
+        const filename = `${objectName}_reports_${formatDate(new Date())}.xlsx`;
+        await telegram.sendDocument(chatId, { source: buffer, filename });
+        console.log(`Report generated and sent for ${objectName}`);
+    } catch (error) {
+        console.error(`Error processing report for ${objectName}:`, error);
+        await telegram.sendMessage(chatId, 'Произошла ошибка при генерации отчета. Попробуйте позже.');
+    }
 });
 
 function parseDateFromDDMMYYYY(dateString) {
@@ -184,8 +198,7 @@ async function downloadReportFile(ctx, objectIndex) {
     const message = await ctx.reply('⏳ Отчет генерируется, вы получите его скоро.');
     ctx.state.userStates[userId].lastMessageId = message.message_id;
 
-    // Добавляем задачу в очередь
-    await reportQueue.add({ userId, objectName, chatId: ctx.chat.id, ctx });
+    await reportQueue.add({ userId, objectName, chatId: ctx.chat.id });
     console.log(`Report job added to queue for ${objectName}`);
 }
 
