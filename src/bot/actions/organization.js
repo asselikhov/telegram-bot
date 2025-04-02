@@ -30,7 +30,6 @@ module.exports = (bot) => {
 
         ctx.state.userStates[userId].step = 'selectObjects';
         await showObjectSelection(ctx, userId, []);
-        console.log(`Переход к выбору объектов для userId ${userId} после выбора организации`);
     });
 
     bot.action(/custom_organization_(\d+)/, async (ctx) => {

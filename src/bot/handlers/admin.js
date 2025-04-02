@@ -63,11 +63,8 @@ module.exports = (bot) => {
         if (!user || user.isApproved) return;
 
         const inviteCodeData = await loadInviteCode(reviewUserId);
-        console.log('[review] Полные данные inviteCodeData для userId', reviewUserId, ':', inviteCodeData);
 
         const creatorId = inviteCodeData?.createdBy;
-        console.log('[review] ID создателя кода:', creatorId, 'для пользователя:', reviewUserId);
-
         let creatorFullName;
         if (!inviteCodeData || !creatorId) {
             creatorFullName = 'Код не зарегистрирован';
@@ -75,7 +72,6 @@ module.exports = (bot) => {
             const creator = users[creatorId];
             creatorFullName = creator ? creator.fullName : 'Пользователь не найден';
         }
-        console.log('[review] Создатель:', creatorFullName);
 
         const usedAt = inviteCodeData?.usedAt
             ? new Date(inviteCodeData.usedAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })
@@ -128,7 +124,6 @@ ${objectsList}
             await saveUser(approveUserId, users[approveUserId]);
             await ctx.telegram.sendMessage(approveUserId, '✅ Ваша заявка одобрена! Используйте /start для входа в меню.');
             await ctx.reply(`Заявка ${user.fullName || approveUserId} одобрена.`);
-            console.log(`[admin.js] Пользователь ${approveUserId} (${user.fullName}) одобрен`);
         }
         await showApplications(ctx);
     });
@@ -145,7 +140,6 @@ ${objectsList}
             await deleteUser(rejectUserId);
             await ctx.telegram.sendMessage(rejectUserId, '❌ Ваша заявка отклонена администратором.');
             await ctx.reply(`Заявка ${user.fullName || rejectUserId} отклонена.`);
-            console.log(`[admin.js] Заявка пользователя ${rejectUserId} (${user.fullName}) отклонена`);
         }
         await showApplications(ctx);
     });

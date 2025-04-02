@@ -7,11 +7,9 @@ const { showProfile, showMainMenu } = require('./menu');
 const { saveReport, loadUserReports } = require('../../database/reportModel');
 const { ORGANIZATIONS_LIST, GENERAL_GROUP_CHAT_IDS, OBJECT_GROUPS, ADMIN_ID } = require('../../config/config');
 
-// Хранилище для медиагрупп
 const mediaGroups = new Map();
 
 module.exports = (bot) => {
-    // Middleware для обработки медиагрупп
     bot.use(async (ctx, next) => {
         if (ctx.message && ctx.message.media_group_id) {
             const userId = ctx.from.id.toString();
@@ -25,7 +23,6 @@ module.exports = (bot) => {
             const group = mediaGroups.get(mediaGroupId);
             group.photos.push(photoId);
 
-            // Очищаем предыдущий таймер и устанавливаем новый
             clearTimeout(group.timeout);
             group.timeout = setTimeout(async () => {
                 const state = ctx.state.userStates[userId];
@@ -34,21 +31,15 @@ module.exports = (bot) => {
                     return;
                 }
 
-                // Добавляем все фото в отчет
                 state.report.photos = [...state.report.photos, ...group.photos];
-                console.log(`[textHandler.js] Собранные фото для медиагруппы: ${state.report.photos.length} - ${state.report.photos}`);
 
-                // Удаляем предыдущую медиагруппу, если она была
                 if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
                     for (const msgId of state.mediaGroupIds) {
-                        await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
-                            console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
-                        );
+                        await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
                     }
                     state.mediaGroupIds = [];
                 }
 
-                // Сначала отправляем медиагруппу
                 const mediaGroup = state.report.photos.map((photoId, index) => ({
                     type: 'photo',
                     media: photoId,
@@ -56,9 +47,7 @@ module.exports = (bot) => {
                 }));
                 const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
                 state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
-                console.log(`[textHandler.js] Медиагруппа отправлена для userId ${userId}: ${state.mediaGroupIds}`);
 
-                // Затем обновляем или создаем текстовое сообщение
                 const text = 'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.';
                 const keyboard = Markup.inlineKeyboard([
                     [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
@@ -67,39 +56,26 @@ module.exports = (bot) => {
                 if (state.messageIds && state.messageIds.length > 0) {
                     const existingMessageId = state.messageIds[0];
                     try {
-                        // Удаляем старое текстовое сообщение
-                        await ctx.telegram.deleteMessage(ctx.chat.id, existingMessageId).catch(e =>
-                            console.log(`[textHandler.js] Не удалось удалить старое сообщение ${existingMessageId}: ${e.message}`)
-                        );
-                    } catch (e) {
-                        console.log(`[textHandler.js] Ошибка при удалении сообщения ${existingMessageId}: ${e.message}`);
-                    }
-                    // Создаем новое сообщение после медиагруппы
+                        await ctx.telegram.deleteMessage(ctx.chat.id, existingMessageId);
+                    } catch (e) {}
                     const newMessage = await ctx.reply(text, keyboard);
                     state.messageIds = [newMessage.message_id];
-                    console.log(`[textHandler.js] Новое текстовое сообщение создано для userId ${userId}: ${newMessage.message_id}`);
                 } else {
                     const newMessage = await ctx.reply(text, keyboard);
                     state.messageIds = [newMessage.message_id];
-                    console.log(`[textHandler.js] Первое текстовое сообщение создано для userId ${userId}: ${newMessage.message_id}`);
                 }
 
-                console.log(`[textHandler.js] Обработка завершена для userId ${userId}, медиагруппа: ${state.mediaGroupIds}, текст: ${state.messageIds[0]}`);
                 mediaGroups.delete(mediaGroupId);
-            }, 500); // Ждем 500 мс после последнего фото в группе
+            }, 500);
         }
         await next();
     });
 
-    // Остальной код остается без изменений (bot.on('text', ...), bot.on('photo', ...), bot.action(...))
-
     bot.on('text', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        console.log(`[textHandler.js] Получен текст для userId ${userId}: "${ctx.message.text}", state:`, state);
 
         if (!state || !state.step) {
-            console.log(`[textHandler.js] Нет состояния или шага для userId ${userId}`);
             return;
         }
 
@@ -116,7 +92,6 @@ module.exports = (bot) => {
                     return;
                 }
                 const { organization, createdBy } = inviteData;
-                console.log(`[textHandler] Пользователь ${userId} ввел код ${code}, созданный ${createdBy}, организация: ${organization}`);
                 users[userId].organization = organization;
                 await saveUser(userId, users[userId]);
                 await markInviteCodeAsUsed(code, userId);
@@ -128,7 +103,6 @@ module.exports = (bot) => {
                 const fullName = ctx.message.text.trim();
                 users[userId].fullName = fullName;
                 await saveUser(userId, users[userId]);
-                console.log(`Сохранено ФИО для userId ${userId}: ${fullName}`);
 
                 const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
                 state.messageIds.push(message.message_id);
@@ -162,7 +136,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     await clearPreviousMessages(ctx, userId);
                     users[userId].fullName = newFullName;
                     await saveUser(userId, users[userId]);
-                    console.log(`ФИО обновлено для userId ${userId}: ${newFullName}`);
 
                     state.step = null;
                     state.messageIds = [];
@@ -170,7 +143,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     await ctx.reply(`Ваше ФИО изменено на "${newFullName}"`);
                     await showProfile(ctx);
                 } catch (error) {
-                    console.error(`[textHandler.js] Ошибка при обновлении ФИО для userId ${userId}: ${error.message}`);
                     await ctx.reply('Произошла ошибка при изменении ФИО. Попробуйте снова.');
                 }
                 break;
@@ -181,7 +153,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 await saveUser(userId, users[userId]);
                 state.step = 'selectObjects';
                 await showObjectSelection(ctx, userId, []);
-                console.log(`Переход к выбору объектов для userId ${userId} после ввода своей организации`);
                 break;
 
             case 'changeOrganizationInput':
@@ -210,7 +181,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             case 'materials':
                 state.report.materials = ctx.message.text.trim();
                 state.step = 'photos';
-                state.mediaGroupIds = []; // Инициализация
+                state.mediaGroupIds = [];
                 const photoMessage = await ctx.reply(
                     '📸 Прикрепите изображения к отчету или нажмите "Готово" для завершения',
                     Markup.inlineKeyboard([[Markup.button.callback('Готово', 'finish_report')]])
@@ -227,7 +198,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             case 'editMaterials':
                 state.report.materials = ctx.message.text.trim();
                 state.step = 'editPhotos';
-                state.mediaGroupIds = []; // Инициализация
+                state.mediaGroupIds = [];
                 const editMessage = await ctx.reply(
                     '📸 Прикрепите новые изображения к отчету или нажмите "Готово" для завершения',
                     Markup.inlineKeyboard([
@@ -239,7 +210,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 break;
 
             default:
-                console.log(`[textHandler.js] Неизвестный шаг для userId ${userId}: ${state.step}`);
                 break;
         }
     });
@@ -254,9 +224,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
 
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
-                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
-                    console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
-                );
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
             }
             state.mediaGroupIds = [];
         }
@@ -277,22 +245,14 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         if (state.messageIds && state.messageIds.length > 0) {
             const existingMessageId = state.messageIds[0];
             try {
-                await ctx.telegram.deleteMessage(ctx.chat.id, existingMessageId).catch(e =>
-                    console.log(`[textHandler.js] Не удалось удалить старое сообщение ${existingMessageId}: ${e.message}`)
-                );
-            } catch (e) {
-                console.log(`[textHandler.js] Ошибка при удалении сообщения ${existingMessageId}: ${e.message}`);
-            }
+                await ctx.telegram.deleteMessage(ctx.chat.id, existingMessageId);
+            } catch (e) {}
             const newMessage = await ctx.reply(text, keyboard);
             state.messageIds = [newMessage.message_id];
-            console.log(`[textHandler.js] Новое текстовое сообщение создано для userId ${userId}: ${newMessage.message_id}`);
         } else {
             const newMessage = await ctx.reply(text, keyboard);
             state.messageIds = [newMessage.message_id];
-            console.log(`[textHandler.js] Первое текстовое сообщение создано для userId ${userId}: ${newMessage.message_id}`);
         }
-
-        console.log(`[textHandler.js] Медиагруппа отправлена для userId ${userId}: ${state.mediaGroupIds}, текст: ${state.messageIds[0]}`);
     });
 
     bot.action('finish_report', async (ctx) => {
@@ -302,9 +262,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
 
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
-                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
-                    console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
-                );
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
             }
         }
         await clearPreviousMessages(ctx, userId);
@@ -372,9 +330,7 @@ ${report.materials}
                     if (chatId === groupChatId) {
                         report.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${messages[0].message_id}`;
                     }
-                } catch (e) {
-                    console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
-                }
+                } catch (e) {}
             }
         } else {
             for (const chatId of allChatIds) {
@@ -384,9 +340,7 @@ ${report.materials}
                     if (chatId === groupChatId) {
                         report.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id}`;
                     }
-                } catch (e) {
-                    console.log(`Не удалось отправить отчет в чат ${chatId}: ${e.message}`);
-                }
+                } catch (e) {}
             }
         }
 
@@ -400,10 +354,7 @@ ${report.materials}
         for (const msgId of allUserMessageIds) {
             try {
                 await ctx.telegram.deleteMessage(ctx.chat.id, msgId);
-                console.log(`Удалено сообщение ${msgId} из чата пользователя ${userId}`);
-            } catch (e) {
-                console.log(`Не удалось удалить сообщение ${msgId} из чата ${ctx.chat.id}: ${e.message}`);
-            }
+            } catch (e) {}
         }
 
         delete ctx.state.userStates[userId];
@@ -417,9 +368,7 @@ ${report.materials}
 
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
-                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
-                    console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
-                );
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
             }
             state.mediaGroupIds = [];
         }
@@ -434,8 +383,6 @@ ${report.materials}
             ])
         );
         state.messageIds = [newMessage.message_id];
-
-        console.log(`[textHandler.js] Все фото удалены для userId ${userId}, новое сообщение отправлено: ${newMessage.message_id}`);
     });
 
     bot.action('finish_edit_report', async (ctx) => {
@@ -445,9 +392,7 @@ ${report.materials}
 
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
-                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e =>
-                    console.log(`[textHandler.js] Не удалось удалить сообщение медиагруппы ${msgId}: ${e.message}`)
-                );
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
             }
         }
         await clearPreviousMessages(ctx, userId);
@@ -492,9 +437,7 @@ ${newReport.materials}
             const oldReport = userReports[oldReportId];
             if (oldReport?.groupMessageIds) {
                 for (const [chatId, msgId] of Object.entries(oldReport.groupMessageIds)) {
-                    await ctx.telegram.deleteMessage(chatId, msgId).catch(e =>
-                        console.log(`Не удалось удалить сообщение ${msgId} в чате ${chatId}: ${e.message}`)
-                    );
+                    await ctx.telegram.deleteMessage(chatId, msgId).catch(e => {});
                 }
                 const client = await require('../../database/db').pool.connect();
                 try {
@@ -526,9 +469,7 @@ ${newReport.materials}
                     if (chatId === newGroupChatId) {
                         newReport.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${messages[0].message_id}`;
                     }
-                } catch (e) {
-                    console.log(`Не удалось отправить обновленный отчет в чат ${chatId}: ${e.message}`);
-                }
+                } catch (e) {}
             }
         } else {
             for (const chatId of allChatIds) {
@@ -538,9 +479,7 @@ ${newReport.materials}
                     if (chatId === newGroupChatId) {
                         newReport.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id}`;
                     }
-                } catch (e) {
-                    console.log(`Не удалось отправить обновленный отчет в чат ${chatId}: ${e.message}`);
-                }
+                } catch (e) {}
             }
         }
 

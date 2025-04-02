@@ -14,17 +14,15 @@ const objectsActions = require('./actions/objects');
 const statusActions = require('./actions/status');
 const { loadUsers } = require('../database/userModel');
 const { loadUserReports } = require('../database/reportModel');
-const { formatDate } = require('./utils'); // Импортируем formatDate
+const { formatDate } = require('./utils');
 
 const bot = new Telegraf(BOT_TOKEN);
 
 const userStates = {};
 
 bot.use((ctx, next) => {
-  console.log('[middleware] Получен update:', ctx.update);
   const userId = ctx.from?.id.toString();
   if (!userId) {
-    console.log('Ошибка: userId не определён в контексте:', ctx.from);
     return next();
   }
   if (!userStates[userId]) {
@@ -43,7 +41,6 @@ bot.use((ctx, next) => {
     if (userStates[userId]) {
       if (!userStates[userId].messageIds.includes(message.message_id)) {
         userStates[userId].messageIds.push(message.message_id);
-        console.log(`[ctx.reply] Сообщение ${message.message_id} добавлено в messageIds для userId ${userId}. Массив:`, userStates[userId].messageIds);
       }
     }
     return message;
@@ -56,7 +53,6 @@ bot.use((ctx, next) => {
     if (userStates[targetUserId]) {
       if (!userStates[targetUserId].messageIds.includes(message.message_id)) {
         userStates[targetUserId].messageIds.push(message.message_id);
-        console.log(`[sendMessage] Сообщение ${message.message_id} добавлено в messageIds для userId ${targetUserId}. Массив:`, userStates[targetUserId].messageIds);
       }
     }
     return message;
@@ -66,14 +62,13 @@ bot.use((ctx, next) => {
 });
 
 bot.action(/.*/, (ctx, next) => {
-  console.log('[DEBUG] Получено действие:', ctx.match[0], 'от userId:', ctx.from.id);
   return next();
 });
 
 async function sendReportReminders() {
   const moscowTime = new Date().toLocaleString('en-US', { timeZone: 'Europe/Moscow' });
   const currentDate = new Date(moscowTime);
-  const formattedDate = formatDate(currentDate); // Формат DD.MM.YYYY
+  const formattedDate = formatDate(currentDate);
 
   const users = await loadUsers();
   const producers = Object.entries(users).filter(([_, user]) =>
@@ -96,13 +91,10 @@ async function sendReportReminders() {
 ${user.fullName}, вы не предоставили отчет за ${formattedDate}.
 
 Пожалуйста, внесите данные.
-                 `.trim();
+                    `.trim();
           try {
             await bot.telegram.sendMessage(groupChatId, reminderText);
-            console.log(`Напоминание отправлено для ${user.fullName} в группу ${groupChatId} в 19:00 по Москве`);
-          } catch (error) {
-            console.error(`Ошибка при отправке напоминания для ${user.fullName}:`, error.message);
-          }
+          } catch (error) {}
         }
       }
     }
@@ -110,7 +102,6 @@ ${user.fullName}, вы не предоставили отчет за ${formatted
 }
 
 cron.schedule('0 19 * * *', () => {
-  console.log('Проверка отчетов на наличие в 19:00 по Москве:', new Date().toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' }));
   sendReportReminders();
 }, {
   timezone: "Europe/Moscow"

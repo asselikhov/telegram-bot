@@ -54,7 +54,6 @@ async function showDownloadReport(ctx, page = 0) {
     ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
-// Вспомогательная функция для преобразования DD.MM.YYYY в Date
 function parseDateFromDDMMYYYY(dateString) {
     const [day, month, year] = dateString.split('.').map(Number);
     return new Date(year, month - 1, day);
@@ -236,7 +235,6 @@ async function showReportObjects(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const reports = await loadUserReports(userId).catch(err => {
-        console.error(`[showReportObjects] Ошибка загрузки отчетов для userId ${userId}: ${err.message}`);
         return {};
     });
 

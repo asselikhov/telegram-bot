@@ -6,22 +6,21 @@ async function loadUsers() {
         const res = await client.query('SELECT * FROM users');
         const users = {};
         res.rows.forEach(row => {
-            // Преобразуем selectedObjects из строки в массив, если оно не null
             let selectedObjects = [];
             if (row.selectedobjects) {
                 try {
                     selectedObjects = Array.isArray(row.selectedobjects)
                         ? row.selectedobjects
-                        : JSON.parse(row.selectedobjects); // Если строка JSON
+                        : JSON.parse(row.selectedobjects);
                 } catch (e) {
-                    selectedObjects = [row.selectedobjects]; // Если не JSON, считаем строкой
+                    selectedObjects = [row.selectedobjects];
                 }
             }
             users[row.userid] = {
                 fullName: row.fullname,
                 position: row.position,
                 organization: row.organization,
-                selectedObjects: selectedObjects, // Гарантируем массив
+                selectedObjects: selectedObjects,
                 status: row.status,
                 isApproved: row.isapproved,
                 nextReportId: row.nextreportid || 1,
@@ -55,7 +54,7 @@ async function saveUser(userId, userData) {
             userData.fullName,
             userData.position,
             userData.organization,
-            JSON.stringify(userData.selectedObjects), // Сохраняем как JSON строку
+            JSON.stringify(userData.selectedObjects),
             userData.status,
             userData.isApproved,
             userData.nextReportId,

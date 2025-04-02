@@ -1,7 +1,6 @@
 const { pool } = require('./db');
 const { formatDate } = require('../bot/utils');
 
-// Функция для удаления "100" из chatId в ссылке
 function normalizeMessageLink(messageLink) {
     if (!messageLink || typeof messageLink !== 'string') return messageLink;
     const match = messageLink.match(/https:\/\/t\.me\/c\/(\d+)\/(\d+)/);
@@ -35,25 +34,19 @@ async function saveReport(userId, report) {
             fullName,
             JSON.stringify(photos || [])
         ]);
-        console.log(`[saveReport] Отчет ${reportId} успешно сохранён для userId ${userId} с messagelink: ${normalizedMessageLink}`);
     } catch (err) {
-        console.error(`[saveReport] Ошибка сохранения отчета ${reportId} для userId ${userId}: ${err.message}`);
         throw err;
     } finally {
         client.release();
     }
 }
 
-// Остальные функции остаются без изменений (пример для полноты)
 async function loadUserReports(userId) {
     const client = await pool.connect();
     try {
-        console.log(`[loadUserReports] Запрос отчетов для userId: ${userId} (тип: ${typeof userId})`);
         const res = await client.query('SELECT * FROM reports WHERE userid = $1', [userId]);
-        console.log(`[loadUserReports] Найдено строк: ${res.rowCount}`);
         const reports = {};
-        res.rows.forEach((row, index) => {
-            console.log(`[loadUserReports] Обработка строки ${index}: reportid=${row.reportid}, objectname=${row.objectname}, userid=${row.userid}`);
+        res.rows.forEach(row => {
             let groupMessageIds = row.groupmessageids;
             let photos = row.photos;
 
@@ -61,7 +54,6 @@ async function loadUserReports(userId) {
                 try {
                     groupMessageIds = JSON.parse(groupMessageIds);
                 } catch (e) {
-                    console.error(`[loadUserReports] Ошибка парсинга groupmessageids для reportid=${row.reportid}: ${e.message}`);
                     groupMessageIds = {};
                 }
             } else if (!groupMessageIds) {
@@ -72,7 +64,6 @@ async function loadUserReports(userId) {
                 try {
                     photos = JSON.parse(photos);
                 } catch (e) {
-                    console.error(`[loadUserReports] Ошибка парсинга photos для reportid=${row.reportid}: ${e.message}`);
                     photos = [];
                 }
             } else if (!photos) {
@@ -93,10 +84,8 @@ async function loadUserReports(userId) {
                 photos
             };
         });
-        console.log(`[loadUserReports] Загружено ${Object.keys(reports).length} отчетов для userId ${userId}`);
         return reports;
     } catch (err) {
-        console.error(`[loadUserReports] Ошибка загрузки отчетов для userId ${userId}: ${err.message}`);
         return {};
     } finally {
         client.release();
@@ -134,7 +123,6 @@ async function loadAllReports() {
                 try {
                     groupMessageIds = JSON.parse(groupMessageIds);
                 } catch (e) {
-                    console.error(`[loadAllReports] Ошибка парсинга groupmessageids для reportid=${row.reportid}: ${e.message}`);
                     groupMessageIds = {};
                 }
             } else if (!groupMessageIds) {
@@ -145,7 +133,6 @@ async function loadAllReports() {
                 try {
                     photos = JSON.parse(photos);
                 } catch (e) {
-                    console.error(`[loadAllReports] Ошибка парсинга photos для reportid=${row.reportid}: ${e.message}`);
                     photos = [];
                 }
             } else if (!photos) {
@@ -166,10 +153,8 @@ async function loadAllReports() {
                 photos
             };
         });
-        console.log(`[loadAllReports] Загружено ${Object.keys(reports).length} отчетов`);
         return reports;
     } catch (err) {
-        console.error(`[loadAllReports] Ошибка загрузки отчетов: ${err.message}`);
         return {};
     } finally {
         client.release();

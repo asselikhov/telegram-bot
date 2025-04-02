@@ -40,7 +40,6 @@ async function markInviteCodeAsUsed(code, userId) {
             WHERE code = $2
             RETURNING organization, createdBy, usedAt
         `, [userId, code]);
-        console.log('[markInviteCodeAsUsed] Результат для кода', code, ':', res.rows[0]);
         return res.rows[0];
     } finally {
         client.release();
@@ -78,7 +77,6 @@ async function loadInviteCode(userId) {
             ORDER BY createdAt DESC 
             LIMIT 1
         `, [userId]);
-        console.log('[loadInviteCode] Результат для userId', userId, ':', res.rows[0]);
         return res.rows.length > 0 ? res.rows[0] : null;
     } finally {
         client.release();

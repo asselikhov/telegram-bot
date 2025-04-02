@@ -31,12 +31,10 @@ module.exports = (bot) => {
         const users = await loadUsers();
         users[userId].position = selectedPosition;
         await saveUser(userId, users[userId]);
-        console.log(`Сохранена должность для userId ${userId}: ${selectedPosition}`);
 
         ctx.state.userStates[userId].step = 'enterFullName';
         const message = await ctx.reply('Введите ваше ФИО:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-        console.log(`Переход к вводу ФИО для userId ${userId} после выбора должности`);
     });
 
     bot.action('edit_position', async (ctx) => {

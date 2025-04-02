@@ -1,4 +1,3 @@
-// status.js
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');

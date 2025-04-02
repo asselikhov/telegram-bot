@@ -27,7 +27,6 @@ async function showObjectSelection(ctx, userId, selected = [], messageId = null)
         try {
             await ctx.telegram.editMessageText(ctx.chat.id, messageId, null, text, keyboard);
         } catch (e) {
-            console.log(`Не удалось отредактировать сообщение ${messageId}:`, e.message);
             await ctx.reply(text, keyboard);
         }
     } else {
@@ -86,7 +85,6 @@ module.exports = (bot) => {
             state.selectedObjects = [];
             const { showPositionSelection } = require('./position');
             await showPositionSelection(ctx, userId);
-            console.log(`Переход к выбору должности для userId ${userId} после выбора объектов`);
         }
     });
 
