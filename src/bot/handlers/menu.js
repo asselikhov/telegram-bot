@@ -1,7 +1,8 @@
 const { Markup } = require('telegraf');
-const { loadUsers } = require('../../database/userModel');
+const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
-const { ORGANIZATION_OBJECTS, ADMIN_ID } = require('../../config/config');
+const { ORGANIZATION_OBJECTS } = require('../../config/config');
+const { ADMIN_ID } = require('../../config/config');
 
 async function showMainMenu(ctx) {
     const userId = ctx.from.id.toString();
@@ -9,6 +10,9 @@ async function showMainMenu(ctx) {
     const user = users[userId] || {};
 
     await clearPreviousMessages(ctx, userId);
+    if (ctx.state.userStates[userId]) {
+        ctx.state.userStates[userId].messageIds = [];
+    }
 
     const menuText = `
 🚀 ГЛАВНОЕ МЕНЮ 
@@ -16,43 +20,47 @@ async function showMainMenu(ctx) {
 Выберите действие ниже:  
     `.trim();
 
-    const buttons = [[Markup.button.callback('👤 Личный кабинет', 'profile')]];
-    if (user.isApproved && user.position === 'Производитель работ') buttons.splice(1, 0, [Markup.button.callback('📝 Создать отчет', 'create_report')]);
-    if (user.isApproved) buttons.splice(1, 0, [Markup.button.callback('📤 Выгрузить отчет', 'download_report')]);
-    if (userId === ADMIN_ID) buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);
-
-    const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
-    if (lastMessageId) {
-        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, menuText, Markup.inlineKeyboard(buttons))
-            .catch(async () => {
-                const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
-                ctx.state.userStates[userId].lastMessageId = message.message_id;
-            });
-    } else {
-        const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
-        ctx.state.userStates[userId].lastMessageId = message.message_id;
+    const buttons = [
+        [Markup.button.callback('👤 Личный кабинет', 'profile')]
+    ];
+    if (user.isApproved && user.position === 'Производитель работ') {
+        buttons.splice(1, 0, [Markup.button.callback('📝 Создать отчет', 'create_report')]);
     }
+    if (user.isApproved) {
+        buttons.splice(1, 0, [Markup.button.callback('📤 Выгрузить отчет', 'download_report')]);
+    }
+    if (userId === ADMIN_ID) {
+        buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);
+    }
+
+    const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 async function showProfile(ctx) {
     const userId = ctx.from.id.toString();
-    const users = await loadUsers(); // Получаем актуальные данные из БД/кэша
+    const users = await loadUsers();
     const user = users[userId] || {};
 
     const availableObjects = ORGANIZATION_OBJECTS[user.organization] || [];
-    const filteredObjects = (user.selectedObjects || []).filter(obj => availableObjects.includes(obj));
-    const objectsList = filteredObjects.length > 0 ? filteredObjects.map(obj => `· ${obj}`).join('\n') : 'Не выбраны';
+    const filteredObjects = user.selectedObjects.filter(obj => availableObjects.includes(obj));
+    const objectsList = filteredObjects.length > 0
+        ? filteredObjects.map(obj => `· ${obj}`).join('\n')
+        : 'Не выбраны';
 
     await clearPreviousMessages(ctx, userId);
 
     const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
+
     const profileText = `
 👤 ЛИЧНЫЙ КАБИНЕТ  
 ➖➖➖➖➖➖➖➖➖➖➖  
 ${user.position || 'Не указана'}  
 ${user.organization || 'Не указана'}  
 ${user.fullName || 'Не указано'}  
+
 ${objectsList}  
+
 ${statusEmoji} ${user.status || 'Не указан'}
 `.trim();
 
@@ -63,17 +71,8 @@ ${statusEmoji} ${user.status || 'Не указан'}
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
     ];
 
-    const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
-    if (lastMessageId) {
-        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, profileText, Markup.inlineKeyboard(buttons))
-            .catch(async () => {
-                const message = await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
-                ctx.state.userStates[userId].lastMessageId = message.message_id;
-            });
-    } else {
-        const message = await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
-        ctx.state.userStates[userId].lastMessageId = message.message_id;
-    }
+    const message = await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 async function showEditData(ctx) {
@@ -89,17 +88,8 @@ async function showEditData(ctx) {
         [Markup.button.callback('↩️ Назад', 'profile')]
     ];
 
-    const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
-    if (lastMessageId) {
-        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons))
-            .catch(async () => {
-                const message = await ctx.reply('Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons));
-                ctx.state.userStates[userId].lastMessageId = message.message_id;
-            });
-    } else {
-        const message = await ctx.reply('Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons));
-        ctx.state.userStates[userId].lastMessageId = message.message_id;
-    }
+    const message = await ctx.reply('Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons));
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
 module.exports = (bot) => {
@@ -110,9 +100,10 @@ module.exports = (bot) => {
     bot.action('edit_fullName', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
+
         ctx.state.userStates[userId].step = 'editFullNameInput';
         const message = await ctx.reply('Введите новое ФИО:');
-        ctx.state.userStates[userId].lastMessageId = message.message_id;
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 };
 

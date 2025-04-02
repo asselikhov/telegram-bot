@@ -6,36 +6,60 @@ const { showMainMenu } = require('./menu');
 module.exports = (bot) => {
     bot.start(async (ctx) => {
         const userId = ctx.from.id.toString();
-        if (ctx.chat.type !== 'private') return;
+        const chatType = ctx.chat.type;
+
+        if (chatType !== 'private') {
+            return ctx.reply('Команда /start доступна только в личных сообщениях с ботом.');
+        }
 
         const users = await loadUsers();
 
         if (!users[userId]) {
-            users[userId] = { fullName: '', position: '', organization: '', selectedObjects: [], status: 'В работе', isApproved: 0, nextReportId: 1, reports: {} };
+            users[userId] = {
+                fullName: '',
+                position: '',
+                organization: '',
+                selectedObjects: [],
+                status: 'В работе',
+                isApproved: 0,
+                nextReportId: 1,
+                reports: {}
+            };
             await saveUser(userId, users[userId]);
-            ctx.state.userStates[userId] = { step: 'enterInviteCode', lastMessageId: null };
+
+            ctx.state.userStates[userId] = {
+                step: 'enterInviteCode',
+                messageIds: []
+            };
             await clearPreviousMessages(ctx, userId);
-            await ctx.reply('Введите пригласительный код:');
+
+            const message = await ctx.reply('Введите пригласительный код для регистрации:');
+            ctx.state.userStates[userId].messageIds.push(message.message_id);
         } else if (users[userId].isApproved) {
             await showMainMenu(ctx);
         } else {
+            const user = users[userId];
             await clearPreviousMessages(ctx, userId);
-            if (!users[userId].organization) {
-                ctx.state.userStates[userId] = { step: 'enterInviteCode', lastMessageId: null };
-                await ctx.reply('Введите пригласительный код:');
-            } else if (!users[userId].selectedObjects.length) {
-                ctx.state.userStates[userId] = { step: 'selectObjects', lastMessageId: null };
+
+            if (!user.organization) {
+                ctx.state.userStates[userId] = { step: 'enterInviteCode', messageIds: [] };
+                const message = await ctx.reply('Введите пригласительный код для регистрации:');
+                ctx.state.userStates[userId].messageIds.push(message.message_id);
+            } else if (!user.selectedObjects.length) {
+                ctx.state.userStates[userId] = { step: 'selectObjects', messageIds: [] };
                 const { showObjectSelection } = require('../actions/objects');
                 await showObjectSelection(ctx, userId, []);
-            } else if (!users[userId].position) {
-                ctx.state.userStates[userId] = { step: 'selectPosition', lastMessageId: null };
+            } else if (!user.position) {
+                ctx.state.userStates[userId] = { step: 'selectPosition', messageIds: [] };
                 const { showPositionSelection } = require('../actions/position');
                 await showPositionSelection(ctx, userId);
-            } else if (!users[userId].fullName) {
-                ctx.state.userStates[userId] = { step: 'enterFullName', lastMessageId: null };
-                await ctx.reply('Введите ваше ФИО:');
+            } else if (!user.fullName) {
+                ctx.state.userStates[userId] = { step: 'enterFullName', messageIds: [] };
+                const message = await ctx.reply('Введите ваше ФИО:');
+                ctx.state.userStates[userId].messageIds.push(message.message_id);
             } else {
-                await ctx.reply('Ваша заявка на рассмотрении.');
+                const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
+                ctx.state.userStates[userId] = { step: null, messageIds: [message.message_id] };
             }
         }
     });
