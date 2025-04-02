@@ -2,7 +2,7 @@ const { Markup, Telegraf } = require('telegraf');
 const Queue = require('bull');
 const ExcelJS = require('exceljs');
 const NodeCache = require('node-cache');
-const { loadUsers } = require('../../database/userModel');
+const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, loadAllReports, saveReport } = require('../../database/reportModel');
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
@@ -13,7 +13,7 @@ const telegram = new Telegraf(botToken).telegram;
 
 // Инициализация кэша и очереди с Redis
 const reportCache = new NodeCache({ stdTTL: 300 });
-const reportQueue = new Queue('report-generation', process.env.REDIS_URL || 'redis://red-cvml61be5dus73f7v7v0:6379', {
+const reportQueue = new Queue('report-generation', process.env.REDIS_URL || 'redis://localhost:6379', {
     defaultJobOptions: { timeout: 60000 }
 });
 
@@ -412,10 +412,118 @@ module.exports = (bot) => {
         if (!selectedObject) return;
 
         await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId] = { step: 'workDone', report: { objectName: selectedObject, photos: [] }, lastMessageId: null };
+        ctx.state.userStates[userId] = {
+            step: 'workDone',
+            report: {
+                objectName: selectedObject,
+                photos: [],
+                timestamp: new Date().toISOString(),
+                userId,
+                fullName: users[userId].fullName
+            },
+            lastMessageId: null
+        };
         const message = await ctx.reply('💡 Введите информацию о выполненных работах:');
         ctx.state.userStates[userId].lastMessageId = message.message_id;
     });
+
+    // Обработчики текстовых сообщений для пошагового ввода
+    bot.on('text', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const userState = ctx.state.userStates[userId];
+        if (!userState || !userState.report) return;
+
+        if (userState.step === 'workDone') {
+            userState.report.workDone = ctx.message.text;
+            userState.step = 'materials';
+            const message = await ctx.reply('💡 Введите информацию о поставленных материалах:');
+            userState.lastMessageId = message.message_id;
+        } else if (userState.step === 'materials') {
+            userState.report.materials = ctx.message.text;
+            userState.step = 'photos';
+            userState.report.date = formatDate(new Date());
+            const message = await ctx.reply('📸 Отправьте фотографии (или нажмите "Готово", если их нет):', Markup.inlineKeyboard([
+                [Markup.button.callback('Готово', 'finish_report')]
+            ]));
+            userState.lastMessageId = message.message_id;
+        } else if (userState.step === 'editWorkDone') {
+            userState.report.workDone = ctx.message.text;
+            userState.step = 'editMaterials';
+            const message = await ctx.reply('💡 Введите новую информацию о поставленных материалах:');
+            userState.lastMessageId = message.message_id;
+        } else if (userState.step === 'editMaterials') {
+            userState.report.materials = ctx.message.text;
+            userState.step = 'editPhotos';
+            const message = await ctx.reply('📸 Отправьте новые фотографии (или нажмите "Готово"):', Markup.inlineKeyboard([
+                [Markup.button.callback('Готово', `finish_edit_${userState.report.originalReportId}`)]
+            ]));
+            userState.lastMessageId = message.message_id;
+        }
+    });
+
+    // Обработчик фотографий
+    bot.on('photo', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const userState = ctx.state.userStates[userId];
+        if (!userState || (userState.step !== 'photos' && userState.step !== 'editPhotos')) return;
+
+        const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+        userState.report.photos.push(photoId);
+
+        await clearPreviousMessages(ctx, userId);
+
+        if (userState.report.photos.length > 0) {
+            await ctx.telegram.sendMediaGroup(ctx.chat.id, userState.report.photos.map(photoId => ({
+                type: 'photo',
+                media: photoId
+            })));
+        }
+
+        const action = userState.step === 'photos' ? 'finish_report' : `finish_edit_${userState.report.originalReportId}`;
+        const message = await ctx.reply(`Добавлено ${userState.report.photos.length} фото. Отправьте еще или нажмите "Готово".`, Markup.inlineKeyboard([
+            [Markup.button.callback('Готово', action)]
+        ]));
+        userState.lastMessageId = message.message_id;
+    });
+
+    // Завершение создания отчета
+    bot.action('finish_report', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const userState = ctx.state.userStates[userId];
+        if (!userState || !userState.report) return;
+
+        const users = await loadUsers();
+        const reportId = `${userId}_${users[userId].nextReportId || 1}`;
+        userState.report.reportId = reportId;
+
+        await saveReport(userId, userState.report);
+
+        users[userId].nextReportId = (users[userId].nextReportId || 1) + 1;
+        await saveUser(userId, users[userId]);
+
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply('✅ Отчет успешно сохранен!');
+        userState.lastMessageId = message.message_id;
+
+        delete ctx.state.userStates[userId];
+    });
+
+    // Завершение редактирования отчета
+    bot.action(/finish_edit_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const reportId = ctx.match[1];
+        const userState = ctx.state.userStates[userId];
+        if (!userState || !userState.report || userState.report.originalReportId !== reportId) return;
+
+        await saveReport(userId, { ...userState.report, reportId });
+
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply('✅ Отчет успешно отредактирован!');
+        userState.lastMessageId = message.message_id;
+
+        delete ctx.state.userStates[userId];
+    });
+
     bot.action('view_reports', showReportObjects);
     bot.action(/select_report_object_(\d+)/, (ctx) => showReportDates(ctx, parseInt(ctx.match[1], 10), 0));
     bot.action(/report_dates_page_(\d+)_(\d+)/, (ctx) => showReportDates(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
