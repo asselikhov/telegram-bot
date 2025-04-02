@@ -5,7 +5,7 @@ const NodeCache = require('node-cache');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, loadAllReports, saveReport } = require('../../database/reportModel');
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
-const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
+const { formatDate, parseAndFormatDate } = require('../utils');
 
 // Инициализация Telegram-клиента
 const botToken = process.env.BOT_TOKEN;
@@ -20,6 +20,19 @@ const reportQueue = new Queue('report-generation', process.env.REDIS_URL || 'red
 reportQueue.on('error', (error) => {
     console.error('Redis queue error:', error);
 });
+
+// Оптимизированная функция очистки сообщений
+async function clearPreviousMessages(ctx, userId) {
+    const userState = ctx.state.userStates[userId];
+    if (userState?.lastMessageId) {
+        try {
+            await ctx.telegram.deleteMessage(ctx.chat.id, userState.lastMessageId);
+            userState.lastMessageId = null; // Сбрасываем после удаления
+        } catch (error) {
+            console.error(`Failed to delete message ${userState.lastMessageId}:`, error);
+        }
+    }
+}
 
 // Фоновая обработка генерации Excel
 reportQueue.process(async (job) => {
@@ -433,6 +446,8 @@ module.exports = (bot) => {
         const userState = ctx.state.userStates[userId];
         if (!userState || !userState.report) return;
 
+        await clearPreviousMessages(ctx, userId);
+
         if (userState.step === 'workDone') {
             userState.report.workDone = ctx.message.text;
             userState.step = 'materials';
@@ -492,6 +507,8 @@ module.exports = (bot) => {
         const userState = ctx.state.userStates[userId];
         if (!userState || !userState.report) return;
 
+        await clearPreviousMessages(ctx, userId);
+
         const users = await loadUsers();
         const reportId = `${userId}_${users[userId].nextReportId || 1}`;
         userState.report.reportId = reportId;
@@ -501,7 +518,6 @@ module.exports = (bot) => {
         users[userId].nextReportId = (users[userId].nextReportId || 1) + 1;
         await saveUser(userId, users[userId]);
 
-        await clearPreviousMessages(ctx, userId);
         const message = await ctx.reply('✅ Отчет успешно сохранен!');
         userState.lastMessageId = message.message_id;
 
@@ -515,9 +531,10 @@ module.exports = (bot) => {
         const userState = ctx.state.userStates[userId];
         if (!userState || !userState.report || userState.report.originalReportId !== reportId) return;
 
+        await clearPreviousMessages(ctx, userId);
+
         await saveReport(userId, { ...userState.report, reportId });
 
-        await clearPreviousMessages(ctx, userId);
         const message = await ctx.reply('✅ Отчет успешно отредактирован!');
         userState.lastMessageId = message.message_id;
 
