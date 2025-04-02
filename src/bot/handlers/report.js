@@ -7,19 +7,24 @@ const { loadUserReports, loadAllReports, saveReport } = require('../../database/
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 
-// Инициализация кэша и очереди
+// Инициализация кэша и очереди с Redis
 const reportCache = new NodeCache({ stdTTL: 300 }); // Кэш на 5 минут
-const reportQueue = new Queue('report-generation');
+const reportQueue = new Queue('report-generation', process.env.REDIS_URL || 'redis://localhost:6379', {
+    defaultJobOptions: { timeout: 60000 } // Тайм-аут 60 секунд для больших отчетов
+});
 
 // Фоновая обработка генерации Excel
 reportQueue.process(async (job) => {
-    const { userId, objectName, ctx } = job.data;
+    const { userId, objectName, chatId } = job.data;
+    console.log(`Processing report for user ${userId}, object: ${objectName}`);
+
     const users = await loadUsers();
     const allReports = await loadAllReports();
     const objectReports = Object.values(allReports).filter(report => report.objectName === objectName);
 
     if (objectReports.length === 0) {
-        await ctx.telegram.sendMessage(userId, `Отчеты для объекта "${objectName}" не найдены.`);
+        await job.data.ctx.telegram.sendMessage(chatId, `Отчеты для объекта "${objectName}" не найдены.`);
+        console.log(`No reports found for ${objectName}`);
         return;
     }
 
@@ -119,7 +124,8 @@ reportQueue.process(async (job) => {
 
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `${objectName}_reports_${formatDate(new Date())}.xlsx`;
-    await ctx.telegram.sendDocument(userId, { source: buffer, filename });
+    await job.data.ctx.telegram.sendDocument(chatId, { source: buffer, filename });
+    console.log(`Report generated and sent for ${objectName}`);
 });
 
 function parseDateFromDDMMYYYY(dateString) {
@@ -175,9 +181,12 @@ async function downloadReportFile(ctx, objectIndex) {
     if (!objectName) return;
 
     await clearPreviousMessages(ctx, userId);
-    reportQueue.add({ userId, objectName, ctx });
     const message = await ctx.reply('⏳ Отчет генерируется, вы получите его скоро.');
     ctx.state.userStates[userId].lastMessageId = message.message_id;
+
+    // Добавляем задачу в очередь
+    await reportQueue.add({ userId, objectName, chatId: ctx.chat.id, ctx });
+    console.log(`Report job added to queue for ${objectName}`);
 }
 
 async function createReport(ctx) {
