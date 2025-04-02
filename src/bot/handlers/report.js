@@ -7,19 +7,16 @@ const { loadUserReports, loadAllReports, saveReport } = require('../../database/
 const { ORGANIZATION_OBJECTS } = require('../../config/config');
 const { formatDate, parseAndFormatDate } = require('../utils');
 
-// Инициализация Telegram-клиента
 const botToken = process.env.BOT_TOKEN;
 const telegram = new Telegraf(botToken).telegram;
 
-// Инициализация кэша и очереди с Redis
-const reportCache = new NodeCache({ stdTTL: 1800 }); // 30 минут
+const reportCache = new NodeCache({ stdTTL: 1800 });
 const reportQueue = new Queue('report-generation', process.env.REDIS_URL || 'redis://localhost:6379', {
     defaultJobOptions: { timeout: 60000 }
 });
 
 reportQueue.on('error', (error) => console.error('Redis queue error:', error));
 
-// Предварительная загрузка кэша
 async function preloadCache() {
     const users = await loadUsers();
     const allReports = await loadAllReports();
@@ -30,9 +27,8 @@ async function preloadCache() {
 
 preloadCache().catch(console.error);
 
-// Дебounce для предотвращения множественных нажатий
 const debounceTimeouts = new Map();
-function debounceAction(userId, action, delay = 300) {
+function debounceAction(userId, action, delay = 100) {
     if (debounceTimeouts.has(userId)) clearTimeout(debounceTimeouts.get(userId));
     return new Promise((resolve) => {
         debounceTimeouts.set(userId, setTimeout(() => {
@@ -54,13 +50,6 @@ async function clearPreviousMessages(ctx, userId) {
     }
 }
 
-// Фоновая обработка генерации Excel (без изменений для краткости)
-reportQueue.process(async (job) => {
-    const { userId, objectName, chatId } = job.data;
-    console.log(`Processing report for user ${userId}, object: ${objectName}`);
-    // ... (логика генерации Excel остается прежней, см. предыдущий код)
-});
-
 function parseDateFromDDMMYYYY(dateString) {
     const [day, month, year] = dateString.split('.').map(Number);
     return new Date(year, month - 1, day);
@@ -75,7 +64,7 @@ async function showDownloadReport(ctx, page = 0) {
     const availableObjects = ORGANIZATION_OBJECTS[userOrganization] || [];
     if (!availableObjects.length) return;
 
-    const itemsPerPage = 10;
+    const itemsPerPage = 5;
     const totalPages = Math.ceil(availableObjects.length / itemsPerPage);
     const startIndex = page * itemsPerPage;
     const currentObjects = availableObjects.slice(startIndex, startIndex + itemsPerPage);
@@ -87,14 +76,14 @@ async function showDownloadReport(ctx, page = 0) {
     ]);
     if (totalPages > 1) {
         const pagination = [];
-        if (page > 0) pagination.push(Markup.button.callback('⬅️ Назад', `download_report_page_${page - 1}`));
-        if (page < totalPages - 1) pagination.push(Markup.button.callback('Вперед ➡️', `download_report_page_${page + 1}`));
+        if (page > 0) pagination.push(Markup.button.callback('⬅️', `download_report_page_${page - 1}`));
+        if (page < totalPages - 1) pagination.push(Markup.button.callback('➡️', `download_report_page_${page + 1}`));
         if (pagination.length) buttons.push(pagination);
     }
-    buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
+    buttons.push([Markup.button.callback('↩️', 'main_menu')]);
 
     const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
-    const text = `Выберите объект для выгрузки отчета (Страница ${page + 1} из ${totalPages}):`;
+    const text = `Объекты (стр. ${page + 1}/${totalPages}):`;
     if (lastMessageId) {
         await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, text, Markup.inlineKeyboard(buttons))
             .catch(async () => {
@@ -114,7 +103,7 @@ async function downloadReportFile(ctx, objectIndex) {
     if (!objectName) return;
 
     await clearPreviousMessages(ctx, userId);
-    const message = await ctx.reply('⏳ Отчет генерируется, вы получите его скоро.');
+    const message = await ctx.reply('⏳ Генерация отчета...');
     ctx.state.userStates[userId].lastMessageId = message.message_id;
 
     await reportQueue.add({ userId, objectName, chatId: ctx.chat.id });
@@ -131,20 +120,17 @@ async function createReport(ctx) {
     if (!userObjects?.length) return;
 
     await clearPreviousMessages(ctx, userId);
-    const buttons = userObjects.map((obj, index) => [Markup.button.callback(obj, `select_object_${index}`)]);
-    buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
+    const loadingMessage = await ctx.reply('⏳ Загрузка...');
+    ctx.state.userStates[userId] = { lastMessageId: loadingMessage.message_id };
 
-    const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
-    if (lastMessageId) {
-        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите объект из списка:', Markup.inlineKeyboard(buttons))
-            .catch(async () => {
-                const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
-                ctx.state.userStates[userId].lastMessageId = message.message_id;
-            });
-    } else {
-        const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
-        ctx.state.userStates[userId].lastMessageId = message.message_id;
-    }
+    const buttons = userObjects.map((obj, index) => [Markup.button.callback(obj, `select_object_${index}`)]);
+    buttons.push([Markup.button.callback('↩️', 'main_menu')]);
+
+    await ctx.telegram.editMessageText(ctx.chat.id, loadingMessage.message_id, null, 'Выберите объект:', Markup.inlineKeyboard(buttons))
+        .catch(async () => {
+            const message = await ctx.reply('Выберите объект:', Markup.inlineKeyboard(buttons));
+            ctx.state.userStates[userId].lastMessageId = message.message_id;
+        });
 }
 
 async function showReportObjects(ctx) {
@@ -161,17 +147,17 @@ async function showReportObjects(ctx) {
 
     const uniqueObjects = [...new Set(Object.values(cachedReports).map(r => r.objectName))];
     const buttons = uniqueObjects.map((obj, index) => [Markup.button.callback(obj, `select_report_object_${index}`)]);
-    buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
+    buttons.push([Markup.button.callback('↩️', 'profile')]);
 
     const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
     if (lastMessageId) {
-        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons))
+        await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите объект:', Markup.inlineKeyboard(buttons))
             .catch(async () => {
-                const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
+                const message = await ctx.reply('Выберите объект:', Markup.inlineKeyboard(buttons));
                 ctx.state.userStates[userId].lastMessageId = message.message_id;
             });
     } else {
-        const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
+        const message = await ctx.reply('Выберите объект:', Markup.inlineKeyboard(buttons));
         ctx.state.userStates[userId].lastMessageId = message.message_id;
     }
 }
@@ -186,7 +172,7 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     const objectReports = Object.values(cachedReports).filter(r => r.objectName === objectName);
     const uniqueDates = [...new Set(objectReports.map(r => parseAndFormatDate(r.date)))];
 
-    const itemsPerPage = 10;
+    const itemsPerPage = 5;
     const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
     const startIndex = page * itemsPerPage;
     const currentDates = uniqueDates.slice(startIndex, startIndex + itemsPerPage).reverse();
@@ -196,13 +182,13 @@ async function showReportDates(ctx, objectIndex, page = 0) {
     ]);
     if (totalPages > 1) {
         const pagination = [];
-        if (page > 0) pagination.push(Markup.button.callback('⬅️ Назад', `report_dates_page_${objectIndex}_${page - 1}`));
-        if (page < totalPages - 1) pagination.push(Markup.button.callback('Вперед ➡️', `report_dates_page_${objectIndex}_${page + 1}`));
+        if (page > 0) pagination.push(Markup.button.callback('⬅️', `report_dates_page_${objectIndex}_${page - 1}`));
+        if (page < totalPages - 1) pagination.push(Markup.button.callback('➡️', `report_dates_page_${objectIndex}_${page + 1}`));
         if (pagination.length) buttons.unshift(pagination);
     }
-    buttons.push([Markup.button.callback('↩️ Назад', 'view_reports')]);
+    buttons.push([Markup.button.callback('↩️', 'view_reports')]);
 
-    const text = `Выберите дату для объекта "${objectName}" (Страница ${page + 1} из ${totalPages}):`;
+    const text = `Даты для "${objectName}" (стр. ${page + 1}/${totalPages}):`;
     const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
     if (lastMessageId) {
         await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, text, Markup.inlineKeyboard(buttons))
@@ -229,7 +215,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     const dateReports = objectReports.filter(([_, r]) => parseAndFormatDate(r.date) === selectedDate)
         .sort((a, b) => a[1].timestamp.localeCompare(b[1].timestamp));
 
-    const itemsPerPage = 10;
+    const itemsPerPage = 5;
     const totalPages = Math.ceil(dateReports.length / itemsPerPage);
     const startIndex = page * itemsPerPage;
     const currentReports = dateReports.slice(startIndex, startIndex + itemsPerPage).reverse();
@@ -239,13 +225,13 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     ]);
     if (totalPages > 1) {
         const pagination = [];
-        if (page > 0) pagination.push(Markup.button.callback('⬅️ Назад', `report_timestamps_page_${objectIndex}_${dateIndex}_${page - 1}`));
-        if (page < totalPages - 1) pagination.push(Markup.button.callback('Вперед ➡️', `report_timestamps_page_${objectIndex}_${dateIndex}_${page + 1}`));
+        if (page > 0) pagination.push(Markup.button.callback('⬅️', `report_timestamps_page_${objectIndex}_${dateIndex}_${page - 1}`));
+        if (page < totalPages - 1) pagination.push(Markup.button.callback('➡️', `report_timestamps_page_${objectIndex}_${dateIndex}_${page + 1}`));
         if (pagination.length) buttons.unshift(pagination);
     }
-    buttons.push([Markup.button.callback('↩️ Назад', `select_report_object_${objectIndex}`)]);
+    buttons.push([Markup.button.callback('↩️', `select_report_object_${objectIndex}`)]);
 
-    const text = `Выберите время отчета для "${objectName}" за ${selectedDate} (Страница ${page + 1} из ${totalPages}):`;
+    const text = `Время для "${objectName}" (${selectedDate}, стр. ${page + 1}/${totalPages}):`;
     const lastMessageId = ctx.state.userStates[userId]?.lastMessageId;
     if (lastMessageId) {
         await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, text, Markup.inlineKeyboard(buttons))
@@ -270,21 +256,19 @@ async function showReportDetails(ctx, reportId) {
     const formattedDate = parseAndFormatDate(report.date);
     const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
     const reportText = `
-📅 ОТЧЕТ ЗА ${formattedDate}  
+📅 ${formattedDate}  
 🏢 ${report.objectName}  
-➖➖➖➖➖➖➖➖➖➖➖ 
 👷 ${report.fullName}  
-ВЫПОЛНЕННЫЕ РАБОТЫ: ${report.workDone}  
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ: ${report.materials}  
-➖➖➖➖➖➖➖➖➖➖➖
+Работы: ${report.workDone}  
+Материалы: ${report.materials}  
 Время: ${time}
     `.trim();
 
     const uniqueObjects = [...new Set(Object.values(cachedReports).map(r => r.objectName))];
     const uniqueDates = [...new Set(Object.values(cachedReports).filter(r => r.objectName === report.objectName).map(r => parseAndFormatDate(r.date)))];
     const buttons = [
-        [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
-        [Markup.button.callback('↩️ Назад', `select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(formattedDate)}`)]
+        [Markup.button.callback('✏️', `edit_report_${reportId}`)],
+        [Markup.button.callback('↩️', `select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(formattedDate)}`)]
     ];
 
     if (report.photos?.length > 0) ctx.telegram.sendMediaGroup(ctx.chat.id, report.photos.map(photoId => ({ type: 'photo', media: photoId }))).catch(console.error);
@@ -300,7 +284,7 @@ async function editReport(ctx, reportId) {
 
     await clearPreviousMessages(ctx, userId);
     ctx.state.userStates[userId] = { step: 'editWorkDone', report: { ...report, originalReportId: reportId }, lastMessageId: null };
-    const message = await ctx.reply('💡 Введите новую информацию о выполненных работах:');
+    const message = await ctx.reply('💡 Введите новые работы:');
     ctx.state.userStates[userId].lastMessageId = message.message_id;
 }
 
@@ -313,7 +297,7 @@ async function deleteAllPhotos(ctx, reportId) {
     userState.report.photos = [];
     userState.step = 'editPhotos';
 
-    const message = await ctx.reply('Все фото удалены. Отправьте новые или нажмите "Готово".', Markup.inlineKeyboard([
+    const message = await ctx.reply('Фото удалены. Отправьте новые или "Готово":', Markup.inlineKeyboard([
         [Markup.button.callback('Готово', `finish_edit_${reportId}`)]
     ]));
     ctx.state.userStates[userId].lastMessageId = message.message_id;
@@ -337,7 +321,7 @@ module.exports = (bot) => {
             report: { objectName: selectedObject, photos: [], timestamp: new Date().toISOString(), userId, fullName: users[userId].fullName },
             lastMessageId: null
         };
-        const message = await ctx.reply('💡 Введите информацию о выполненных работах:');
+        const message = await ctx.reply('💡 Введите работы:');
         ctx.state.userStates[userId].lastMessageId = message.message_id;
     });
 
@@ -351,25 +335,25 @@ module.exports = (bot) => {
         if (userState.step === 'workDone') {
             userState.report.workDone = ctx.message.text;
             userState.step = 'materials';
-            const message = await ctx.reply('💡 Введите информацию о поставленных материалах:');
+            const message = await ctx.reply('💡 Введите материалы:');
             userState.lastMessageId = message.message_id;
         } else if (userState.step === 'materials') {
             userState.report.materials = ctx.message.text;
             userState.step = 'photos';
             userState.report.date = formatDate(new Date());
-            const message = await ctx.reply('📸 Отправьте фотографии (или нажмите "Готово", если их нет):', Markup.inlineKeyboard([
+            const message = await ctx.reply('📸 Отправьте фото или "Готово":', Markup.inlineKeyboard([
                 [Markup.button.callback('Готово', 'finish_report')]
             ]));
             userState.lastMessageId = message.message_id;
         } else if (userState.step === 'editWorkDone') {
             userState.report.workDone = ctx.message.text;
             userState.step = 'editMaterials';
-            const message = await ctx.reply('💡 Введите новую информацию о поставленных материалах:');
+            const message = await ctx.reply('💡 Введите новые материалы:');
             userState.lastMessageId = message.message_id;
         } else if (userState.step === 'editMaterials') {
             userState.report.materials = ctx.message.text;
             userState.step = 'editPhotos';
-            const message = await ctx.reply('📸 Отправьте новые фотографии (или нажмите "Готово"):', Markup.inlineKeyboard([
+            const message = await ctx.reply('📸 Отправьте новые фото или "Готово":', Markup.inlineKeyboard([
                 [Markup.button.callback('Готово', `finish_edit_${userState.report.originalReportId}`)]
             ]));
             userState.lastMessageId = message.message_id;
@@ -394,7 +378,7 @@ module.exports = (bot) => {
         }
 
         const action = userState.step === 'photos' ? 'finish_report' : `finish_edit_${userState.report.originalReportId}`;
-        const message = await ctx.reply(`Добавлено ${userState.report.photos.length} фото. Отправьте еще или нажмите "Готово".`, Markup.inlineKeyboard([
+        const message = await ctx.reply(`Добавлено ${userState.report.photos.length} фото. Еще или "Готово":`, Markup.inlineKeyboard([
             [Markup.button.callback('Готово', action)]
         ]));
         userState.lastMessageId = message.message_id;
@@ -417,7 +401,7 @@ module.exports = (bot) => {
         await saveUser(userId, users[userId]);
         reportCache.set('users', users);
 
-        const message = await ctx.reply('✅ Отчет успешно сохранен!');
+        const message = await ctx.reply('✅ Отчет сохранен!');
         userState.lastMessageId = message.message_id;
 
         delete ctx.state.userStates[userId];
@@ -433,7 +417,7 @@ module.exports = (bot) => {
 
         await saveReport(userId, { ...userState.report, reportId });
 
-        const message = await ctx.reply('✅ Отчет успешно отредактирован!');
+        const message = await ctx.reply('✅ Отчет отредактирован!');
         userState.lastMessageId = message.message_id;
 
         delete ctx.state.userStates[userId];
