@@ -288,24 +288,7 @@ module.exports = (bot) => {
             fullName: users[userId].fullName,
             photos: state.report.photos || []
         };
-        const reportText = `
-📅 ОТЧЕТ ЗА ${formattedDate}
-
-🏢 ${report.objectName}
-
-➖➖➖➖➖➖➖➖➖➖➖
-👷 ${users[userId].fullName}
-
-ВЫПОЛНЕННЫЕ РАБОТЫ:
-
-${report.workDone}
-
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
-
-${report.materials}
-
-➖➖➖➖➖➖➖➖➖➖➖
-`.trim();
+        const reportText = 📅 ОТЧЕТ ЗА ${formattedDate} 🏢 ${report.objectName} ➖➖➖➖➖➖➖➖➖➖➖ 👷 ${users[userId].fullName} ВЫПОЛНЕННЫЕ РАБОТЫ: ${report.workDone} ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ: ${report.materials} ➖➖➖➖➖➖➖➖➖➖➖        .trim();
 
         const groupChatId = OBJECT_GROUPS[report.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
         const userOrg = users[userId].organization;
@@ -426,24 +409,7 @@ ${report.materials}
             fullName: users[userId].fullName,
             photos: state.report.photos || []
         };
-        const newReportText = `
-📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)
-
-🏢 ${newReport.objectName}
-
-➖➖➖➖➖➖➖➖➖➖➖
-👷 ${users[userId].fullName}
-
-ВЫПОЛНЕННЫЕ РАБОТЫ:
-
-${newReport.workDone}
-
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
-
-${newReport.materials}
-
-➖➖➖➖➖➖➖➖➖➖➖
-`.trim();
+        const newReportText = 📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН) 🏢 ${newReport.objectName} ➖➖➖➖➖➖➖➖➖➖➖ 👷 ${users[userId].fullName} ВЫПОЛНЕННЫЕ РАБОТЫ: ${newReport.workDone} ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ: ${newReport.materials} ➖➖➖➖➖➖➖➖➖➖➖        .trim();
 
         const oldReportId = state.report.originalReportId;
         if (oldReportId) {
@@ -488,7 +454,7 @@ ${newReport.materials}
             for (const chatId of allChatIds) {
                 try {
                     const message = await ctx.telegram.sendMessage(chatId, newReportText);
-                    report.groupMessageIds[chatId] = message.message_id;
+                    newReport.groupMessageIds[chatId] = message.message_id;
                     if (chatId === newGroupChatId) {
                         newReport.messageLink = https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id};
                     }
@@ -506,4 +472,5 @@ ${newReport.materials}
         state.step = null;
         state.report = {};
     });
+};
 
