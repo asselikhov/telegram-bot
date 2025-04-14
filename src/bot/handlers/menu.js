@@ -1,8 +1,7 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
-const { ORGANIZATION_OBJECTS } = require('../../config/config');
-const { ADMIN_ID } = require('../../config/config');
+const { ORGANIZATION_OBJECTS, ADMIN_ID } = require('../../config/config');
 
 async function showMainMenu(ctx) {
     const userId = ctx.from.id.toString();

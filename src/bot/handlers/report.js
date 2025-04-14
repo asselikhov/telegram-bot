@@ -1,8 +1,8 @@
 const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
-const { loadUsers } = require('../../database/userModel');
-const { loadUserReports, loadAllReports } = require('../../database/reportModel');
-const { ORGANIZATION_OBJECTS } = require('../../config/config');
+const { loadUsers, saveUser } = require('../../database/userModel');
+const { loadUserReports, loadAllReports, saveReport } = require('../../database/reportModel');
+const { ORGANIZATION_OBJECTS, OBJECTS_LIST_CYRILLIC, GENERAL_GROUP_CHAT_IDS } = require('../../config/config');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 
 async function showDownloadReport(ctx, page = 0) {
@@ -434,6 +434,110 @@ async function deleteAllPhotos(ctx, reportId) {
     ctx.state.userStates[userId].messageIds = [message.message_id];
 }
 
+async function finishEditReport(ctx, reportId) {
+    const userId = ctx.from.id.toString();
+    const state = ctx.state.userStates[userId];
+    if (!state || state.step !== 'editPhotos' || state.report.originalReportId !== reportId) return;
+
+    if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+        for (const msgId of state.mediaGroupIds) {
+            await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
+        }
+    }
+    await clearPreviousMessages(ctx, userId);
+    state.mediaGroupIds = [];
+    state.messageIds = [];
+
+    const users = await loadUsers();
+
+    const newTimestamp = new Date().toISOString();
+    const formattedDate = parseAndFormatDate(state.report.date);
+    const newReportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`;
+    const newReport = {
+        reportId: newReportId,
+        userId,
+        objectName: state.report.objectName,
+        date: formattedDate,
+        timestamp: newTimestamp,
+        workDone: state.report.workDone,
+        materials: state.report.materials,
+        groupMessageIds: {},
+        messageLink: null,
+        fullName: users[userId].fullName,
+        photos: state.report.photos
+    };
+    const newReportText = `
+📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)  
+🏢 ${newReport.objectName}  
+➖➖➖➖➖➖➖➖➖➖➖ 
+👷 ${users[userId].fullName} 
+
+ВЫПОЛНЕННЫЕ РАБОТЫ:  
+${newReport.workDone}  
+
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
+${newReport.materials}  
+➖➖➖➖➖➖➖➖➖➖➖
+    `.trim();
+
+    const oldReportId = state.report.originalReportId;
+    if (oldReportId) {
+        const userReports = await loadUserReports(userId);
+        const oldReport = userReports[oldReportId];
+        if (oldReport?.groupMessageIds) {
+            for (const [chatId, msgId] of Object.entries(oldReport.groupMessageIds)) {
+                await ctx.telegram.deleteMessage(chatId, msgId).catch(e => {});
+            }
+            const db = await connectMongo();
+            const reportsCollection = db.collection('reports');
+            await reportsCollection.deleteOne({ reportid: oldReportId });
+        }
+    }
+
+    const newGroupChatId = OBJECTS_LIST_CYRILLIC.includes(newReport.objectName) ? GENERAL_GROUP_CHAT_IDS[newReport.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId : GENERAL_GROUP_CHAT_IDS['default'].chatId;
+    const userOrg = users[userId].organization;
+    const targetOrgs = [
+        userOrg,
+        ...Object.keys(ORGANIZATION_OBJECTS).filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
+    ];
+    const allChatIds = [newGroupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
+
+    if (newReport.photos.length > 0) {
+        const mediaGroup = newReport.photos.map((photoId, index) => ({
+            type: 'photo',
+            media: photoId,
+            caption: index === 0 ? newReportText.slice(0, 1024) : undefined
+        }));
+        for (const chatId of allChatIds) {
+            try {
+                const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
+                newReport.groupMessageIds[chatId] = messages[0].message_id;
+                if (chatId === newGroupChatId) {
+                    newReport.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${messages[0].message_id}`;
+                }
+            } catch (e) {}
+        }
+    } else {
+        for (const chatId of allChatIds) {
+            try {
+                const message = await ctx.telegram.sendMessage(chatId, newReportText);
+                newReport.groupMessageIds[chatId] = message.message_id;
+                if (chatId === newGroupChatId) {
+                    newReport.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id}`;
+                }
+            } catch (e) {}
+        }
+    }
+
+    await saveReport(userId, newReport);
+    await saveUser(userId, users[userId]);
+    await ctx.reply(`✅ Ваш отчёт обновлён:\n\n${newReportText}${newReport.photos.length > 0 ? '\n(С изображениями)' : ''}`, Markup.inlineKeyboard([
+        [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
+    ]));
+    state.step = null;
+    state.report = {};
+}
+
 module.exports = (bot) => {
     bot.action('download_report', async (ctx) => await showDownloadReport(ctx, 0));
     bot.action(/download_report_page_(\d+)/, async (ctx) => await showDownloadReport(ctx, parseInt(ctx.match[1], 10)));
@@ -478,4 +582,5 @@ module.exports = (bot) => {
     bot.action(/select_report_time_(.+)/, (ctx) => showReportDetails(ctx, ctx.match[1]));
     bot.action(/edit_report_(.+)/, (ctx) => editReport(ctx, ctx.match[1]));
     bot.action(/delete_all_photos_(.+)/, (ctx) => deleteAllPhotos(ctx, ctx.match[1]));
+    bot.action(/finish_edit_(.+)/, (ctx) => finishEditReport(ctx, ctx.match[1]));
 };

@@ -1,31 +1,27 @@
 const { Markup } = require('telegraf');
-const { pool } = require('../../database/db');
-const { generateInviteCode } = require('../../database/inviteCodeModel');
 const { loadUsers } = require('../../database/userModel');
+const { generateInviteCode } = require('../../database/inviteCodeModel');
 const { clearPreviousMessages } = require('../utils');
-const { ORGANIZATION_OBJECTS } = require('../../config/config');
-const { ADMIN_ID } = require('../../config/config');
+const { ORGANIZATION_OBJECTS, ADMIN_ID } = require('../../config/config');
 
 module.exports = (bot) => {
     bot.action('generate_invite_code', async (ctx) => {
         const userId = ctx.from.id.toString();
+        const users = await loadUsers();
 
+        if (!users[userId]) {
+            await ctx.reply('Пользователь не зарегистрирован.');
+            return;
+        }
+
+        if (!users[userId].isApproved) {
+            await ctx.reply('Только подтвержденные пользователи могут генерировать коды.');
+            return;
+        }
+
+        const organization = users[userId].organization;
         try {
-            const users = await loadUsers();
-
-            if (!users[userId]) {
-                await ctx.reply('Пользователь не зарегистрирован.');
-                return;
-            }
-
-            if (!users[userId].isApproved) {
-                await ctx.reply('Только подтвержденные пользователи могут генерировать коды.');
-                return;
-            }
-
-            const organization = users[userId].organization;
             const code = await generateInviteCode(userId, organization);
-
             await clearPreviousMessages(ctx, userId);
 
             const messageText = `
@@ -47,6 +43,7 @@ module.exports = (bot) => {
             );
             ctx.state.userStates[userId].messageIds.push(message.message_id);
         } catch (error) {
+            console.error('Ошибка при генерации кода:', error);
             await ctx.reply('Произошла ошибка при генерации кода. Попробуйте позже.');
         }
     });
@@ -92,13 +89,6 @@ module.exports = (bot) => {
         }
 
         try {
-            const users = await loadUsers();
-
-            if (!users[userId]) {
-                await ctx.reply('Пользователь не зарегистрирован.');
-                return;
-            }
-
             const organizations = ctx.state.userStates[userId].adminOrganizations || [];
             if (!organizations[orgIndex]) {
                 await ctx.reply('Организация не найдена.');
@@ -129,6 +119,7 @@ module.exports = (bot) => {
             );
             ctx.state.userStates[userId].messageIds.push(message.message_id);
         } catch (error) {
+            console.error('Ошибка при генерации кода:', error);
             await ctx.reply('Произошла ошибка при генерации кода. Попробуйте позже.');
         }
     });
