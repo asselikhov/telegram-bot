@@ -310,7 +310,7 @@ ${report.materials}
             userOrg,
             ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
         ];
-        const allChatIds = [...new Set([groupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId])];
+        const allChatIds = [...new Set([groupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)])];
 
         const tempMessage = await ctx.reply('⏳ Отправка отчета в группы...');
         const userMessageIds = [tempMessage.message_id];
@@ -455,7 +455,7 @@ ${newReport.materials}
             userOrg,
             ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
         ];
-        const allChatIds = [...new Set([newGroupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId])];
+        const allChatIds = [...new Set([newGroupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)])];
 
         if (newReport.photos.length > 0) {
             const mediaGroup = newReport.photos.map((photoId, index) => ({
