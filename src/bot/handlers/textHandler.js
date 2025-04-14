@@ -297,8 +297,10 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
 🏢 ${report.objectName}
 ➖➖➖➖➖➖➖➖➖➖➖
 👷 ${users[userId].fullName}
+
 ВЫПОЛНЕННЫЕ РАБОТЫ:
 ${report.workDone}
+
 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
 ${report.materials}
 ➖➖➖➖➖➖➖➖➖➖➖
@@ -428,8 +430,10 @@ ${report.materials}
 🏢 ${newReport.objectName}
 ➖➖➖➖➖➖➖➖➖➖➖
 👷 ${users[userId].fullName}
+
 ВЫПОЛНЕННЫЕ РАБОТЫ:
 ${newReport.workDone}
+
 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
 ${newReport.materials}
 ➖➖➖➖➖➖➖➖➖➖➖
