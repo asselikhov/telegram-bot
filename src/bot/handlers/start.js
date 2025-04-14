@@ -5,62 +5,73 @@ const { showMainMenu } = require('./menu');
 
 module.exports = (bot) => {
     bot.start(async (ctx) => {
-        const userId = ctx.from.id.toString();
+        const telegramId = ctx.from.id?.toString();
         const chatType = ctx.chat.type;
+
+        if (!telegramId) {
+            console.error('No telegramId provided in ctx.from');
+            return ctx.reply('Ошибка: не удалось определить ваш ID. Попробуйте снова.');
+        }
 
         if (chatType !== 'private') {
             return ctx.reply('Команда /start доступна только в личных сообщениях с ботом.');
         }
 
-        const users = await loadUsers();
+        try {
+            const users = await loadUsers();
 
-        if (!users[userId]) {
-            users[userId] = {
-                fullName: '',
-                position: '',
-                organization: '',
-                selectedObjects: [],
-                status: 'В работе',
-                isApproved: 0,
-                nextReportId: 1,
-                reports: {}
-            };
-            await saveUser(userId, users[userId]);
+            if (!users[telegramId]) {
+                users[telegramId] = {
+                    fullName: '',
+                    position: '',
+                    organization: '',
+                    selectedObjects: [],
+                    status: 'В работе',
+                    isApproved: 0,
+                    nextReportId: 1,
+                    reports: {}
+                };
+                await saveUser(telegramId, users[telegramId]);
 
-            ctx.state.userStates[userId] = {
-                step: 'enterInviteCode',
-                messageIds: []
-            };
-            await clearPreviousMessages(ctx, userId);
+                ctx.state.userStates = ctx.state.userStates || {};
+                ctx.state.userStates[telegramId] = {
+                    step: 'enterInviteCode',
+                    messageIds: []
+                };
+                await clearPreviousMessages(ctx, telegramId);
 
-            const message = await ctx.reply('Введите пригласительный код для регистрации:');
-            ctx.state.userStates[userId].messageIds.push(message.message_id);
-        } else if (users[userId].isApproved) {
-            await showMainMenu(ctx);
-        } else {
-            const user = users[userId];
-            await clearPreviousMessages(ctx, userId);
-
-            if (!user.organization) {
-                ctx.state.userStates[userId] = { step: 'enterInviteCode', messageIds: [] };
                 const message = await ctx.reply('Введите пригласительный код для регистрации:');
-                ctx.state.userStates[userId].messageIds.push(message.message_id);
-            } else if (!user.selectedObjects.length) {
-                ctx.state.userStates[userId] = { step: 'selectObjects', messageIds: [] };
-                const { showObjectSelection } = require('../actions/objects');
-                await showObjectSelection(ctx, userId, []);
-            } else if (!user.position) {
-                ctx.state.userStates[userId] = { step: 'selectPosition', messageIds: [] };
-                const { showPositionSelection } = require('../actions/position');
-                await showPositionSelection(ctx, userId);
-            } else if (!user.fullName) {
-                ctx.state.userStates[userId] = { step: 'enterFullName', messageIds: [] };
-                const message = await ctx.reply('Введите ваше ФИО:');
-                ctx.state.userStates[userId].messageIds.push(message.message_id);
+                ctx.state.userStates[telegramId].messageIds.push(message.message_id);
+            } else if (users[telegramId].isApproved) {
+                await showMainMenu(ctx);
             } else {
-                const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
-                ctx.state.userStates[userId] = { step: null, messageIds: [message.message_id] };
+                const user = users[telegramId];
+                await clearPreviousMessages(ctx, telegramId);
+
+                if (!user.organization) {
+                    ctx.state.userStates[telegramId] = { step: 'enterInviteCode', messageIds: [] };
+                    const message = await ctx.reply('Введите пригласительный код для регистрации:');
+                    ctx.state.userStates[telegramId].messageIds.push(message.message_id);
+                } else if (!user.selectedObjects.length) {
+                    ctx.state.userStates[telegramId] = { step: 'selectObjects', messageIds: [] };
+                    const { showObjectSelection } = require('../actions/objects');
+                    await showObjectSelection(ctx, telegramId, []);
+                } else if (!user.position) {
+                    ctx.state.userStates[telegramId] = { step: 'selectPosition', messageIds: [] };
+                    const { showPositionSelection } = require('../actions/position');
+                    await showPositionSelection(ctx, telegramId);
+                } else if (!user.fullName) {
+                    ctx.state.userStates[telegramId] = { step: 'enterFullName', messageIds: [] };
+                    const message = await ctx.reply('Введите ваше ФИО:');
+                    ctx.state.userStates[telegramId].messageIds.push(message.message_id);
+                } else {
+                    const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
+                    ctx.state.userStates[telegramId] = { step: null, messageIds: [message.message_id] };
+                }
             }
+        } catch (error) {
+            console.error(`Error processing /start for user ${telegramId}:`, error);
+            await ctx.reply('Произошла ошибка. Попробуйте снова позже.');
         }
     });
 };
