@@ -506,3 +506,4 @@ ${newReport.materials}
         state.step = null;
         state.report = {};
     });
+};
