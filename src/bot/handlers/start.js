@@ -2,6 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
 const { showMainMenu } = require('./menu');
+const { ADMIN_ID } = require('../../config/config');
 
 module.exports = (bot) => {
     bot.start(async (ctx) => {
@@ -20,6 +21,32 @@ module.exports = (bot) => {
         try {
             const users = await loadUsers();
 
+            // Проверка на администратора
+            if (telegramId === ADMIN_ID.toString()) {
+                if (!users[telegramId]) {
+                    users[telegramId] = {
+                        fullName: 'Администратор',
+                        position: 'Администратор',
+                        organization: 'Администрация',
+                        selectedObjects: [],
+                        status: 'Одобрено',
+                        isApproved: 1,
+                        nextReportId: 1,
+                        reports: {}
+                    };
+                    await saveUser(telegramId, users[telegramId]);
+                } else if (!users[telegramId].isApproved) {
+                    users[telegramId].isApproved = 1;
+                    users[telegramId].status = 'Одобрено';
+                    await saveUser(telegramId, users[telegramId]);
+                }
+                ctx.state.userStates = ctx.state.userStates || {};
+                ctx.state.userStates[telegramId] = { step: null, messageIds: [] };
+                await clearPreviousMessages(ctx, telegramId);
+                return await showMainMenu(ctx);
+            }
+
+            // Логика для обычных пользователей
             if (!users[telegramId]) {
                 users[telegramId] = {
                     fullName: '',
