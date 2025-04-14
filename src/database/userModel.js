@@ -1,8 +1,16 @@
 const { connectMongo } = require('../config/mongoConfig');
 
+let db;
+
+async function getDb() {
+    if (!db) {
+        db = await connectMongo();
+    }
+    return db;
+}
+
 async function loadUsers() {
-    const db = await connectMongo();
-    const usersCollection = db.collection('users');
+    const usersCollection = (await getDb()).collection('users');
     const users = await usersCollection.find({}).toArray();
     const usersMap = {};
     users.forEach(user => {
@@ -35,8 +43,7 @@ async function saveUser(telegramId, userData) {
     if (!telegramId) {
         throw new Error('telegramId is required');
     }
-    const db = await connectMongo();
-    const usersCollection = db.collection('users');
+    const usersCollection = (await getDb()).collection('users');
     try {
         await usersCollection.updateOne(
             { telegramId },
@@ -65,8 +72,7 @@ async function deleteUser(telegramId) {
     if (!telegramId) {
         throw new Error('telegramId is required');
     }
-    const db = await connectMongo();
-    const usersCollection = db.collection('users');
+    const usersCollection = (await getDb()).collection('users');
     await usersCollection.deleteOne({ telegramId });
 }
 

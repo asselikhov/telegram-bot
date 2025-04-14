@@ -1,9 +1,17 @@
 const { connectMongo } = require('../config/mongoConfig');
 const { v4: uuidv4 } = require('uuid');
 
+let db;
+
+async function getDb() {
+    if (!db) {
+        db = await connectMongo();
+    }
+    return db;
+}
+
 async function generateInviteCode(userId, organization) {
-    const db = await connectMongo();
-    const codesCollection = db.collection('invite_codes');
+    const codesCollection = (await getDb()).collection('invite_codes');
     const code = uuidv4().slice(0, 8);
     await codesCollection.insertOne({
         code,
@@ -16,16 +24,14 @@ async function generateInviteCode(userId, organization) {
 }
 
 async function validateInviteCode(code) {
-    const db = await connectMongo();
-    const codesCollection = db.collection('invite_codes');
+    const codesCollection = (await getDb()).collection('invite_codes');
     const invite = await codesCollection.findOne({ code });
     if (!invite || invite.isUsed) return null;
     return { organization: invite.organization, createdBy: invite.createdBy };
 }
 
 async function markInviteCodeAsUsed(code, userId) {
-    const db = await connectMongo();
-    const codesCollection = db.collection('invite_codes');
+    const codesCollection = (await getDb()).collection('invite_codes');
     const result = await codesCollection.findOneAndUpdate(
         { code },
         { $set: { isUsed: true, usedBy: userId, usedAt: new Date() } },
@@ -35,8 +41,7 @@ async function markInviteCodeAsUsed(code, userId) {
 }
 
 async function getAllInviteCodes() {
-    const db = await connectMongo();
-    const codesCollection = db.collection('invite_codes');
+    const codesCollection = (await getDb()).collection('invite_codes');
     const codes = await codesCollection.find({}).sort({ createdAt: -1 }).toArray();
     return codes.map(row => ({
         code: row.code,
@@ -49,8 +54,7 @@ async function getAllInviteCodes() {
 }
 
 async function loadInviteCode(userId) {
-    const db = await connectMongo();
-    const codesCollection = db.collection('invite_codes');
+    const codesCollection = (await getDb()).collection('invite_codes');
     const invite = await codesCollection.findOne({ usedBy: userId }, { sort: { createdAt: -1 } });
     return invite ? {
         code: invite.code,

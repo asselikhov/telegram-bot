@@ -1,6 +1,15 @@
 const { connectMongo } = require('../config/mongoConfig');
 const { formatDate } = require('../bot/utils');
 
+let db;
+
+async function getDb() {
+    if (!db) {
+        db = await connectMongo();
+    }
+    return db;
+}
+
 function normalizeMessageLink(messageLink) {
     if (!messageLink || typeof messageLink !== 'string') return messageLink;
     const match = messageLink.match(/https:\/\/t\.me\/c\/(\d+)\/(\d+)/);
@@ -12,8 +21,7 @@ function normalizeMessageLink(messageLink) {
 }
 
 async function saveReport(userId, report) {
-    const db = await connectMongo();
-    const reportsCollection = db.collection('reports');
+    const reportsCollection = (await getDb()).collection('reports');
     const { reportId, userId: reportUserId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
     const normalizedMessageLink = normalizeMessageLink(messageLink);
     await reportsCollection.updateOne(
@@ -38,8 +46,7 @@ async function saveReport(userId, report) {
 }
 
 async function loadUserReports(userId) {
-    const db = await connectMongo();
-    const reportsCollection = db.collection('reports');
+    const reportsCollection = (await getDb()).collection('reports');
     const reports = await reportsCollection.find({ userid: userId }).toArray();
     const reportsMap = {};
     reports.forEach(row => {
@@ -76,9 +83,8 @@ async function loadUserReports(userId) {
 }
 
 async function getReportText(objectName) {
-    const db = await connectMongo();
-    const reportsCollection = db.collection('reports');
-    const usersCollection = db.collection('users');
+    const reportsCollection = (await getDb()).collection('reports');
+    const usersCollection = (await getDb()).collection('users');
     const reports = await reportsCollection.find({ objectname: objectName }).sort({ timestamp: 1 }).toArray();
     if (reports.length === 0) return '';
     const userIds = [...new Set(reports.map(r => r.userid))];
@@ -93,8 +99,7 @@ async function getReportText(objectName) {
 }
 
 async function loadAllReports() {
-    const db = await connectMongo();
-    const reportsCollection = db.collection('reports');
+    const reportsCollection = (await getDb()).collection('reports');
     const reports = await reportsCollection.find({}).toArray();
     const reportsMap = {};
     reports.forEach(row => {
