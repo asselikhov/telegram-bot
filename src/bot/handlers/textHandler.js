@@ -488,7 +488,7 @@ ${newReport.materials}
             for (const chatId of allChatIds) {
                 try {
                     const message = await ctx.telegram.sendMessage(chatId, newReportText);
-                    newReport.groupMessageIds[chatId] = message.message_id;
+                    report.groupMessageIds[chatId] = message.message_id;
                     if (chatId === newGroupChatId) {
                         newReport.messageLink = https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id};
                     }
@@ -506,4 +506,4 @@ ${newReport.materials}
         state.step = null;
         state.report = {};
     });
-};
+
