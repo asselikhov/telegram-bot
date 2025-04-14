@@ -1,4 +1,4 @@
-const { pool } = require('./db');
+const { connectMongo } = require('../config/mongoConfig');
 const { formatDate } = require('../bot/utils');
 
 function normalizeMessageLink(messageLink) {
@@ -12,153 +12,122 @@ function normalizeMessageLink(messageLink) {
 }
 
 async function saveReport(userId, report) {
+    const db = await connectMongo();
+    const reportsCollection = db.collection('reports');
     const { reportId, userId: reportUserId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
-    const client = await pool.connect();
-    try {
-        const normalizedMessageLink = normalizeMessageLink(messageLink);
-        await client.query(`
-            INSERT INTO reports (reportid, userid, objectname, date, timestamp, workdone, materials, groupmessageids, messagelink, fullname, photos)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT (reportid) DO UPDATE
-            SET userid = $2, objectname = $3, date = $4, timestamp = $5, workdone = $6, materials = $7, groupmessageids = $8, messagelink = $9, fullname = $10, photos = $11
-        `, [
-            reportId,
-            reportUserId || userId,
-            objectName,
-            date,
-            timestamp,
-            workDone,
-            materials,
-            JSON.stringify(groupMessageIds || {}),
-            normalizedMessageLink || null,
-            fullName,
-            JSON.stringify(photos || [])
-        ]);
-    } catch (err) {
-        throw err;
-    } finally {
-        client.release();
-    }
+    const normalizedMessageLink = normalizeMessageLink(messageLink);
+    await reportsCollection.updateOne(
+        { reportid: reportId },
+        {
+            $set: {
+                reportid: reportId,
+                userid: reportUserId || userId,
+                objectname: objectName,
+                date,
+                timestamp,
+                workdone: workDone,
+                materials,
+                groupmessageids: JSON.stringify(groupMessageIds || {}),
+                messagelink: normalizedMessageLink || null,
+                fullname: fullName,
+                photos: JSON.stringify(photos || [])
+            }
+        },
+        { upsert: true }
+    );
 }
 
 async function loadUserReports(userId) {
-    const client = await pool.connect();
-    try {
-        const res = await client.query('SELECT * FROM reports WHERE userid = $1', [userId]);
-        const reports = {};
-        res.rows.forEach(row => {
-            let groupMessageIds = row.groupmessageids;
-            let photos = row.photos;
+    const db = await connectMongo();
+    const reportsCollection = db.collection('reports');
+    const reports = await reportsCollection.find({ userid: userId }).toArray();
+    const reportsMap = {};
+    reports.forEach(row => {
+        let groupMessageIds = row.groupmessageids;
+        let photos = row.photos;
 
-            if (groupMessageIds && typeof groupMessageIds === 'string') {
-                try {
-                    groupMessageIds = JSON.parse(groupMessageIds);
-                } catch (e) {
-                    groupMessageIds = {};
-                }
-            } else if (!groupMessageIds) {
-                groupMessageIds = {};
-            }
+        try {
+            groupMessageIds = JSON.parse(groupMessageIds || '{}');
+        } catch (e) {
+            groupMessageIds = {};
+        }
 
-            if (photos && typeof photos === 'string') {
-                try {
-                    photos = JSON.parse(photos);
-                } catch (e) {
-                    photos = [];
-                }
-            } else if (!photos) {
-                photos = [];
-            }
+        try {
+            photos = JSON.parse(photos || '[]');
+        } catch (e) {
+            photos = [];
+        }
 
-            reports[row.reportid] = {
-                reportId: row.reportid,
-                userId: row.userid,
-                objectName: row.objectname,
-                date: row.date,
-                timestamp: row.timestamp,
-                workDone: row.workdone,
-                materials: row.materials,
-                groupMessageIds,
-                messageLink: row.messagelink,
-                fullName: row.fullname,
-                photos
-            };
-        });
-        return reports;
-    } catch (err) {
-        return {};
-    } finally {
-        client.release();
-    }
+        reportsMap[row.reportid] = {
+            reportId: row.reportid,
+            userId: row.userid,
+            objectName: row.objectname,
+            date: row.date,
+            timestamp: row.timestamp,
+            workDone: row.workdone,
+            materials: row.materials,
+            groupMessageIds,
+            messageLink: row.messagelink,
+            fullName: row.fullname,
+            photos
+        };
+    });
+    return reportsMap;
 }
 
 async function getReportText(objectName) {
-    const client = await pool.connect();
-    try {
-        const res = await client.query(
-            'SELECT r.*, u.fullname, u.position, u.organization FROM reports r JOIN users u ON r.userid = u.userid WHERE r.objectname = $1 ORDER BY r.timestamp',
-            [objectName]
-        );
-        if (res.rows.length === 0) return '';
-        return res.rows.map(row => {
-            const date = row.date;
-            const time = new Date(row.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
-            return `${date} ${time}\n${row.objectname}\n${row.position || 'Не указана'} ${row.organization || 'Не указана'} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n${row.materials}\n--------------------------\n`;
-        }).join('');
-    } finally {
-        client.release();
-    }
+    const db = await connectMongo();
+    const reportsCollection = db.collection('reports');
+    const usersCollection = db.collection('users');
+    const reports = await reportsCollection.find({ objectname: objectName }).sort({ timestamp: 1 }).toArray();
+    if (reports.length === 0) return '';
+    const userIds = [...new Set(reports.map(r => r.userid))];
+    const users = await usersCollection.find({ userid: { $in: userIds } }).toArray();
+    const usersMap = Object.fromEntries(users.map(u => [u.userid, u]));
+    return reports.map(row => {
+        const user = usersMap[row.userid] || {};
+        const date = row.date;
+        const time = new Date(row.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
+        return `${date} ${time}\n${row.objectname}\n${user.position || 'Не указана'} ${user.organization || 'Не указана'} ${row.fullname}\n\nВЫПОЛНЕННЫЕ РАБОТЫ:\n${row.workdone}\n\nПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:\n${row.materials}\n--------------------------\n`;
+    }).join('');
 }
 
 async function loadAllReports() {
-    const client = await pool.connect();
-    try {
-        const res = await client.query('SELECT * FROM reports');
-        const reports = {};
-        res.rows.forEach(row => {
-            let groupMessageIds = row.groupmessageids;
-            let photos = row.photos;
+    const db = await connectMongo();
+    const reportsCollection = db.collection('reports');
+    const reports = await reportsCollection.find({}).toArray();
+    const reportsMap = {};
+    reports.forEach(row => {
+        let groupMessageIds = row.groupmessageids;
+        let photos = row.photos;
 
-            if (groupMessageIds && typeof groupMessageIds === 'string') {
-                try {
-                    groupMessageIds = JSON.parse(groupMessageIds);
-                } catch (e) {
-                    groupMessageIds = {};
-                }
-            } else if (!groupMessageIds) {
-                groupMessageIds = {};
-            }
+        try {
+            groupMessageIds = JSON.parse(groupMessageIds || '{}');
+        } catch (e) {
+            groupMessageIds = {};
+        }
 
-            if (photos && typeof photos === 'string') {
-                try {
-                    photos = JSON.parse(photos);
-                } catch (e) {
-                    photos = [];
-                }
-            } else if (!photos) {
-                photos = [];
-            }
+        try {
+            photos = JSON.parse(photos || '[]');
+        } catch (e) {
+            photos = [];
+        }
 
-            reports[row.reportid] = {
-                reportId: row.reportid,
-                userId: row.userid,
-                objectName: row.objectname,
-                date: row.date,
-                timestamp: row.timestamp,
-                workDone: row.workdone,
-                materials: row.materials,
-                groupMessageIds,
-                messageLink: row.messagelink,
-                fullName: row.fullname,
-                photos
-            };
-        });
-        return reports;
-    } catch (err) {
-        return {};
-    } finally {
-        client.release();
-    }
+        reportsMap[row.reportid] = {
+            reportId: row.reportid,
+            userId: row.userid,
+            objectName: row.objectname,
+            date: row.date,
+            timestamp: row.timestamp,
+            workDone: row.workdone,
+            materials: row.materials,
+            groupMessageIds,
+            messageLink: row.messagelink,
+            fullName: row.fullname,
+            photos
+        };
+    });
+    return reportsMap;
 }
 
 module.exports = { loadUserReports, saveReport, getReportText, loadAllReports };

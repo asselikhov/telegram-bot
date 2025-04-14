@@ -1,4 +1,5 @@
 const { Markup } = require('telegraf');
+const { connectMongo } = require('../config/mongoConfig');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 const { loadInviteCode, markInviteCodeAsUsed, validateInviteCode } = require('../../database/inviteCodeModel');
@@ -439,12 +440,9 @@ ${newReport.materials}
                 for (const [chatId, msgId] of Object.entries(oldReport.groupMessageIds)) {
                     await ctx.telegram.deleteMessage(chatId, msgId).catch(e => {});
                 }
-                const client = await require('../../database/db').pool.connect();
-                try {
-                    await client.query('DELETE FROM reports WHERE reportid = $1', [oldReportId]);
-                } finally {
-                    client.release();
-                }
+                const db = await connectMongo();
+                const reportsCollection = db.collection('reports');
+                await reportsCollection.deleteOne({ reportid: oldReportId });
             }
         }
 
