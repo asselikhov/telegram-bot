@@ -1,5 +1,5 @@
 const { Markup } = require('telegraf');
-const { connectMongo } = require('../config/mongoConfig');
+const { connectMongo } = require('../../config/mongoConfig');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 const { loadInviteCode, markInviteCodeAsUsed, validateInviteCode } = require('../../database/inviteCodeModel');
@@ -32,7 +32,7 @@ module.exports = (bot) => {
                     return;
                 }
 
-                state.report.photos = [...state.report.photos, ...group.photos];
+                state.report.photos = [...(state.report.photos || []), ...group.photos];
 
                 if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
                     for (const msgId of state.mediaGroupIds) {
@@ -44,8 +44,8 @@ module.exports = (bot) => {
                 const mediaGroup = state.report.photos.map((photoId, index) => ({
                     type: 'photo',
                     media: photoId,
-                    caption: index === 0 ? `Добавлено ${state.report.photos.length} фото:` : undefined
-                }));
+                    caption: index === 0 ? Добавлено ${state.report.photos.length} фото: : undefined
+            }));
                 const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
                 state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
 
@@ -113,15 +113,11 @@ module.exports = (bot) => {
                 const creator = creatorId ? users[creatorId] : null;
                 const creatorFullName = creator ? creator.fullName : 'Неизвестно';
 
-                const adminText = `
-${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'})
-Объекты: ${users[userId].selectedObjects.join(', ') || 'Не выбраны'}
-Пригласительный код создан: ${creatorFullName}
-                `.trim();
-                await ctx.telegram.sendMessage(ADMIN_ID, `📝 НОВАЯ ЗАЯВКА\n${adminText}`, Markup.inlineKeyboard([
-                    [Markup.button.callback(`✅ Одобрить (${users[userId].fullName || 'Не указано'})`, `approve_${userId}`)],
-                    [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Не указано'})`, `reject_${userId}`)]
-                ]));
+                const adminText = ${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'}) Объекты: ${users[userId].selectedObjects.join(', ') || 'Не выбраны'} Пригласительный код создан: ${creatorFullName}                .trim();
+                await ctx.telegram.sendMessage(ADMIN_ID, 📝 НОВАЯ ЗАЯВКА\n${adminText}, Markup.inlineKeyboard([
+                [Markup.button.callback(✅ Одобрить (${users[userId].fullName || 'Не указано'}), approve_${userId})],
+                [Markup.button.callback(❌ Отклонить (${users[userId].fullName || 'Не указано'}), reject_${userId})]
+            ]));
                 ctx.state.userStates[userId] = { step: null, messageIds: [] };
                 break;
 
@@ -141,7 +137,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     state.step = null;
                     state.messageIds = [];
 
-                    await ctx.reply(`Ваше ФИО изменено на "${newFullName}"`);
+                    await ctx.reply(Ваше ФИО изменено на "${newFullName}");
                     await showProfile(ctx);
                 } catch (error) {
                     await ctx.reply('Произошла ошибка при изменении ФИО. Попробуйте снова.');
@@ -169,14 +165,15 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 await saveUser(userId, users[userId]);
                 await markInviteCodeAsUsed(orgCode);
                 state.step = 'selectObjects';
-                await ctx.reply(`Организация изменена на "${newOrg.organization}". Теперь выберите объекты:`);
+                await ctx.reply(Организация изменена на "${newOrg.organization}". Теперь выберите объекты:);
                 await showObjectSelection(ctx, userId, []);
                 break;
 
             case 'workDone':
                 state.report.workDone = ctx.message.text.trim();
                 state.step = 'materials';
-                await ctx.reply('💡 Введите информацию о поставленных материалах:');
+                const workDoneMessage = await ctx.reply('💡 Введите информацию о поставленных материалах:');
+                state.messageIds = [workDoneMessage.message_id];
                 break;
 
             case 'materials':
@@ -193,7 +190,8 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             case 'editWorkDone':
                 state.report.workDone = ctx.message.text.trim();
                 state.step = 'editMaterials';
-                await ctx.reply('💡 Введите новую информацию о поставленных материалах:');
+                const editWorkDoneMessage = await ctx.reply('💡 Введите новую информацию о поставленных материалах:');
+                state.messageIds = [editWorkDoneMessage.message_id];
                 break;
 
             case 'editMaterials':
@@ -221,6 +219,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         if (!state || (state.step !== 'photos' && state.step !== 'editPhotos') || ctx.message.media_group_id) return;
 
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+        state.report.photos = state.report.photos || [];
         state.report.photos.push(photoId);
 
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
@@ -233,8 +232,8 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const mediaGroup = state.report.photos.map((photoId, index) => ({
             type: 'photo',
             media: photoId,
-            caption: index === 0 ? `Добавлено ${state.report.photos.length} фото:` : undefined
-        }));
+            caption: index === 0 ? Добавлено ${state.report.photos.length} фото: : undefined
+    }));
         const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
         state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
 
@@ -275,7 +274,7 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
         const date = new Date();
         const formattedDate = formatDate(date);
         const timestamp = date.toISOString();
-        const reportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`;
+        const reportId = ${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++};
         const report = {
             reportId,
             userId,
@@ -290,18 +289,23 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
             photos: state.report.photos || []
         };
         const reportText = `
-📅 ОТЧЕТ ЗА ${formattedDate}  
-🏢 ${report.objectName}  
-➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ${users[userId].fullName} 
+📅 ОТЧЕТ ЗА ${formattedDate}
 
-ВЫПОЛНЕННЫЕ РАБОТЫ:  
-${report.workDone}  
+🏢 ${report.objectName}
 
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-${report.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
-        `.trim();
+👷 ${users[userId].fullName}
+
+ВЫПОЛНЕННЫЕ РАБОТЫ:
+
+${report.workDone}
+
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
+
+${report.materials}
+
+➖➖➖➖➖➖➖➖➖➖➖
+`.trim();
 
         const groupChatId = OBJECT_GROUPS[report.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
         const userOrg = users[userId].organization;
@@ -309,7 +313,7 @@ ${report.materials}
             userOrg,
             ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
         ];
-        const allChatIds = [groupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
+        const allChatIds = [...new Set([groupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId])];
 
         const tempMessage = await ctx.reply('⏳ Отправка отчета в группы...');
         const userMessageIds = [tempMessage.message_id];
@@ -329,9 +333,11 @@ ${report.materials}
                     const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
                     report.groupMessageIds[chatId] = messages[0].message_id;
                     if (chatId === groupChatId) {
-                        report.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${messages[0].message_id}`;
+                        report.messageLink = https://t.me/c/${chatId.toString().replace('-', '')}/${messages[0].message_id};
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.error(Ошибка отправки медиа-группы в чат ${chatId}:, e);
+                }
             }
         } else {
             for (const chatId of allChatIds) {
@@ -339,16 +345,18 @@ ${report.materials}
                     const message = await ctx.telegram.sendMessage(chatId, reportText);
                     report.groupMessageIds[chatId] = message.message_id;
                     if (chatId === groupChatId) {
-                        report.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id}`;
+                        report.messageLink = https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id};
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.error(Ошибка отправки сообщения в чат ${chatId}:, e);
+                }
             }
         }
 
         await saveReport(userId, report);
         await saveUser(userId, users[userId]);
 
-        const finalMessage = await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`);
+        const finalMessage = await ctx.reply(✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''});
         userMessageIds.push(finalMessage.message_id);
 
         const allUserMessageIds = [...userMessageIds, ...userMediaGroupIds];
@@ -404,7 +412,7 @@ ${report.materials}
 
         const newTimestamp = new Date().toISOString();
         const formattedDate = parseAndFormatDate(state.report.date);
-        const newReportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`;
+        const newReportId = ${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++};
         const newReport = {
             reportId: newReportId,
             userId,
@@ -416,21 +424,26 @@ ${report.materials}
             groupMessageIds: {},
             messageLink: null,
             fullName: users[userId].fullName,
-            photos: state.report.photos
+            photos: state.report.photos || []
         };
         const newReportText = `
-📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)  
-🏢 ${newReport.objectName}  
-➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ${users[userId].fullName} 
+📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)
 
-ВЫПОЛНЕННЫЕ РАБОТЫ:  
-${newReport.workDone}  
+🏢 ${newReport.objectName}
 
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-${newReport.materials}  
 ➖➖➖➖➖➖➖➖➖➖➖
-        `.trim();
+👷 ${users[userId].fullName}
+
+ВЫПОЛНЕННЫЕ РАБОТЫ:
+
+${newReport.workDone}
+
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
+
+${newReport.materials}
+
+➖➖➖➖➖➖➖➖➖➖➖
+`.trim();
 
         const oldReportId = state.report.originalReportId;
         if (oldReportId) {
@@ -452,7 +465,7 @@ ${newReport.materials}
             userOrg,
             ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
         ];
-        const allChatIds = [newGroupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
+        const allChatIds = [...new Set([newGroupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId])];
 
         if (newReport.photos.length > 0) {
             const mediaGroup = newReport.photos.map((photoId, index) => ({
@@ -465,9 +478,11 @@ ${newReport.materials}
                     const messages = await ctx.telegram.sendMediaGroup(chatId, mediaGroup);
                     newReport.groupMessageIds[chatId] = messages[0].message_id;
                     if (chatId === newGroupChatId) {
-                        newReport.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${messages[0].message_id}`;
+                        newReport.messageLink = https://t.me/c/${chatId.toString().replace('-', '')}/${messages[0].message_id};
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.error(Ошибка отправки медиа-группы в чат ${chatId}:, e);
+                }
             }
         } else {
             for (const chatId of allChatIds) {
@@ -475,18 +490,19 @@ ${newReport.materials}
                     const message = await ctx.telegram.sendMessage(chatId, newReportText);
                     newReport.groupMessageIds[chatId] = message.message_id;
                     if (chatId === newGroupChatId) {
-                        newReport.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id}`;
+                        newReport.messageLink = https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id};
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.error(Ошибка отправки сообщения в чат ${chatId}:, e);
+                }
             }
         }
 
         await saveReport(userId, newReport);
         await saveUser(userId, users[userId]);
-        await ctx.reply(`✅ Ваш отчёт обновлён:\n\n${newReportText}${newReport.photos.length > 0 ? '\n(С изображениями)' : ''}`, Markup.inlineKeyboard([
+        await ctx.reply(✅ Ваш отчёт обновлён:\n\n${newReportText}${newReport.photos.length > 0 ? '\n(С изображениями)' : ''}, Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
         ]));
         state.step = null;
         state.report = {};
     });
-};

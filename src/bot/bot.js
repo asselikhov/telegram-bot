@@ -94,7 +94,9 @@ ${user.fullName}, вы не предоставили отчет за ${formatted
                     `.trim();
           try {
             await bot.telegram.sendMessage(groupChatId, reminderText);
-          } catch (error) {}
+          } catch (error) {
+            console.error(`Ошибка отправки напоминания для ${userId} в чат ${groupChatId}:`, error);
+          }
         }
       }
     }
@@ -102,11 +104,13 @@ ${user.fullName}, вы не предоставили отчет за ${formatted
 }
 
 cron.schedule('0 19 * * *', () => {
+  console.log('Запуск задачи отправки напоминаний об отчетах');
   sendReportReminders();
 }, {
   timezone: "Europe/Moscow"
 });
 
+console.log('Инициализация обработчиков бота...');
 startHandler(bot);
 menuHandler(bot);
 reportHandler(bot);
@@ -118,5 +122,6 @@ positionActions(bot);
 organizationActions(bot);
 objectsActions(bot);
 statusActions(bot);
+console.log('Все обработчики инициализированы');
 
 module.exports = bot;
