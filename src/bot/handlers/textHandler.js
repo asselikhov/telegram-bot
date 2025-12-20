@@ -244,8 +244,13 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     clearConfigCache();
                     state.step = null;
                     await ctx.reply(`Организация "${orgName}" создана.`);
-                    const { showOrganizationsList } = require('./admin');
-                    await showOrganizationsList(ctx);
+                    // Имитируем нажатие кнопки для отображения списка организаций
+                    const adminModule = require('./admin');
+                    if (adminModule.showOrganizationsList) {
+                        await adminModule.showOrganizationsList(ctx);
+                    } else {
+                        await ctx.reply('Организация создана. Используйте кнопку "Управление организациями" для просмотра.');
+                    }
                 } catch (error) {
                     if (error.code === 11000) {
                         await ctx.reply('Организация с таким названием уже существует.');
@@ -268,8 +273,13 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     clearConfigCache();
                     state.step = null;
                     await ctx.reply(`Должность "${posName}" создана.`);
-                    const { showAdminPanel } = require('./admin');
-                    await showAdminPanel(ctx);
+                    // Имитируем нажатие кнопки для отображения списка должностей
+                    const adminModule = require('./admin');
+                    if (adminModule.showPositionsList) {
+                        await adminModule.showPositionsList(ctx);
+                    } else {
+                        await ctx.reply('Должность создана. Используйте кнопку "Управление должностями" для просмотра.');
+                    }
                 } catch (error) {
                     if (error.code === 11000) {
                         await ctx.reply('Должность с таким названием уже существует.');
