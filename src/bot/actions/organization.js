@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { ORGANIZATIONS_LIST } = require('../../config/config');
+const { getOrganizations } = require('../../database/configService');
 const { clearPreviousMessages } = require('../utils');
 const { showProfile } = require('../handlers/menu');
 const { showObjectSelection } = require('./objects');
@@ -8,17 +8,23 @@ const { ADMIN_ID } = require('../../config/config');
 
 async function showOrganizationSelection(ctx, userId) {
     await clearPreviousMessages(ctx, userId);
-    const buttons = ORGANIZATIONS_LIST.map((org, index) => [Markup.button.callback(org, `select_organization_${index}_${userId}`)]);
+    const organizations = await getOrganizations();
+    const orgNames = organizations.map(org => org.name);
+    const buttons = orgNames.map((org, index) => [Markup.button.callback(org, `select_organization_${index}_${userId}`)]);
     buttons.push([Markup.button.callback('Ввести свою организацию', `custom_organization_${userId}`)]);
     const message = await ctx.reply('Выберите вашу организацию:', Markup.inlineKeyboard(buttons));
     ctx.state.userStates[userId].messageIds.push(message.message_id);
+    // Сохраняем список организаций в state для использования в обработчиках
+    ctx.state.userStates[userId].organizationsList = orgNames;
 }
 
 module.exports = (bot) => {
     bot.action(/select_organization_(\d+)_(\d+)/, async (ctx) => {
         const orgIndex = parseInt(ctx.match[1], 10);
         const userId = ctx.match[2];
-        const selectedOrganization = ORGANIZATIONS_LIST[orgIndex];
+        const organizations = await getOrganizations();
+        const orgNames = organizations.map(org => org.name);
+        const selectedOrganization = orgNames[orgIndex];
         if (!selectedOrganization) return;
 
         await clearPreviousMessages(ctx, userId);
@@ -45,14 +51,15 @@ module.exports = (bot) => {
         await clearPreviousMessages(ctx, userId);
 
         if (userId === ADMIN_ID) {
-            const organizations = ORGANIZATIONS_LIST;
-            if (organizations.length === 0) {
+            const organizations = await getOrganizations();
+            const orgNames = organizations.map(org => org.name);
+            if (orgNames.length === 0) {
                 const message = await ctx.reply('Список организаций пуст.');
                 ctx.state.userStates[userId].messageIds.push(message.message_id);
                 return;
             }
 
-            const buttons = organizations.map((org, index) => [
+            const buttons = orgNames.map((org, index) => [
                 Markup.button.callback(org, `admin_select_org_${index}`)
             ]);
             buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
@@ -76,7 +83,9 @@ module.exports = (bot) => {
         const orgIndex = parseInt(ctx.match[1], 10);
         await clearPreviousMessages(ctx, userId);
 
-        const selectedOrg = ORGANIZATIONS_LIST[orgIndex];
+        const organizations = await getOrganizations();
+        const orgNames = organizations.map(org => org.name);
+        const selectedOrg = orgNames[orgIndex];
         if (!selectedOrg) {
             const message = await ctx.reply('Ошибка: организация не найдена.');
             ctx.state.userStates[userId].messageIds.push(message.message_id);

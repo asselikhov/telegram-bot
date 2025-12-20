@@ -1,7 +1,8 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
-const { ORGANIZATION_OBJECTS, ADMIN_ID } = require('../../config/config');
+const { ADMIN_ID } = require('../../config/config');
+const { getOrganizationObjects } = require('../../database/configService');
 
 async function showMainMenu(ctx) {
     const userId = ctx.from.id.toString();
@@ -41,7 +42,7 @@ async function showProfile(ctx) {
     const users = await loadUsers();
     const user = users[userId] || {};
 
-    const availableObjects = ORGANIZATION_OBJECTS[user.organization] || [];
+    const availableObjects = await getOrganizationObjects(user.organization);
     const filteredObjects = user.selectedObjects.filter(obj => availableObjects.includes(obj));
     const objectsList = filteredObjects.length > 0
         ? filteredObjects.map(obj => `· ${obj}`).join('\n')

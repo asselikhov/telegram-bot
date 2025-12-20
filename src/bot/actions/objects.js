@@ -1,12 +1,12 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { ORGANIZATION_OBJECTS } = require('../../config/config');
+const { getOrganizationObjects } = require('../../database/configService');
 const { clearPreviousMessages } = require('../utils');
 
 async function showObjectSelection(ctx, userId, selected = [], messageId = null) {
     const users = await loadUsers();
     const userOrganization = users[userId].organization;
-    const availableObjects = ORGANIZATION_OBJECTS[userOrganization] || [];
+    const availableObjects = await getOrganizationObjects(userOrganization);
 
     if (!availableObjects.length) {
         await clearPreviousMessages(ctx, userId);
@@ -42,7 +42,7 @@ module.exports = (bot) => {
         const userId = ctx.match[2];
         const users = await loadUsers();
         const userOrganization = users[userId].organization;
-        const availableObjects = ORGANIZATION_OBJECTS[userOrganization] || [];
+        const availableObjects = await getOrganizationObjects(userOrganization);
         const objectName = availableObjects[objectIndex];
         const state = ctx.state.userStates[userId];
 

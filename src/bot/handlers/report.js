@@ -2,8 +2,8 @@ const { Markup } = require('telegraf');
 const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, loadAllReports, saveReport } = require('../../database/reportModel');
-const { ORGANIZATION_OBJECTS, OBJECTS_LIST_CYRILLIC, GENERAL_GROUP_CHAT_IDS } = require('../../config/config');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
+const { getOrganizationObjects, getObjects, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap } = require('../../database/configService');
 
 async function showDownloadReport(ctx, page = 0) {
     const userId = ctx.from.id.toString();
@@ -14,7 +14,7 @@ async function showDownloadReport(ctx, page = 0) {
     }
 
     const userOrganization = users[userId].organization;
-    const availableObjects = ORGANIZATION_OBJECTS[userOrganization] || [];
+    const availableObjects = await getOrganizationObjects(userOrganization);
 
     if (!availableObjects.length) {
         return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
@@ -63,7 +63,7 @@ async function downloadReportFile(ctx, objectIndex) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const userOrganization = users[userId].organization;
-    const availableObjects = ORGANIZATION_OBJECTS[userOrganization] || [];
+    const availableObjects = await getOrganizationObjects(userOrganization);
     const objectName = availableObjects[objectIndex];
 
     if (!objectName) {
@@ -494,13 +494,16 @@ ${newReport.materials}
         }
     }
 
-    const newGroupChatId = OBJECTS_LIST_CYRILLIC.includes(newReport.objectName) ? GENERAL_GROUP_CHAT_IDS[newReport.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId : GENERAL_GROUP_CHAT_IDS['default'].chatId;
+    const objectGroups = await getObjectGroups();
+    const generalChatIds = await getGeneralGroupChatIds();
+    const orgObjectsMap = await getAllOrganizationObjectsMap();
+    const newGroupChatId = objectGroups[newReport.objectName] || generalChatIds['default']?.chatId || null;
     const userOrg = users[userId].organization;
     const targetOrgs = [
         userOrg,
-        ...Object.keys(ORGANIZATION_OBJECTS).filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
+        ...Object.keys(orgObjectsMap).filter(org => generalChatIds[org]?.reportSources?.includes(userOrg))
     ];
-    const allChatIds = [newGroupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)];
+    const allChatIds = [newGroupChatId, ...targetOrgs.map(org => generalChatIds[org]?.chatId || generalChatIds['default']?.chatId).filter(Boolean)];
 
     if (newReport.photos.length > 0) {
         const mediaGroup = newReport.photos.map((photoId, index) => ({

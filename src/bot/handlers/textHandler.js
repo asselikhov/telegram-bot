@@ -6,7 +6,7 @@ const { loadInviteCode, markInviteCodeAsUsed, validateInviteCode } = require('..
 const { showObjectSelection } = require('../actions/objects');
 const { showProfile, showMainMenu } = require('./menu');
 const { saveReport, loadUserReports } = require('../../database/reportModel');
-const { ORGANIZATIONS_LIST, GENERAL_GROUP_CHAT_IDS, OBJECT_GROUPS, ADMIN_ID } = require('../../config/config');
+const { ADMIN_ID } = require('../../config/config');
 
 const mediaGroups = new Map();
 
@@ -212,6 +212,121 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 state.messageIds = [editMessage.message_id];
                 break;
 
+            // Обработка админских шагов
+            case 'admin_org_add_name':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const orgName = ctx.message.text.trim();
+                    if (!orgName) {
+                        const msg = await ctx.reply('Название не может быть пустым. Введите снова:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    await createOrganization({ name: orgName, chatId: null, reportSources: [] });
+                    clearConfigCache();
+                    state.step = null;
+                    await ctx.reply(`Организация "${orgName}" создана.`);
+                    const { showAdminPanel } = require('./admin');
+                    await showAdminPanel(ctx);
+                } catch (error) {
+                    if (error.code === 11000) {
+                        await ctx.reply('Организация с таким названием уже существует.');
+                    } else {
+                        await ctx.reply('Ошибка при создании организации: ' + error.message);
+                    }
+                }
+                break;
+                
+            case 'admin_pos_add_name':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const posName = ctx.message.text.trim();
+                    if (!posName) {
+                        const msg = await ctx.reply('Название не может быть пустым. Введите снова:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    await createPosition({ name: posName, isAdmin: false });
+                    clearConfigCache();
+                    state.step = null;
+                    await ctx.reply(`Должность "${posName}" создана.`);
+                    const { showAdminPanel } = require('./admin');
+                    await showAdminPanel(ctx);
+                } catch (error) {
+                    if (error.code === 11000) {
+                        await ctx.reply('Должность с таким названием уже существует.');
+                    } else {
+                        await ctx.reply('Ошибка при создании должности: ' + error.message);
+                    }
+                }
+                break;
+                
+            case 'admin_obj_add_name':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const objName = ctx.message.text.trim();
+                    if (!objName) {
+                        const msg = await ctx.reply('Название не может быть пустым. Введите снова:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    await createObject({ name: objName, telegramGroupId: null });
+                    clearConfigCache();
+                    state.step = null;
+                    state.nextStep = 'admin_obj_add_group';
+                    const msg = await ctx.reply(`Объект "${objName}" создан. Введите ID Telegram группы (или /skip для пропуска):`);
+                    state.messageIds.push(msg.message_id);
+                } catch (error) {
+                    if (error.code === 11000) {
+                        await ctx.reply('Объект с таким названием уже существует.');
+                    } else {
+                        await ctx.reply('Ошибка при создании объекта: ' + error.message);
+                    }
+                }
+                break;
+                
+            case 'admin_notif_edit_time':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const timeString = ctx.message.text.trim();
+                    if (!validateTimeFormat(timeString)) {
+                        const msg = await ctx.reply('Неверный формат времени. Используйте формат HH:mm (например, 19:00):');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    await updateNotificationSettings({ time: timeString });
+                    clearConfigCache();
+                    state.step = null;
+                    const bot = require('../bot');
+                    if (bot.setupReminderCron) await bot.setupReminderCron();
+                    await ctx.reply(`Время уведомлений изменено на ${timeString}.`);
+                    const { showAdminPanel } = require('./admin');
+                    await showAdminPanel(ctx);
+                } catch (error) {
+                    await ctx.reply('Ошибка при изменении времени: ' + error.message);
+                }
+                break;
+                
+            case 'admin_notif_edit_text':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const template = ctx.message.text.trim();
+                    if (!template) {
+                        const msg = await ctx.reply('Текст не может быть пустым. Введите снова:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    await updateNotificationSettings({ messageTemplate: template });
+                    clearConfigCache();
+                    state.step = null;
+                    await ctx.reply('Шаблон сообщения обновлен.');
+                    const { showAdminPanel } = require('./admin');
+                    await showAdminPanel(ctx);
+                } catch (error) {
+                    await ctx.reply('Ошибка при изменении текста: ' + error.message);
+                }
+                break;
+                
             default:
                 break;
         }
@@ -306,13 +421,16 @@ ${report.materials}
 ➖➖➖➖➖➖➖➖➖➖➖
         `.trim();
 
-        const groupChatId = OBJECT_GROUPS[report.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
+        const objectGroups = await getObjectGroups();
+        const generalChatIds = await getGeneralGroupChatIds();
+        const orgObjectsMap = await getAllOrganizationObjectsMap();
+        const groupChatId = objectGroups[report.objectName] || generalChatIds['default']?.chatId || null;
         const userOrg = users[userId].organization;
         const targetOrgs = [
             userOrg,
-            ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
+            ...Object.keys(orgObjectsMap).filter(org => generalChatIds[org]?.reportSources?.includes(userOrg))
         ];
-        const allChatIds = [...new Set([groupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)])];
+        const allChatIds = [...new Set([groupChatId, ...targetOrgs.map(org => generalChatIds[org]?.chatId || generalChatIds['default']?.chatId).filter(Boolean)])];
 
         const tempMessage = await ctx.reply('⏳ Отправка отчета в группы...');
         const userMessageIds = [tempMessage.message_id];
@@ -453,13 +571,16 @@ ${newReport.materials}
             }
         }
 
-        const newGroupChatId = OBJECT_GROUPS[newReport.objectName] || GENERAL_GROUP_CHAT_IDS['default'].chatId;
+        const objectGroups = await getObjectGroups();
+        const generalChatIds = await getGeneralGroupChatIds();
+        const orgObjectsMap = await getAllOrganizationObjectsMap();
+        const newGroupChatId = objectGroups[newReport.objectName] || generalChatIds['default']?.chatId || null;
         const userOrg = users[userId].organization;
         const targetOrgs = [
             userOrg,
-            ...ORGANIZATIONS_LIST.filter(org => GENERAL_GROUP_CHAT_IDS[org]?.reportSources?.includes(userOrg))
+            ...Object.keys(orgObjectsMap).filter(org => generalChatIds[org]?.reportSources?.includes(userOrg))
         ];
-        const allChatIds = [...new Set([newGroupChatId, ...targetOrgs.map(org => GENERAL_GROUP_CHAT_IDS[org]?.chatId || GENERAL_GROUP_CHAT_IDS['default'].chatId)])];
+        const allChatIds = [...new Set([newGroupChatId, ...targetOrgs.map(org => generalChatIds[org]?.chatId || generalChatIds['default']?.chatId).filter(Boolean)])];
 
         if (newReport.photos.length > 0) {
             const mediaGroup = newReport.photos.map((photoId, index) => ({

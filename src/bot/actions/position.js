@@ -1,18 +1,20 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
-const { BASE_POSITIONS_LIST, ADMIN_ID } = require('../../config/config');
+const { ADMIN_ID } = require('../../config/config');
+const { getPositions } = require('../../database/configService');
 const { clearPreviousMessages } = require('../utils');
 
-function getPositionsList(userId) {
-    const positions = [...BASE_POSITIONS_LIST];
-    if (userId === ADMIN_ID) positions.push('Админ');
-    return positions;
+async function getPositionsList(userId) {
+    const positions = await getPositions();
+    const positionNames = positions.map(p => p.name);
+    if (userId === ADMIN_ID) positionNames.push('Админ');
+    return positionNames;
 }
 
 async function showPositionSelection(ctx, userId) {
     await clearPreviousMessages(ctx, userId);
 
-    const positions = getPositionsList(userId);
+    const positions = await getPositionsList(userId);
     const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_initial_position_${index}_${userId}`)]);
 
     const message = await ctx.reply('Выберите вашу должность:', Markup.inlineKeyboard(buttons));
@@ -23,7 +25,8 @@ module.exports = (bot) => {
     bot.action(/select_initial_position_(\d+)_(\d+)/, async (ctx) => {
         const positionIndex = parseInt(ctx.match[1], 10);
         const userId = ctx.match[2];
-        const selectedPosition = getPositionsList(userId)[positionIndex];
+        const positions = await getPositionsList(userId);
+        const selectedPosition = positions[positionIndex];
         if (!selectedPosition) return;
 
         await clearPreviousMessages(ctx, userId);
@@ -40,7 +43,7 @@ module.exports = (bot) => {
     bot.action('edit_position', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
-        const positions = getPositionsList(userId);
+        const positions = await getPositionsList(userId);
         const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_position_${index}`)]);
         buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
@@ -51,7 +54,8 @@ module.exports = (bot) => {
     bot.action(/select_position_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
         const positionIndex = parseInt(ctx.match[1], 10);
-        const selectedPosition = getPositionsList(userId)[positionIndex];
+        const positions = await getPositionsList(userId);
+        const selectedPosition = positions[positionIndex];
         if (!selectedPosition) return;
 
         await clearPreviousMessages(ctx, userId);

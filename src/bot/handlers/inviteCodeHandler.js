@@ -2,7 +2,8 @@ const { Markup } = require('telegraf');
 const { loadUsers } = require('../../database/userModel');
 const { generateInviteCode } = require('../../database/inviteCodeModel');
 const { clearPreviousMessages } = require('../utils');
-const { ORGANIZATION_OBJECTS, ADMIN_ID } = require('../../config/config');
+const { ADMIN_ID } = require('../../config/config');
+const { getAllOrganizationObjectsMap } = require('../../database/configService');
 
 module.exports = (bot) => {
     bot.action('generate_invite_code', async (ctx) => {
@@ -58,7 +59,8 @@ module.exports = (bot) => {
 
         await clearPreviousMessages(ctx, userId);
 
-        const organizations = Object.keys(ORGANIZATION_OBJECTS);
+        const orgObjectsMap = await getAllOrganizationObjectsMap();
+        const organizations = Object.keys(orgObjectsMap);
 
         if (organizations.length === 0) {
             await ctx.reply('Нет доступных организаций для генерации кодов.');
