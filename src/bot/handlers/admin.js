@@ -29,7 +29,8 @@ const {
     getOrganizationObjects, 
     addObjectToOrganization, 
     removeObjectFromOrganization,
-    removeAllObjectsFromOrganization 
+    removeAllObjectsFromOrganization,
+    removeOrganizationFromObject
 } = require('../../database/organizationObjectModel');
 const { 
     getNotificationSettings, 
@@ -233,8 +234,11 @@ ${objectsList}
             return;
         }
         
-        const buttons = organizations.map(org => [
-            Markup.button.callback(org.name, `admin_org_view_${encodeURIComponent(org.name)}`)
+        // Сохраняем список организаций в state для использования в обработчике
+        ctx.state.userStates[userId].adminOrganizationsList = organizations.map(org => org.name);
+        
+        const buttons = organizations.map((org, index) => [
+            Markup.button.callback(org.name, `admin_org_view_${index}`)
         ]);
         buttons.push([Markup.button.callback('➕ Добавить организацию', 'admin_org_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
@@ -256,11 +260,19 @@ ${objectsList}
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
-    bot.action(/admin_org_view_(.+)/, async (ctx) => {
+    bot.action(/admin_org_view_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         
-        const orgName = decodeURIComponent(ctx.match[1]);
+        const orgIndex = parseInt(ctx.match[1], 10);
+        const orgNames = ctx.state.userStates[userId].adminOrganizationsList;
+        if (!orgNames || !orgNames[orgIndex]) {
+            await ctx.reply('Организация не найдена.');
+            await showOrganizationsList(ctx);
+            return;
+        }
+        
+        const orgName = orgNames[orgIndex];
         await clearPreviousMessages(ctx, userId);
         
         const org = await getOrganization(orgName);
@@ -282,11 +294,14 @@ ${objectsList}
 ${objectsList}
         `.trim();
         
+        // Сохраняем orgName для обработчиков редактирования/удаления
+        ctx.state.userStates[userId].adminSelectedOrgName = orgName;
+        
         const message = await ctx.reply(orgText, {
             parse_mode: 'Markdown',
             reply_markup: Markup.inlineKeyboard([
-                [Markup.button.callback('✏️ Редактировать', `admin_org_edit_${encodeURIComponent(orgName)}`)],
-                [Markup.button.callback('🗑 Удалить', `admin_org_delete_${encodeURIComponent(orgName)}`)],
+                [Markup.button.callback('✏️ Редактировать', 'admin_org_edit')],
+                [Markup.button.callback('🗑 Удалить', 'admin_org_delete')],
                 [Markup.button.callback('↩️ Назад', 'admin_organizations')]
             ]).reply_markup
         });
@@ -302,8 +317,9 @@ ${objectsList}
         if (userId !== ADMIN_ID) return;
         await clearPreviousMessages(ctx, userId);
         const positions = await getAllPositions();
-        const buttons = positions.map(pos => [
-            Markup.button.callback(pos.name, `admin_pos_view_${encodeURIComponent(pos.name)}`)
+        ctx.state.userStates[userId].adminPositionsList = positions.map(pos => pos.name);
+        const buttons = positions.map((pos, index) => [
+            Markup.button.callback(pos.name, `admin_pos_view_${index}`)
         ]);
         buttons.push([Markup.button.callback('➕ Добавить должность', 'admin_pos_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
@@ -321,6 +337,51 @@ ${objectsList}
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
+    
+    bot.action(/admin_pos_view_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const posIndex = parseInt(ctx.match[1], 10);
+        const posNames = ctx.state.userStates[userId].adminPositionsList;
+        if (!posNames || !posNames[posIndex]) {
+            await ctx.reply('Должность не найдена.');
+            await showPositionsList(ctx);
+            return;
+        }
+        const posName = posNames[posIndex];
+        ctx.state.userStates[userId].adminSelectedPosName = posName;
+        
+        const usersWithPos = await getUsersByPosition(posName);
+        await clearPreviousMessages(ctx, userId);
+        const posText = `💼 **${posName}**\n\n👥 Используется пользователями: ${usersWithPos.length}`;
+        const message = await ctx.reply(posText, {
+            parse_mode: 'Markdown',
+            reply_markup: Markup.inlineKeyboard([
+                [Markup.button.callback('🗑 Удалить', 'admin_pos_delete')],
+                [Markup.button.callback('↩️ Назад', 'admin_positions')]
+            ]).reply_markup
+        });
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_pos_delete', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const posName = ctx.state.userStates[userId].adminSelectedPosName;
+        if (!posName) {
+            await ctx.reply('Ошибка: должность не выбрана.');
+            return;
+        }
+        const usersWithPos = await getUsersByPosition(posName);
+        if (usersWithPos.length > 0) {
+            await ctx.reply(`⚠️ Невозможно удалить должность "${posName}". Она используется ${usersWithPos.length} пользователем(ями).`);
+            return;
+        }
+        await deletePosition(posName);
+        clearConfigCache();
+        await ctx.reply(`✅ Должность "${posName}" удалена.`);
+        await showPositionsList(ctx);
+    });
 
     // ========== УПРАВЛЕНИЕ ОБЪЕКТАМИ ==========
     async function showObjectsList(ctx) {
@@ -328,8 +389,9 @@ ${objectsList}
         if (userId !== ADMIN_ID) return;
         await clearPreviousMessages(ctx, userId);
         const objects = await getAllObjects();
-        const buttons = objects.map(obj => [
-            Markup.button.callback(obj.name, `admin_obj_view_${encodeURIComponent(obj.name)}`)
+        ctx.state.userStates[userId].adminObjectsList = objects.map(obj => obj.name);
+        const buttons = objects.map((obj, index) => [
+            Markup.button.callback(obj.name, `admin_obj_view_${index}`)
         ]);
         buttons.push([Markup.button.callback('➕ Добавить объект', 'admin_obj_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
@@ -346,6 +408,55 @@ ${objectsList}
             [Markup.button.callback('↩️ Отмена', 'admin_objects')]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action(/admin_obj_view_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const objIndex = parseInt(ctx.match[1], 10);
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        if (!objNames || !objNames[objIndex]) {
+            await ctx.reply('Объект не найден.');
+            await showObjectsList(ctx);
+            return;
+        }
+        const objName = objNames[objIndex];
+        ctx.state.userStates[userId].adminSelectedObjName = objName;
+        
+        const obj = await getObject(objName);
+        const usersWithObj = await getUsersByObject(objName);
+        const reportsWithObj = await getReportsByObject(objName);
+        await clearPreviousMessages(ctx, userId);
+        const objText = `🏗 **${obj.name}**\n\n📱 ID группы: ${obj.telegramGroupId || 'Не указан'}\n👥 Используется пользователями: ${usersWithObj.length}\n📄 Отчетов: ${reportsWithObj.length}`;
+        const message = await ctx.reply(objText, {
+            parse_mode: 'Markdown',
+            reply_markup: Markup.inlineKeyboard([
+                [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
+                [Markup.button.callback('↩️ Назад', 'admin_objects')]
+            ]).reply_markup
+        });
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_obj_delete', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const objName = ctx.state.userStates[userId].adminSelectedObjName;
+        if (!objName) {
+            await ctx.reply('Ошибка: объект не выбран.');
+            return;
+        }
+        const usersWithObj = await getUsersByObject(objName);
+        const reportsWithObj = await getReportsByObject(objName);
+        if (usersWithObj.length > 0 || reportsWithObj.length > 0) {
+            await ctx.reply(`⚠️ Невозможно удалить объект "${objName}". Используется ${usersWithObj.length} пользователем(ями) и имеет ${reportsWithObj.length} отчетов.`);
+            return;
+        }
+        await removeOrganizationFromObject(objName);
+        await deleteObject(objName);
+        clearConfigCache();
+        await ctx.reply(`✅ Объект "${objName}" удален.`);
+        await showObjectsList(ctx);
     });
 
     // ========== НАСТРОЙКИ УВЕДОМЛЕНИЙ ==========
