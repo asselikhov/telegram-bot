@@ -355,6 +355,200 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 }
                 break;
                 
+            // ========== АДМИН-ПАНЕЛЬ: РЕДАКТИРОВАНИЕ ПОЛЬЗОВАТЕЛЕЙ ==========
+            case 'admin_user_edit_fullname':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const targetUserId = state.adminSelectedUserId;
+                    if (!targetUserId) {
+                        await ctx.reply('Ошибка: пользователь не выбран.');
+                        state.step = null;
+                        break;
+                    }
+                    const fullName = ctx.message.text.trim();
+                    if (!fullName) {
+                        const msg = await ctx.reply('ФИО не может быть пустым. Введите снова:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    const users = await loadUsers();
+                    if (users[targetUserId]) {
+                        const oldValue = users[targetUserId].fullName;
+                        users[targetUserId].fullName = fullName;
+                        await saveUser(targetUserId, users[targetUserId]);
+                        
+                        // Логируем изменение
+                        const { logUserChange } = require('../../database/auditLogModel');
+                        await logUserChange(targetUserId, userId, 'update', 'fullName', oldValue, fullName);
+                        
+                        state.step = null;
+                        await ctx.reply(`ФИО изменено на "${fullName}".`);
+                        const adminModule = require('./admin');
+                        if (adminModule.showUserDetails) {
+                            const returnPage = state.adminUsersReturnPage || 0;
+                            await adminModule.showUserDetails(ctx, targetUserId, returnPage);
+                        }
+                    }
+                } catch (error) {
+                    await ctx.reply('Ошибка при изменении ФИО: ' + error.message);
+                }
+                break;
+                
+            case 'admin_user_edit_phone':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const targetUserId = state.adminSelectedUserId;
+                    if (!targetUserId) {
+                        await ctx.reply('Ошибка: пользователь не выбран.');
+                        state.step = null;
+                        break;
+                    }
+                    const phone = ctx.message.text.trim();
+                    const users = await loadUsers();
+                    if (users[targetUserId]) {
+                        const oldValue = users[targetUserId].phone;
+                        users[targetUserId].phone = phone;
+                        await saveUser(targetUserId, users[targetUserId]);
+                        
+                        // Логируем изменение
+                        const { logUserChange } = require('../../database/auditLogModel');
+                        await logUserChange(targetUserId, userId, 'update', 'phone', oldValue, phone);
+                        
+                        state.step = null;
+                        await ctx.reply(`Телефон изменен на "${phone}".`);
+                        const adminModule = require('./admin');
+                        if (adminModule.showUserDetails) {
+                            const returnPage = state.adminUsersReturnPage || 0;
+                            await adminModule.showUserDetails(ctx, targetUserId, returnPage);
+                        }
+                    }
+                } catch (error) {
+                    await ctx.reply('Ошибка при изменении телефона: ' + error.message);
+                }
+                break;
+                
+            // ========== АДМИН-ПАНЕЛЬ: ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЕЙ ==========
+            case 'admin_user_add_telegramid':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const telegramId = ctx.message.text.trim();
+                    if (!telegramId || !/^\d+$/.test(telegramId)) {
+                        const msg = await ctx.reply('Неверный формат Telegram ID. Введите числовой ID (например, 123456789):');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    
+                    // Проверяем, существует ли уже пользователь
+                    const users = await loadUsers();
+                    if (users[telegramId]) {
+                        const msg = await ctx.reply('Пользователь с таким Telegram ID уже существует. Введите другой ID:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    
+                    if (!state.adminNewUser) {
+                        state.adminNewUser = {};
+                    }
+                    state.adminNewUser.telegramId = telegramId;
+                    state.step = 'admin_user_add_fullname';
+                    const msg = await ctx.reply('Введите ФИО нового пользователя:', Markup.inlineKeyboard([
+                        [Markup.button.callback('↩️ Отмена', 'admin_users')]
+                    ]));
+                    state.messageIds.push(msg.message_id);
+                } catch (error) {
+                    await ctx.reply('Ошибка: ' + error.message);
+                }
+                break;
+                
+            case 'admin_user_add_fullname':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const fullName = ctx.message.text.trim();
+                    if (!fullName) {
+                        const msg = await ctx.reply('ФИО не может быть пустым. Введите снова:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    state.adminNewUser.fullName = fullName;
+                    // Выбор должности происходит через кнопки (admin_user_add_set_position)
+                    // Показываем список должностей для выбора
+                    const positions = await require('../../database/configService').getPositions();
+                    const { Markup } = require('telegraf');
+                    const buttons = positions.map((pos, index) => [
+                        Markup.button.callback(pos.name, `admin_user_add_set_position_${index}`)
+                    ]);
+                    buttons.push([Markup.button.callback('↩️ Отмена', 'admin_users')]);
+                    state.adminAddPositions = positions.map(pos => pos.name);
+                    const msg = await ctx.reply('Выберите должность:', Markup.inlineKeyboard(buttons));
+                    state.messageIds.push(msg.message_id);
+                    state.step = null; // Сбрасываем step, так как дальше работаем через кнопки
+                } catch (error) {
+                    await ctx.reply('Ошибка: ' + error.message);
+                }
+                break;
+                
+            case 'admin_user_add_phone':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    let phone = ctx.message.text.trim();
+                    if (phone === '/skip') {
+                        phone = '';
+                    }
+                    if (!state.adminNewUser) {
+                        await ctx.reply('Ошибка: данные пользователя не найдены.');
+                        state.step = null;
+                        break;
+                    }
+                    state.adminNewUser.phone = phone;
+                    
+                    // Создаем пользователя
+                    const newUser = {
+                        fullName: state.adminNewUser.fullName,
+                        position: state.adminNewUser.position,
+                        organization: state.adminNewUser.organization,
+                        selectedObjects: state.adminNewUser.selectedObjects || [],
+                        status: 'В работе',
+                        isApproved: 1, // Автоматически одобряем пользователя, добавленного админом
+                        nextReportId: 1,
+                        reports: {},
+                        phone: phone || ''
+                    };
+                    
+                    await saveUser(state.adminNewUser.telegramId, newUser);
+                    state.step = null;
+                    delete state.adminNewUser;
+                    await ctx.reply(`✅ Пользователь "${newUser.fullName}" успешно добавлен.`);
+                    
+                    // Возвращаемся к списку пользователей
+                    const adminModule = require('./admin');
+                    if (adminModule.showUsersList) {
+                        await adminModule.showUsersList(ctx, {}, 0);
+                    }
+                } catch (error) {
+                    await ctx.reply('Ошибка при создании пользователя: ' + error.message);
+                }
+                break;
+                
+            // ========== АДМИН-ПАНЕЛЬ: ПОИСК ПОЛЬЗОВАТЕЛЕЙ ==========
+            case 'admin_users_search_input':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const searchQuery = ctx.message.text.trim();
+                    const filters = ctx.state.userStates[userId].adminUserFilters || {};
+                    filters.search = searchQuery;
+                    ctx.state.userStates[userId].adminUserFilters = filters;
+                    ctx.state.userStates[userId].adminUserSearch = searchQuery;
+                    state.step = null;
+                    await ctx.reply(`Поиск: "${searchQuery}"`);
+                    const adminModule = require('./admin');
+                    if (adminModule.showUsersList) {
+                        await adminModule.showUsersList(ctx, filters, 0);
+                    }
+                } catch (error) {
+                    await ctx.reply('Ошибка при поиске: ' + error.message);
+                }
+                break;
+                
             default:
                 break;
         }
