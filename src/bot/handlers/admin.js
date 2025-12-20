@@ -237,9 +237,16 @@ ${objectsList}
         // Сохраняем список организаций в state для использования в обработчике
         ctx.state.userStates[userId].adminOrganizationsList = organizations.map(org => org.name);
         
-        const buttons = organizations.map((org, index) => [
-            Markup.button.callback(org.name, `admin_org_view_${index}`)
-        ]);
+        const buttons = organizations.map((org, index) => {
+            // Обрезаем текст кнопки до 64 символов (лимит Telegram)
+            const buttonText = org.name.length > 64 ? org.name.substring(0, 61) + '...' : org.name;
+            // Используем короткий callback_data (лимит 64 байта)
+            const callbackData = `org_${index}`;
+            if (callbackData.length > 64) {
+                console.error(`Callback data too long: ${callbackData}`);
+            }
+            return [Markup.button.callback(buttonText, callbackData)];
+        });
         buttons.push([Markup.button.callback('➕ Добавить организацию', 'admin_org_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
         
@@ -260,7 +267,7 @@ ${objectsList}
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
-    bot.action(/admin_org_view_(\d+)/, async (ctx) => {
+    bot.action(/^org_(\d+)$/, async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         
@@ -318,9 +325,16 @@ ${objectsList}
         await clearPreviousMessages(ctx, userId);
         const positions = await getAllPositions();
         ctx.state.userStates[userId].adminPositionsList = positions.map(pos => pos.name);
-        const buttons = positions.map((pos, index) => [
-            Markup.button.callback(pos.name, `admin_pos_view_${index}`)
-        ]);
+        const buttons = positions.map((pos, index) => {
+            // Обрезаем текст кнопки до 64 символов (лимит Telegram)
+            const buttonText = pos.name.length > 64 ? pos.name.substring(0, 61) + '...' : pos.name;
+            // Используем короткий callback_data (лимит 64 байта)
+            const callbackData = `pos_${index}`;
+            if (callbackData.length > 64) {
+                console.error(`Callback data too long: ${callbackData}`);
+            }
+            return [Markup.button.callback(buttonText, callbackData)];
+        });
         buttons.push([Markup.button.callback('➕ Добавить должность', 'admin_pos_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
         const message = await ctx.reply('💼 Управление должностями\nВыберите должность:', Markup.inlineKeyboard(buttons));
@@ -338,7 +352,7 @@ ${objectsList}
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
     
-    bot.action(/admin_pos_view_(\d+)/, async (ctx) => {
+    bot.action(/^pos_(\d+)$/, async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         const posIndex = parseInt(ctx.match[1], 10);
@@ -390,9 +404,16 @@ ${objectsList}
         await clearPreviousMessages(ctx, userId);
         const objects = await getAllObjects();
         ctx.state.userStates[userId].adminObjectsList = objects.map(obj => obj.name);
-        const buttons = objects.map((obj, index) => [
-            Markup.button.callback(obj.name, `admin_obj_view_${index}`)
-        ]);
+        const buttons = objects.map((obj, index) => {
+            // Обрезаем текст кнопки до 64 символов (лимит Telegram)
+            const buttonText = obj.name.length > 64 ? obj.name.substring(0, 61) + '...' : obj.name;
+            // Используем короткий callback_data (лимит 64 байта)
+            const callbackData = `obj_${index}`;
+            if (callbackData.length > 64) {
+                console.error(`Callback data too long: ${callbackData}`);
+            }
+            return [Markup.button.callback(buttonText, callbackData)];
+        });
         buttons.push([Markup.button.callback('➕ Добавить объект', 'admin_obj_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
         const message = await ctx.reply('🏗 Управление объектами\nВыберите объект:', Markup.inlineKeyboard(buttons));
@@ -410,7 +431,7 @@ ${objectsList}
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
     
-    bot.action(/admin_obj_view_(\d+)/, async (ctx) => {
+    bot.action(/^obj_(\d+)$/, async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         const objIndex = parseInt(ctx.match[1], 10);
