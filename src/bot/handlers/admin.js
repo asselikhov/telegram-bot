@@ -677,4 +677,28 @@ ${settings.messageTemplate}
             [Markup.button.callback('↩️ Назад', 'admin_notifications')]
         ]));
     });
+    
+    // Экспортируем функции для использования в других модулях
+    exportedFunctions.showOrganizationsList = showOrganizationsList;
+    exportedFunctions.showPositionsList = showPositionsList;
+    exportedFunctions.showObjectsList = showObjectsList;
 };
+
+// Экспортируем функции для использования в других модулях
+Object.assign(module.exports, {
+    showOrganizationsList: (ctx) => {
+        if (exportedFunctions.showOrganizationsList) {
+            return exportedFunctions.showOrganizationsList(ctx);
+        }
+    },
+    showPositionsList: (ctx) => {
+        if (exportedFunctions.showPositionsList) {
+            return exportedFunctions.showPositionsList(ctx);
+        }
+    },
+    showObjectsList: (ctx) => {
+        if (exportedFunctions.showObjectsList) {
+            return exportedFunctions.showObjectsList(ctx);
+        }
+    }
+});
