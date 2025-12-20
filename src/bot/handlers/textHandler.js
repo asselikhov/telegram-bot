@@ -7,6 +7,24 @@ const { showObjectSelection } = require('../actions/objects');
 const { showProfile, showMainMenu } = require('./menu');
 const { saveReport, loadUserReports } = require('../../database/reportModel');
 const { ADMIN_ID } = require('../../config/config');
+const {
+    createOrganization, updateOrganization, organizationExists
+} = require('../../database/organizationModel');
+const {
+    createPosition, updatePosition, positionExists
+} = require('../../database/positionModel');
+const {
+    createObject, updateObject, objectExists
+} = require('../../database/objectModel');
+const {
+    clearConfigCache, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap
+} = require('../../database/configService');
+const {
+    updateNotificationSettings
+} = require('../../database/notificationSettingsModel');
+const {
+    validateTimeFormat
+} = require('../utils/notificationHelper');
 
 const mediaGroups = new Map();
 
@@ -226,8 +244,8 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     clearConfigCache();
                     state.step = null;
                     await ctx.reply(`Организация "${orgName}" создана.`);
-                    const { showAdminPanel } = require('./admin');
-                    await showAdminPanel(ctx);
+                    const { showOrganizationsList } = require('./admin');
+                    await showOrganizationsList(ctx);
                 } catch (error) {
                     if (error.code === 11000) {
                         await ctx.reply('Организация с таким названием уже существует.');

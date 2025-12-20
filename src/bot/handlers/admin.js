@@ -120,6 +120,9 @@ async function getReportsByObject(objectName) {
     return Object.values(allReports).filter(report => report.objectName === objectName);
 }
 
+// Экспортируем функции для использования в других модулях
+const exportedFunctions = {};
+
 module.exports = (bot) => {
     bot.action('admin_panel', showAdminPanel);
     bot.action('view_applications', showApplications);
@@ -218,7 +221,7 @@ ${objectsList}
 
     // ========== УПРАВЛЕНИЕ ОРГАНИЗАЦИЯМИ ==========
     
-    async function showOrganizationsList(ctx) {
+    const showOrganizationsList = async function showOrganizationsList(ctx) {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         
@@ -313,11 +316,35 @@ ${objectsList}
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
-    // Обработчики удаления и редактирования организаций будут добавлены через textHandler
-    // Базовые обработчики для должностей, объектов и уведомлений добавлены ниже
+    // Обработчики удаления и редактирования организаций
+    bot.action('admin_org_delete', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const orgName = ctx.state.userStates[userId].adminSelectedOrgName;
+        if (!orgName) {
+            await ctx.reply('Ошибка: организация не выбрана.');
+            return;
+        }
+        
+        // Проверяем использование организации
+        const usersWithOrg = await getUsersByOrganization(orgName);
+        if (usersWithOrg.length > 0) {
+            await ctx.reply(`⚠️ Невозможно удалить организацию "${orgName}". Она используется ${usersWithOrg.length} пользователем(ями).`);
+            return;
+        }
+        
+        // Удаляем связи организации с объектами
+        await removeAllObjectsFromOrganization(orgName);
+        // Удаляем организацию
+        await deleteOrganization(orgName);
+        clearConfigCache();
+        
+        await ctx.reply(`✅ Организация "${orgName}" удалена.`);
+        await showOrganizationsList(ctx);
+    });
     
     // ========== УПРАВЛЕНИЕ ДОЛЖНОСТЯМИ ==========
-    async function showPositionsList(ctx) {
+    const showPositionsList = async function showPositionsList(ctx) {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         await clearPreviousMessages(ctx, userId);
@@ -393,7 +420,7 @@ ${objectsList}
     });
 
     // ========== УПРАВЛЕНИЕ ОБЪЕКТАМИ ==========
-    async function showObjectsList(ctx) {
+    const showObjectsList = async function showObjectsList(ctx) {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         await clearPreviousMessages(ctx, userId);
@@ -461,14 +488,97 @@ ${objectsList}
         }
         const usersWithObj = await getUsersByObject(objName);
         const reportsWithObj = await getReportsByObject(objName);
-        if (usersWithObj.length > 0 || reportsWithObj.length > 0) {
-            await ctx.reply(`⚠️ Невозможно удалить объект "${objName}". Используется ${usersWithObj.length} пользователем(ями) и имеет ${reportsWithObj.length} отчетов.`);
+        
+        if (reportsWithObj.length > 0) {
+            await ctx.reply(`⚠️ Невозможно удалить объект "${objName}". Объект имеет ${reportsWithObj.length} отчетов.`);
             return;
         }
+        
+        if (usersWithObj.length > 0) {
+            // Предлагаем миграцию пользователей
+            const users = await loadUsers();
+            const userOrgs = [...new Set(usersWithObj.map(([uid, _]) => users[uid]?.organization).filter(Boolean))];
+            const allOrgs = await getAllOrganizations();
+            const orgNames = allOrgs.map(org => org.name);
+            
+            // Сохраняем информацию для миграции
+            ctx.state.userStates[userId].objDeleteContext = {
+                objName,
+                usersToMigrate: usersWithObj.map(([uid, _]) => uid),
+                userOrgs
+            };
+            
+            // Получаем доступные объекты для миграции (все объекты кроме удаляемого)
+            const allObjects = await getAllObjects();
+            const availableObjects = allObjects.filter(obj => obj.name !== objName).map(obj => obj.name);
+            
+            if (availableObjects.length === 0) {
+                await ctx.reply(`⚠️ Невозможно удалить объект "${objName}". Используется ${usersWithObj.length} пользователем(ями), но нет других объектов для миграции.`);
+                return;
+            }
+            
+            // Предлагаем выбрать объект для миграции
+            ctx.state.userStates[userId].availableObjectsForMigration = availableObjects;
+            const allObjects = await getAllObjects();
+            const currentObjIndex = allObjects.findIndex(o => o.name === objName);
+            const buttons = availableObjects.slice(0, 10).map((obj, index) => [
+                Markup.button.callback(obj, `admin_obj_migrate_${index}`)
+            ]);
+            buttons.push([Markup.button.callback('↩️ Отмена', `obj_${currentObjIndex}`)]);
+            
+            await ctx.reply(
+                `⚠️ Объект "${objName}" используется ${usersWithObj.length} пользователем(ями).\n\nВыберите объект для миграции пользователей:`,
+                Markup.inlineKeyboard(buttons)
+            );
+            return;
+        }
+        
+        // Если нет пользователей и отчетов, удаляем объект
         await removeOrganizationFromObject(objName);
         await deleteObject(objName);
         clearConfigCache();
         await ctx.reply(`✅ Объект "${objName}" удален.`);
+        await showObjectsList(ctx);
+    });
+    
+    bot.action(/admin_obj_migrate_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const objIndex = parseInt(ctx.match[1], 10);
+        const context = ctx.state.userStates[userId].objDeleteContext;
+        const availableObjects = ctx.state.userStates[userId].availableObjectsForMigration;
+        
+        if (!context || !availableObjects || !availableObjects[objIndex]) {
+            await ctx.reply('Ошибка: контекст миграции не найден.');
+            return;
+        }
+        
+        const targetObject = availableObjects[objIndex];
+        const users = await loadUsers();
+        
+        // Мигрируем пользователей
+        for (const uid of context.usersToMigrate) {
+            if (users[uid] && Array.isArray(users[uid].selectedObjects)) {
+                // Удаляем старый объект из списка пользователя
+                users[uid].selectedObjects = users[uid].selectedObjects.filter(obj => obj !== context.objName);
+                // Добавляем новый объект, если его еще нет
+                if (!users[uid].selectedObjects.includes(targetObject)) {
+                    users[uid].selectedObjects.push(targetObject);
+                }
+                await saveUser(uid, users[uid]);
+            }
+        }
+        
+        // Удаляем объект
+        await removeOrganizationFromObject(context.objName);
+        await deleteObject(context.objName);
+        clearConfigCache();
+        
+        // Очищаем контекст
+        delete ctx.state.userStates[userId].objDeleteContext;
+        delete ctx.state.userStates[userId].availableObjectsForMigration;
+        
+        await ctx.reply(`✅ Объект "${context.objName}" удален. Пользователи мигрированы на "${targetObject}".`);
         await showObjectsList(ctx);
     });
 
