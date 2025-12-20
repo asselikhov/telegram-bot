@@ -239,13 +239,23 @@ ${objectsList}
         
         const buttons = organizations.map((org, index) => {
             // Обрезаем текст кнопки до 64 символов (лимит Telegram)
-            const buttonText = org.name.length > 64 ? org.name.substring(0, 61) + '...' : org.name;
+            let buttonText = org.name || `Организация ${index + 1}`;
+            if (buttonText.length > 64) {
+                buttonText = buttonText.substring(0, 61) + '...';
+            }
             // Используем короткий callback_data (лимит 64 байта)
             const callbackData = `org_${index}`;
-            if (callbackData.length > 64) {
-                console.error(`Callback data too long: ${callbackData}`);
+            // Проверяем, что callback_data не превышает лимит
+            if (Buffer.byteLength(callbackData, 'utf8') > 64) {
+                console.error(`Callback data too long: ${callbackData} (${Buffer.byteLength(callbackData, 'utf8')} bytes)`);
+                throw new Error(`Callback data exceeds 64 bytes: ${callbackData}`);
             }
-            return [Markup.button.callback(buttonText, callbackData)];
+            try {
+                return [Markup.button.callback(buttonText, callbackData)];
+            } catch (error) {
+                console.error(`Error creating button for org ${index}: ${org.name}`, error);
+                throw error;
+            }
         });
         buttons.push([Markup.button.callback('➕ Добавить организацию', 'admin_org_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
@@ -327,13 +337,23 @@ ${objectsList}
         ctx.state.userStates[userId].adminPositionsList = positions.map(pos => pos.name);
         const buttons = positions.map((pos, index) => {
             // Обрезаем текст кнопки до 64 символов (лимит Telegram)
-            const buttonText = pos.name.length > 64 ? pos.name.substring(0, 61) + '...' : pos.name;
+            let buttonText = pos.name || `Должность ${index + 1}`;
+            if (buttonText.length > 64) {
+                buttonText = buttonText.substring(0, 61) + '...';
+            }
             // Используем короткий callback_data (лимит 64 байта)
             const callbackData = `pos_${index}`;
-            if (callbackData.length > 64) {
-                console.error(`Callback data too long: ${callbackData}`);
+            // Проверяем, что callback_data не превышает лимит
+            if (Buffer.byteLength(callbackData, 'utf8') > 64) {
+                console.error(`Callback data too long: ${callbackData} (${Buffer.byteLength(callbackData, 'utf8')} bytes)`);
+                throw new Error(`Callback data exceeds 64 bytes: ${callbackData}`);
             }
-            return [Markup.button.callback(buttonText, callbackData)];
+            try {
+                return [Markup.button.callback(buttonText, callbackData)];
+            } catch (error) {
+                console.error(`Error creating button for pos ${index}: ${pos.name}`, error);
+                throw error;
+            }
         });
         buttons.push([Markup.button.callback('➕ Добавить должность', 'admin_pos_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
@@ -406,13 +426,23 @@ ${objectsList}
         ctx.state.userStates[userId].adminObjectsList = objects.map(obj => obj.name);
         const buttons = objects.map((obj, index) => {
             // Обрезаем текст кнопки до 64 символов (лимит Telegram)
-            const buttonText = obj.name.length > 64 ? obj.name.substring(0, 61) + '...' : obj.name;
+            let buttonText = obj.name || `Объект ${index + 1}`;
+            if (buttonText.length > 64) {
+                buttonText = buttonText.substring(0, 61) + '...';
+            }
             // Используем короткий callback_data (лимит 64 байта)
             const callbackData = `obj_${index}`;
-            if (callbackData.length > 64) {
-                console.error(`Callback data too long: ${callbackData}`);
+            // Проверяем, что callback_data не превышает лимит
+            if (Buffer.byteLength(callbackData, 'utf8') > 64) {
+                console.error(`Callback data too long: ${callbackData} (${Buffer.byteLength(callbackData, 'utf8')} bytes)`);
+                throw new Error(`Callback data exceeds 64 bytes: ${callbackData}`);
             }
-            return [Markup.button.callback(buttonText, callbackData)];
+            try {
+                return [Markup.button.callback(buttonText, callbackData)];
+            } catch (error) {
+                console.error(`Error creating button for obj ${index}: ${obj.name}`, error);
+                throw error;
+            }
         });
         buttons.push([Markup.button.callback('➕ Добавить объект', 'admin_obj_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
