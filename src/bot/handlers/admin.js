@@ -522,7 +522,6 @@ ${objectsList}
             
             // Предлагаем выбрать объект для миграции
             ctx.state.userStates[userId].availableObjectsForMigration = availableObjects;
-            const allObjects = await getAllObjects();
             const currentObjIndex = allObjects.findIndex(o => o.name === objName);
             const buttons = availableObjects.slice(0, 10).map((obj, index) => [
                 Markup.button.callback(obj, `admin_obj_migrate_${index}`)
