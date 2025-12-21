@@ -3033,7 +3033,6 @@ ${objectsList}
     
     // Экспортируем функции для использования в других модулях
     exportedFunctions.showOrganizationsList = showOrganizationsList;
-    exportedFunctions.showPositionsList = showPositionsList;
     exportedFunctions.showObjectsList = showObjectsList;
     exportedFunctions.showUsersList = showUsersList;
     exportedFunctions.showUserDetails = showUserDetails;
@@ -3044,11 +3043,6 @@ Object.assign(module.exports, {
     showOrganizationsList: (ctx) => {
         if (exportedFunctions.showOrganizationsList) {
             return exportedFunctions.showOrganizationsList(ctx);
-        }
-    },
-    showPositionsList: (ctx) => {
-        if (exportedFunctions.showPositionsList) {
-            return exportedFunctions.showPositionsList(ctx);
         }
     },
     showObjectsList: (ctx) => {
