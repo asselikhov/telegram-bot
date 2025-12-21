@@ -11,14 +11,23 @@ async function getDb() {
 
 async function ensureIndexes() {
     const collection = (await getDb()).collection('positions');
-    await collection.createIndex({ name: 1 }, { unique: true });
+    // Составной индекс для уникальности должности в пределах организации
+    await collection.createIndex({ organization: 1, name: 1 }, { unique: true });
+    // Старый индекс для обратной совместимости (будет удален при миграции)
+    try {
+        await collection.createIndex({ name: 1 }, { unique: false });
+    } catch (e) {
+        // Индекс может уже существовать, игнорируем ошибку
+    }
 }
 
-async function getAllPositions() {
+async function getAllPositions(organization) {
     await ensureIndexes();
     const collection = (await getDb()).collection('positions');
-    const positions = await collection.find({}).sort({ name: 1 }).toArray();
+    const query = organization ? { organization } : {};
+    const positions = await collection.find(query).sort({ name: 1 }).toArray();
     return positions.map(pos => ({
+        organization: pos.organization || null,
         name: pos.name,
         isAdmin: pos.isAdmin || false,
         createdAt: pos.createdAt,
@@ -26,11 +35,25 @@ async function getAllPositions() {
     }));
 }
 
-async function getPosition(name) {
+async function getAllPositionsGlobally() {
+    await ensureIndexes();
     const collection = (await getDb()).collection('positions');
-    const pos = await collection.findOne({ name });
+    const positions = await collection.find({}).sort({ organization: 1, name: 1 }).toArray();
+    return positions.map(pos => ({
+        organization: pos.organization || null,
+        name: pos.name,
+        isAdmin: pos.isAdmin || false,
+        createdAt: pos.createdAt,
+        updatedAt: pos.updatedAt
+    }));
+}
+
+async function getPosition(organization, name) {
+    const collection = (await getDb()).collection('positions');
+    const pos = await collection.findOne({ organization, name });
     if (!pos) return null;
     return {
+        organization: pos.organization || null,
         name: pos.name,
         isAdmin: pos.isAdmin || false,
         createdAt: pos.createdAt,
@@ -43,6 +66,7 @@ async function createPosition(positionData) {
     const collection = (await getDb()).collection('positions');
     const now = new Date();
     const pos = {
+        organization: positionData.organization || null,
         name: positionData.name,
         isAdmin: positionData.isAdmin || false,
         createdAt: now,
@@ -52,33 +76,34 @@ async function createPosition(positionData) {
     return pos;
 }
 
-async function updatePosition(name, updateData) {
+async function updatePosition(organization, name, updateData) {
     const collection = (await getDb()).collection('positions');
     const update = {
         ...updateData,
         updatedAt: new Date()
     };
     const result = await collection.findOneAndUpdate(
-        { name },
+        { organization, name },
         { $set: update },
         { returnDocument: 'after' }
     );
     return result.value;
 }
 
-async function deletePosition(name) {
+async function deletePosition(organization, name) {
     const collection = (await getDb()).collection('positions');
-    await collection.deleteOne({ name });
+    await collection.deleteOne({ organization, name });
 }
 
-async function positionExists(name) {
+async function positionExists(organization, name) {
     const collection = (await getDb()).collection('positions');
-    const count = await collection.countDocuments({ name });
+    const count = await collection.countDocuments({ organization, name });
     return count > 0;
 }
 
 module.exports = {
     getAllPositions,
+    getAllPositionsGlobally,
     getPosition,
     createPosition,
     updatePosition,

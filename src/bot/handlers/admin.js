@@ -66,7 +66,6 @@ async function showAdminPanel(ctx) {
             [Markup.button.callback('👥 Управление пользователями', 'admin_users')],
             [Markup.button.callback('📈 Статистика', 'admin_statistics')],
             [Markup.button.callback('🏢 Управление организациями', 'admin_organizations')],
-            [Markup.button.callback('💼 Управление должностями', 'admin_positions')],
             [Markup.button.callback('🏗 Управление объектами', 'admin_objects')],
             [Markup.button.callback('🔔 Настройки уведомлений', 'admin_notifications')],
             [Markup.button.callback('↩️ Назад', 'main_menu')]
@@ -343,6 +342,7 @@ ${objectsList}
             [Markup.button.callback('✏️ Название', 'admin_org_edit_name')],
             [Markup.button.callback('📱 ID чата (Telegram)', 'admin_org_edit_chatid')],
             [Markup.button.callback('🏗 Объекты', 'admin_org_edit_objects')],
+            [Markup.button.callback('💼 Редактирование должностей', 'admin_org_edit_positions')],
             [Markup.button.callback('↩️ Назад', `org_${orgIndex}`)]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
@@ -622,49 +622,78 @@ ${objectsList}
         await showOrganizationsList(ctx);
     });
     
-    // ========== УПРАВЛЕНИЕ ДОЛЖНОСТЯМИ ==========
-    const showPositionsList = async function showPositionsList(ctx) {
+    // ========== УПРАВЛЕНИЕ ДОЛЖНОСТЯМИ ОРГАНИЗАЦИИ ==========
+    bot.action('admin_org_edit_positions', async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
+        
+        const orgName = ctx.state.userStates[userId].adminSelectedOrgName;
+        if (!orgName) {
+            await ctx.reply('Ошибка: организация не выбрана.');
+            return;
+        }
+        
         await clearPreviousMessages(ctx, userId);
-        const positions = await getAllPositions();
+        const positions = await getAllPositions(orgName);
         ctx.state.userStates[userId].adminPositionsList = positions.map(pos => pos.name);
+        ctx.state.userStates[userId].adminSelectedOrgName = orgName; // Сохраняем организацию для других обработчиков
+        
         const buttons = [];
         for (let index = 0; index < positions.length; index++) {
             const pos = positions[index];
             const buttonText = pos.name || `Должность ${index + 1}`;
-            const callbackData = `pos_${index}`;
+            const callbackData = `admin_org_pos_${index}`;
             buttons.push([Markup.button.callback(buttonText, callbackData)]);
         }
-        buttons.push([Markup.button.callback('➕ Добавить должность', 'admin_pos_add')]);
-        buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
-        const message = await ctx.reply('💼 Управление должностями\nВыберите должность:', Markup.inlineKeyboard(buttons));
+        buttons.push([Markup.button.callback('➕ Добавить должность', 'admin_org_pos_add')]);
+        buttons.push([Markup.button.callback('↩️ Назад', 'admin_org_edit')]);
+        const message = await ctx.reply(`💼 Редактирование должностей\nОрганизация: **${orgName}**\n\nВыберите должность:`, {
+            parse_mode: 'Markdown',
+            reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+        });
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-    }
-    bot.action('admin_positions', showPositionsList);
-    bot.action('admin_pos_add', async (ctx) => {
+    });
+    
+    bot.action('admin_org_pos_add', async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
+        
+        const orgName = ctx.state.userStates[userId].adminSelectedOrgName;
+        if (!orgName) {
+            await ctx.reply('Ошибка: организация не выбрана.');
+            return;
+        }
+        
         await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId].step = 'admin_pos_add_name';
+        ctx.state.userStates[userId].step = 'admin_org_pos_add_name';
         const message = await ctx.reply('Введите название новой должности:', Markup.inlineKeyboard([
-            [Markup.button.callback('↩️ Отмена', 'admin_positions')]
+            [Markup.button.callback('↩️ Отмена', 'admin_org_edit_positions')]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
     
-    bot.action(/^pos_(\d+)$/, async (ctx) => {
+    bot.action(/^admin_org_pos_(\d+)$/, async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
+        
+        const orgName = ctx.state.userStates[userId].adminSelectedOrgName;
+        if (!orgName) {
+            await ctx.reply('Ошибка: организация не выбрана.');
+            return;
+        }
+        
         const posIndex = parseInt(ctx.match[1], 10);
         const posNames = ctx.state.userStates[userId].adminPositionsList;
         if (!posNames || !posNames[posIndex]) {
             await ctx.reply('Должность не найдена.');
-            await showPositionsList(ctx);
+            await ctx.telegram.sendMessage(ctx.chat.id, 'Вернуться к должностям', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', 'admin_org_edit_positions')]
+            ]));
             return;
         }
         const posName = posNames[posIndex];
         ctx.state.userStates[userId].adminSelectedPosName = posName;
+        ctx.state.userStates[userId].adminSelectedOrgName = orgName;
         
         const usersWithPos = await getUsersByPosition(posName);
         await clearPreviousMessages(ctx, userId);
@@ -672,30 +701,37 @@ ${objectsList}
         const message = await ctx.reply(posText, {
             parse_mode: 'Markdown',
             reply_markup: Markup.inlineKeyboard([
-                [Markup.button.callback('🗑 Удалить', 'admin_pos_delete')],
-                [Markup.button.callback('↩️ Назад', 'admin_positions')]
+                [Markup.button.callback('🗑 Удалить', 'admin_org_pos_delete')],
+                [Markup.button.callback('↩️ Назад', 'admin_org_edit_positions')]
             ]).reply_markup
         });
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
     
-    bot.action('admin_pos_delete', async (ctx) => {
+    bot.action('admin_org_pos_delete', async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
+        
         const posName = ctx.state.userStates[userId].adminSelectedPosName;
-        if (!posName) {
-            await ctx.reply('Ошибка: должность не выбрана.');
+        const orgName = ctx.state.userStates[userId].adminSelectedOrgName;
+        if (!posName || !orgName) {
+            await ctx.reply('Ошибка: должность или организация не выбраны.');
             return;
         }
+        
         const usersWithPos = await getUsersByPosition(posName);
         if (usersWithPos.length > 0) {
             await ctx.reply(`⚠️ Невозможно удалить должность "${posName}". Она используется ${usersWithPos.length} пользователем(ями).`);
             return;
         }
-        await deletePosition(posName);
+        await deletePosition(orgName, posName);
         clearConfigCache();
         await ctx.reply(`✅ Должность "${posName}" удалена.`);
-        await showPositionsList(ctx);
+        
+        // Возвращаемся к списку должностей организации
+        await ctx.telegram.sendMessage(ctx.chat.id, 'Вернуться к должностям', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'admin_org_edit_positions')]
+        ]));
     });
 
     // ========== УПРАВЛЕНИЕ ОБЪЕКТАМИ ==========
@@ -2123,15 +2159,33 @@ ${objectsList}
             return;
         }
         
+        const users = await loadUsers();
+        const targetUser = users[targetUserId];
+        if (!targetUser) {
+            await ctx.reply('Ошибка: пользователь не найден.');
+            return;
+        }
+        
+        const userOrganization = targetUser.organization;
+        if (!userOrganization) {
+            await ctx.reply('У пользователя не указана организация. Сначала укажите организацию.');
+            return;
+        }
+        
         await clearPreviousMessages(ctx, userId);
-        const positions = await getAllPositions();
+        const positions = await getAllPositions(userOrganization);
+        if (positions.length === 0) {
+            await ctx.reply(`Для организации "${userOrganization}" не настроены должности. Сначала создайте должности для этой организации.`);
+            return;
+        }
+        
         const buttons = positions.map((pos, index) => [
             Markup.button.callback(pos.name, `admin_user_set_position_${index}`)
         ]);
         buttons.push([Markup.button.callback('↩️ Отмена', 'admin_user_back')]);
         
         ctx.state.userStates[userId].adminEditPositions = positions.map(pos => pos.name);
-        const message = await ctx.reply('Выберите новую должность:', Markup.inlineKeyboard(buttons));
+        const message = await ctx.reply(`Выберите новую должность (организация: ${userOrganization}):`, Markup.inlineKeyboard(buttons));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
     
@@ -2632,7 +2686,43 @@ ${objectsList}
         }
     });
     
-    // Обработчики для добавления пользователя (выбор должности и организации)
+    // Обработчики для добавления пользователя (выбор организации и должности)
+    bot.action(/admin_user_add_set_org_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const orgIndex = parseInt(ctx.match[1], 10);
+        const orgNames = ctx.state.userStates[userId].adminAddOrgs;
+        
+        if (!orgNames || !orgNames[orgIndex]) {
+            await ctx.reply('Организация не найдена.');
+            return;
+        }
+        
+        const orgName = orgNames[orgIndex];
+        if (!ctx.state.userStates[userId].adminNewUser) {
+            ctx.state.userStates[userId].adminNewUser = {};
+        }
+        ctx.state.userStates[userId].adminNewUser.organization = orgName;
+        
+        // Показываем должности организации
+        const positions = await getAllPositions(orgName);
+        if (positions.length === 0) {
+            await ctx.reply(`Для организации "${orgName}" не настроены должности. Сначала создайте должности для этой организации.`);
+            return;
+        }
+        
+        const buttons = positions.map((pos, index) => [
+            Markup.button.callback(pos.name, `admin_user_add_set_position_${index}`)
+        ]);
+        buttons.push([Markup.button.callback('↩️ Отмена', 'admin_users')]);
+        ctx.state.userStates[userId].adminAddPositions = positions.map(pos => pos.name);
+        
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply(`Выберите должность (организация: ${orgName}):`, Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
     bot.action(/admin_user_add_set_position_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
@@ -2650,39 +2740,10 @@ ${objectsList}
         }
         ctx.state.userStates[userId].adminNewUser.position = posNames[posIndex];
         
-        // Показываем список организаций для выбора
-        const organizations = await getAllOrganizations();
-        const buttons = organizations.map((org, index) => [
-            Markup.button.callback(org.name, `admin_user_add_set_org_${index}`)
-        ]);
-        buttons.push([Markup.button.callback('↩️ Отмена', 'admin_users')]);
-        ctx.state.userStates[userId].adminAddOrgs = organizations.map(org => org.name);
-        
-        await clearPreviousMessages(ctx, userId);
-        const message = await ctx.reply('Выберите организацию:', Markup.inlineKeyboard(buttons));
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
-    });
-    
-    bot.action(/admin_user_add_set_org_(\d+)/, async (ctx) => {
-        const userId = ctx.from.id.toString();
-        if (userId !== ADMIN_ID) return;
-        
-        const orgIndex = parseInt(ctx.match[1], 10);
-        const orgNames = ctx.state.userStates[userId].adminAddOrgs;
-        
-        if (!orgNames || !orgNames[orgIndex]) {
-            await ctx.reply('Организация не найдена.');
-            return;
-        }
-        
-        if (!ctx.state.userStates[userId].adminNewUser) {
-            ctx.state.userStates[userId].adminNewUser = {};
-        }
-        ctx.state.userStates[userId].adminNewUser.organization = orgNames[orgIndex];
-        
         // Показываем выбор объектов для организации
+        const orgName = ctx.state.userStates[userId].adminNewUser.organization;
         const { getOrganizationObjects } = require('../../database/configService');
-        const availableObjects = await getOrganizationObjects(orgNames[orgIndex]);
+        const availableObjects = await getOrganizationObjects(orgName);
         
         if (!availableObjects.length) {
             // Если объектов нет, пропускаем этот шаг

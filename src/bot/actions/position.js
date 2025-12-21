@@ -4,8 +4,11 @@ const { ADMIN_ID } = require('../../config/config');
 const { getPositions } = require('../../database/configService');
 const { clearPreviousMessages } = require('../utils');
 
-async function getPositionsList(userId) {
-    const positions = await getPositions();
+async function getPositionsList(userId, organization) {
+    if (!organization) {
+        return [];
+    }
+    const positions = await getPositions(organization);
     const positionNames = positions.map(p => p.name);
     if (userId === ADMIN_ID) positionNames.push('Админ');
     return positionNames;
@@ -14,7 +17,21 @@ async function getPositionsList(userId) {
 async function showPositionSelection(ctx, userId) {
     await clearPreviousMessages(ctx, userId);
 
-    const positions = await getPositionsList(userId);
+    const users = await loadUsers();
+    const user = users[userId] || {};
+    const organization = user.organization;
+    
+    if (!organization) {
+        await ctx.reply('Ошибка: у вас не указана организация. Обратитесь к администратору.');
+        return;
+    }
+
+    const positions = await getPositionsList(userId, organization);
+    if (positions.length === 0) {
+        await ctx.reply('Для вашей организации не настроены должности. Обратитесь к администратору.');
+        return;
+    }
+    
     const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_initial_position_${index}_${userId}`)]);
 
     const message = await ctx.reply('Выберите вашу должность:', Markup.inlineKeyboard(buttons));
@@ -25,13 +42,15 @@ module.exports = (bot) => {
     bot.action(/select_initial_position_(\d+)_(\d+)/, async (ctx) => {
         const positionIndex = parseInt(ctx.match[1], 10);
         const userId = ctx.match[2];
-        const positions = await getPositionsList(userId);
+        const users = await loadUsers();
+        const user = users[userId] || {};
+        const organization = user.organization;
+        const positions = await getPositionsList(userId, organization);
         const selectedPosition = positions[positionIndex];
         if (!selectedPosition) return;
 
         await clearPreviousMessages(ctx, userId);
 
-        const users = await loadUsers();
         users[userId].position = selectedPosition;
         await saveUser(userId, users[userId]);
 
@@ -43,7 +62,22 @@ module.exports = (bot) => {
     bot.action('edit_position', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
-        const positions = await getPositionsList(userId);
+        
+        const users = await loadUsers();
+        const user = users[userId] || {};
+        const organization = user.organization;
+        
+        if (!organization) {
+            await ctx.reply('Ошибка: у вас не указана организация. Обратитесь к администратору.');
+            return;
+        }
+        
+        const positions = await getPositionsList(userId, organization);
+        if (positions.length === 0) {
+            await ctx.reply('Для вашей организации не настроены должности. Обратитесь к администратору.');
+            return;
+        }
+        
         const buttons = positions.map((pos, index) => [Markup.button.callback(pos, `select_position_${index}`)]);
         buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
@@ -54,12 +88,14 @@ module.exports = (bot) => {
     bot.action(/select_position_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
         const positionIndex = parseInt(ctx.match[1], 10);
-        const positions = await getPositionsList(userId);
+        const users = await loadUsers();
+        const user = users[userId] || {};
+        const organization = user.organization;
+        const positions = await getPositionsList(userId, organization);
         const selectedPosition = positions[positionIndex];
         if (!selectedPosition) return;
 
         await clearPreviousMessages(ctx, userId);
-        const users = await loadUsers();
         users[userId].position = selectedPosition;
         await saveUser(userId, users[userId]);
         ctx.state.userStates[userId].step = null;

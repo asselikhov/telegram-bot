@@ -394,32 +394,62 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 }
                 break;
                 
-            case 'admin_pos_add_name':
+            case 'admin_org_pos_add_name':
+            case 'admin_pos_add_name': // Для обратной совместимости
                 if (userId !== ADMIN_ID) break;
                 try {
+                    const orgName = state.adminSelectedOrgName;
+                    if (!orgName) {
+                        await ctx.reply('Ошибка: организация не выбрана.');
+                        state.step = null;
+                        break;
+                    }
                     const posName = ctx.message.text.trim();
                     if (!posName) {
                         const msg = await ctx.reply('Название не может быть пустым. Введите снова:');
                         state.messageIds.push(msg.message_id);
                         return;
                     }
-                    await createPosition({ name: posName, isAdmin: false });
+                    await createPosition({ organization: orgName, name: posName, isAdmin: false });
                     clearConfigCache();
                     state.step = null;
-                    await ctx.reply(`Должность "${posName}" создана.`);
-                    // Имитируем нажатие кнопки для отображения списка должностей
-                    const adminModule = require('./admin');
-                    if (adminModule.showPositionsList) {
-                        await adminModule.showPositionsList(ctx);
-                    } else {
-                        await ctx.reply('Должность создана. Используйте кнопку "Управление должностями" для просмотра.');
+                    await ctx.reply(`Должность "${posName}" создана для организации "${orgName}".`);
+                    // Возвращаемся к списку должностей организации
+                    // Имитируем нажатие кнопки через отправку callback query
+                    try {
+                        await ctx.telegram.answerCallbackQuery('dummy');
+                        // Создаем фейковый update для вызова обработчика
+                        const { Markup } = require('telegraf');
+                        const { getAllPositions } = require('../../database/positionModel');
+                        await clearPreviousMessages(ctx, userId);
+                        const positions = await getAllPositions(orgName);
+                        state.adminPositionsList = positions.map(pos => pos.name);
+                        state.adminSelectedOrgName = orgName;
+                        
+                        const buttons = [];
+                        for (let index = 0; index < positions.length; index++) {
+                            const pos = positions[index];
+                            const buttonText = pos.name || `Должность ${index + 1}`;
+                            const callbackData = `admin_org_pos_${index}`;
+                            buttons.push([Markup.button.callback(buttonText, callbackData)]);
+                        }
+                        buttons.push([Markup.button.callback('➕ Добавить должность', 'admin_org_pos_add')]);
+                        buttons.push([Markup.button.callback('↩️ Назад', 'admin_org_edit')]);
+                        const message = await ctx.reply(`💼 Редактирование должностей\nОрганизация: **${orgName}**\n\nВыберите должность:`, {
+                            parse_mode: 'Markdown',
+                            reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+                        });
+                        state.messageIds.push(message.message_id);
+                    } catch (error) {
+                        await ctx.reply('Должность создана. Используйте кнопку "Редактирование должностей" для просмотра.');
                     }
                 } catch (error) {
                     if (error.code === 11000) {
-                        await ctx.reply('Должность с таким названием уже существует.');
+                        await ctx.reply('Должность с таким названием уже существует в этой организации.');
                     } else {
                         await ctx.reply('Ошибка при создании должности: ' + error.message);
                     }
+                    state.step = null;
                 }
                 break;
                 
@@ -686,16 +716,16 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                         return;
                     }
                     state.adminNewUser.fullName = fullName;
-                    // Выбор должности происходит через кнопки (admin_user_add_set_position)
-                    // Показываем список должностей для выбора
-                    const positions = await require('../../database/configService').getPositions();
+                    // Сначала выбираем организацию, потом должности этой организации
+                    const { getAllOrganizations } = require('../../database/organizationModel');
+                    const organizations = await getAllOrganizations();
                     const { Markup } = require('telegraf');
-                    const buttons = positions.map((pos, index) => [
-                        Markup.button.callback(pos.name, `admin_user_add_set_position_${index}`)
+                    const buttons = organizations.map((org, index) => [
+                        Markup.button.callback(org.name, `admin_user_add_set_org_${index}`)
                     ]);
                     buttons.push([Markup.button.callback('↩️ Отмена', 'admin_users')]);
-                    state.adminAddPositions = positions.map(pos => pos.name);
-                    const msg = await ctx.reply('Выберите должность:', Markup.inlineKeyboard(buttons));
+                    state.adminAddOrgs = organizations.map(org => org.name);
+                    const msg = await ctx.reply('Выберите организацию:', Markup.inlineKeyboard(buttons));
                     state.messageIds.push(msg.message_id);
                     state.step = null; // Сбрасываем step, так как дальше работаем через кнопки
                 } catch (error) {

@@ -40,16 +40,21 @@ async function getOrganizations() {
 }
 
 /**
- * Получить все должности
+ * Получить должности организации
+ * @param {string} organization - Название организации
  */
-async function getPositions() {
-    const cached = configCache.get(CACHE_KEYS.POSITIONS);
+async function getPositions(organization) {
+    if (!organization) {
+        return [];
+    }
+    const cacheKey = `${CACHE_KEYS.POSITIONS}_${organization}`;
+    const cached = configCache.get(cacheKey);
     if (cached) {
         return cached;
     }
     
-    const positions = await getAllPositions();
-    configCache.set(CACHE_KEYS.POSITIONS, positions);
+    const positions = await getAllPositions(organization);
+    configCache.set(cacheKey, positions);
     return positions;
 }
 
