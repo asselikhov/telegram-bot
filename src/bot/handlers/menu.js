@@ -145,6 +145,7 @@ ${statusEmoji} ${user.status || 'Не указан'}
 
     const message = await ctx.reply(profileText, {
         parse_mode: 'Markdown',
+        link_preview_options: { is_disabled: true },
         reply_markup: Markup.inlineKeyboard(buttons).reply_markup
     });
     ctx.state.userStates[userId].messageIds.push(message.message_id);
