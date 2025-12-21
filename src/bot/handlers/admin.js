@@ -981,6 +981,7 @@ ${settings.messageTemplate}
         }
         
         // Кнопка режима мультивыбора
+        const multiSelectMode = ctx.state.userStates[userId].adminMultiSelectMode === true;
         if (multiSelectMode) {
             const selectedCount = (ctx.state.userStates[userId].adminSelectedUsers || []).length;
             buttons.push([
