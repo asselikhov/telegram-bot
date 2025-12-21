@@ -64,10 +64,23 @@ async function getPosition(organization, name) {
 async function createPosition(positionData) {
     await ensureIndexes();
     const collection = (await getDb()).collection('positions');
+    
+    // Проверяем существование должности перед созданием
+    const orgName = positionData.organization || null;
+    const posName = positionData.name;
+    
+    // Проверяем, не существует ли уже должность с таким именем в этой организации
+    const existing = await collection.findOne({ organization: orgName, name: posName });
+    if (existing) {
+        const error = new Error(`Должность "${posName}" уже существует в организации "${orgName || 'без организации'}"`);
+        error.code = 11000; // Код ошибки дубликата
+        throw error;
+    }
+    
     const now = new Date();
     const pos = {
-        organization: positionData.organization || null,
-        name: positionData.name,
+        organization: orgName,
+        name: posName,
         isAdmin: positionData.isAdmin || false,
         createdAt: now,
         updatedAt: now

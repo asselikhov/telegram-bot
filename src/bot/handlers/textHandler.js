@@ -410,6 +410,14 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                         state.messageIds.push(msg.message_id);
                         return;
                     }
+                    // Проверяем существование должности перед созданием
+                    const { positionExists } = require('../../database/positionModel');
+                    const exists = await positionExists(orgName, posName);
+                    if (exists) {
+                        await ctx.reply(`Должность "${posName}" уже существует в организации "${orgName}".`);
+                        state.step = null;
+                        break;
+                    }
                     await createPosition({ organization: orgName, name: posName, isAdmin: false });
                     clearConfigCache();
                     state.step = null;
