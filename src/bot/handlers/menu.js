@@ -2,7 +2,7 @@ const { Markup } = require('telegraf');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { clearPreviousMessages } = require('../utils');
 const { ADMIN_ID } = require('../../config/config');
-const { getOrganizationObjects, getObjectGroups, getGeneralGroupChatIds } = require('../../database/configService');
+const { getOrganizationObjects, getObjectGroups, getGeneralGroupChatIds, getReportUsers } = require('../../database/configService');
 const { getAllObjects } = require('../../database/objectModel');
 
 async function showMainMenu(ctx) {
@@ -24,7 +24,20 @@ async function showMainMenu(ctx) {
     const buttons = [
         [Markup.button.callback('👤 Личный кабинет', 'profile')]
     ];
-    if (user.isApproved && user.position === 'Производитель работ') {
+    
+    // Проверяем, должен ли пользователь подавать отчеты
+    let shouldShowCreateReport = false;
+    if (user.isApproved && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+        for (const objectName of user.selectedObjects) {
+            const reportUsers = await getReportUsers(user.organization, objectName);
+            if (reportUsers && reportUsers.includes(userId)) {
+                shouldShowCreateReport = true;
+                break;
+            }
+        }
+    }
+    
+    if (shouldShowCreateReport) {
         buttons.splice(1, 0, [Markup.button.callback('📝 Создать отчет', 'create_report')]);
     }
     if (user.isApproved) {
