@@ -468,12 +468,6 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     await ctx.reply(`Время уведомлений "${type === 'reports' ? 'Отчеты' : 'Статистика'}" изменено на ${timeString}.`);
                     // Возвращаемся к настройкам конкретного типа через имитацию callback
                     const { Markup } = require('telegraf');
-                    const botInstance = require('../bot');
-                    const fakeCtx = {
-                        ...ctx,
-                        match: [null, type],
-                        state: ctx.state
-                    };
                     // Вызываем обработчик выбора типа напрямую
                     if (type === 'reports') {
                         const { clearPreviousMessages } = require('../utils');
