@@ -194,8 +194,8 @@ async function sendStatisticsNotifications() {
                       const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
                       return map[match];
                     });
-                    // Заменяем пробелы на неразрывные
-                    return escaped.replace(/ /g, '&nbsp;');
+                    // Заменяем пробелы на неразрывные (Unicode U+00A0)
+                    return escaped.replace(/ /g, '\u00A0');
                   }
                 }
                 if (objUrl) {
@@ -204,8 +204,8 @@ async function sendStatisticsNotifications() {
                     const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
                     return map[match];
                   });
-                  // Заменяем обычные пробелы на неразрывные пробелы, чтобы название не переносилось
-                  escapedObjName = escapedObjName.replace(/ /g, '&nbsp;');
+                  // Заменяем обычные пробелы на неразрывные пробелы (Unicode U+00A0), чтобы название не переносилось
+                  escapedObjName = escapedObjName.replace(/ /g, '\u00A0');
                   return `<a href="${objUrl}">${escapedObjName}</a>`;
                 }
               } catch (error) {
@@ -215,8 +215,8 @@ async function sendStatisticsNotifications() {
                   const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
                   return map[match];
                 });
-                // Заменяем пробелы на неразрывные
-                return escaped.replace(/ /g, '&nbsp;');
+                // Заменяем пробелы на неразрывные (Unicode U+00A0)
+                return escaped.replace(/ /g, '\u00A0');
               }
             }
             // Экранируем для HTML, если ссылки нет или нет telegramGroupId
@@ -224,8 +224,8 @@ async function sendStatisticsNotifications() {
               const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
               return map[match];
             });
-            // Заменяем пробелы на неразрывные
-            return escaped.replace(/ /g, '&nbsp;');
+            // Заменяем пробелы на неразрывные (Unicode U+00A0)
+            return escaped.replace(/ /g, '\u00A0');
           })
         );
         
