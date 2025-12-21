@@ -12,13 +12,8 @@ async function getDb() {
 async function ensureIndexes() {
     const collection = (await getDb()).collection('positions');
     // Составной индекс для уникальности должности в пределах организации
+    // Позволяет иметь должности с одинаковым названием в разных организациях
     await collection.createIndex({ organization: 1, name: 1 }, { unique: true });
-    // Старый индекс для обратной совместимости (будет удален при миграции)
-    try {
-        await collection.createIndex({ name: 1 }, { unique: false });
-    } catch (e) {
-        // Индекс может уже существовать, игнорируем ошибку
-    }
 }
 
 async function getAllPositions(organization) {
@@ -64,23 +59,10 @@ async function getPosition(organization, name) {
 async function createPosition(positionData) {
     await ensureIndexes();
     const collection = (await getDb()).collection('positions');
-    
-    // Проверяем существование должности перед созданием
-    const orgName = positionData.organization || null;
-    const posName = positionData.name;
-    
-    // Проверяем, не существует ли уже должность с таким именем в этой организации
-    const existing = await collection.findOne({ organization: orgName, name: posName });
-    if (existing) {
-        const error = new Error(`Должность "${posName}" уже существует в организации "${orgName || 'без организации'}"`);
-        error.code = 11000; // Код ошибки дубликата
-        throw error;
-    }
-    
     const now = new Date();
     const pos = {
-        organization: orgName,
-        name: posName,
+        organization: positionData.organization || null,
+        name: positionData.name,
         isAdmin: positionData.isAdmin || false,
         createdAt: now,
         updatedAt: now
