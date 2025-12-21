@@ -1,12 +1,49 @@
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+
+// Определяем путь к системному шрифту Windows (Arial поддерживает кириллицу)
+let fontPath = null;
+if (process.platform === 'win32') {
+    // Стандартные пути к шрифтам Windows
+    const windir = process.env.WINDIR || process.env.windir || 'C:/Windows';
+    const possiblePaths = [
+        path.join(windir, 'Fonts', 'arial.ttf'),
+        path.join(windir, 'Fonts', 'ARIAL.TTF'),
+        'C:/Windows/Fonts/arial.ttf',
+        'C:/Windows/Fonts/ARIAL.TTF'
+    ];
+    
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+            fontPath = p;
+            console.log(`Используется шрифт: ${fontPath}`);
+            break;
+        }
+    }
+}
 
 // Создаем PDF документ
 const doc = new PDFDocument({
     size: 'A4',
-    margins: { top: 50, bottom: 70, left: 50, right: 50 }
+    margins: { top: 50, bottom: 70, left: 50, right: 50 },
+    autoFirstPage: true
 });
+
+// Регистрируем шрифты для кириллицы
+if (fontPath && fs.existsSync(fontPath)) {
+    // Используем системный шрифт Arial для кириллицы
+    doc.registerFont('default', fontPath);
+    doc.registerFont('bold', fontPath);
+    doc.registerFont('italic', fontPath);
+} else {
+    // Если шрифт не найден, используем стандартные (может не работать с кириллицей)
+    console.warn('Предупреждение: Системный шрифт Arial не найден. Кириллица может отображаться некорректно.');
+    doc.registerFont('default', 'Helvetica');
+    doc.registerFont('bold', 'Helvetica-Bold');
+    doc.registerFont('italic', 'Helvetica-Oblique');
+}
 
 // Путь для сохранения файла
 const outputPath = path.join(__dirname, '..', 'presentation.pdf');
@@ -28,7 +65,7 @@ let pageNumber = 1;
 function addTitle(text, fontSize = 28) {
     doc.fontSize(fontSize)
        .fillColor(primaryColor)
-       .font('Helvetica-Bold')
+       .font('bold')
        .text(text, { align: 'center' })
        .moveDown(1);
 }
@@ -37,7 +74,7 @@ function addTitle(text, fontSize = 28) {
 function addSubtitle(text, fontSize = 18) {
     doc.fontSize(fontSize)
        .fillColor(secondaryColor)
-       .font('Helvetica-Bold')
+       .font('bold')
        .text(text, { align: 'left' })
        .moveDown(0.5);
 }
@@ -46,7 +83,7 @@ function addSubtitle(text, fontSize = 18) {
 function addText(text, fontSize = 12, options = {}) {
     doc.fontSize(fontSize)
        .fillColor(textColor)
-       .font('Helvetica')
+       .font('default')
        .text(text, options)
        .moveDown(0.3);
 }
@@ -62,13 +99,13 @@ function addNumberedItem(number, text, fontSize = 11) {
     
     doc.fontSize(fontSize - 1)
        .fillColor('#FFFFFF')
-       .font('Helvetica-Bold')
+       .font('bold')
        .text(number.toString(), x + 6, y, { width: 20, align: 'center' });
     
     // Текст
     doc.fontSize(fontSize)
        .fillColor(textColor)
-       .font('Helvetica')
+       .font('default')
        .text(text, x + 25, y - 2, { width: 500, align: 'left' })
        .moveDown(0.5);
 }
@@ -80,8 +117,8 @@ function addPageWithNumber() {
         const oldY = doc.y;
         doc.fontSize(10)
            .fillColor('#95A5A6')
-           .font('Helvetica')
-           .text(`Страница ${pageNumber}`, 50, doc.page.height - 30, { align: 'center', width: doc.page.width - 100 });
+           .font('default')
+           .text(`Страница ${pageNumber}`, 50, doc.page.height - 30, { align: 'center', width: doc.page.width - 100, encoding: 'UTF-8' });
         doc.y = oldY;
     }
     pageNumber++;
@@ -99,8 +136,8 @@ doc.moveDown(3);
 
 doc.fontSize(16)
    .fillColor(textColor)
-   .font('Helvetica')
-   .text('Руководство пользователя', { align: 'center' })
+   .font('default')
+   .text('Руководство пользователя', { align: 'center', encoding: 'UTF-8' })
    .moveDown(1);
 
 doc.fontSize(14)
@@ -163,13 +200,13 @@ doc.moveDown(1);
 addSubtitle('Важное условие', 16);
 doc.fontSize(11)
    .fillColor(accentColor)
-   .font('Helvetica-Bold')
-   .text('Примечание: Кнопка "Создать отчет" доступна только пользователям, которые указаны администратором в настройках отчетов для конкретных объектов.', { indent: 10 });
+   .font('bold')
+   .text('Примечание: Кнопка "Создать отчет" доступна только пользователям, которые указаны администратором в настройках отчетов для конкретных объектов.', { indent: 10, encoding: 'UTF-8' });
 doc.moveDown(0.5);
 
 doc.fontSize(11)
    .fillColor(textColor)
-   .font('Helvetica');
+   .font('default');
 
 addSubtitle('Шаг 1: Открытие главного меню', 16);
 addText('После одобрения заявки администратором, при запуске бота вы увидите главное меню с доступными опциями.', 11);
@@ -187,24 +224,24 @@ addSubtitle('Шаг 4: Ввод информации о выполненных �
 addText('Бот попросит вас ввести информацию о выполненных работах. Опишите детально, что было сделано на объекте.', 11);
 doc.fontSize(10)
    .fillColor('#7F8C8D')
-   .font('Helvetica-Oblique')
-   .text('Пример: "Выполнена укладка асфальта на участке 100-150 метров. Проведена разметка дорожного полотна."', { indent: 20 });
+   .font('italic')
+   .text('Пример: "Выполнена укладка асфальта на участке 100-150 метров. Проведена разметка дорожного полотна."', { indent: 20, encoding: 'UTF-8' });
 doc.moveDown(0.3);
 doc.fontSize(11)
    .fillColor(textColor)
-   .font('Helvetica');
+   .font('default');
 doc.moveDown(0.5);
 
 addSubtitle('Шаг 5: Ввод информации о материалах', 16);
 addText('Затем укажите информацию о поставленных материалах.', 11);
 doc.fontSize(10)
    .fillColor('#7F8C8D')
-   .font('Helvetica-Oblique')
-   .text('Пример: "Поставлено: асфальт - 50 тонн, щебень - 30 тонн"', { indent: 20 });
+   .font('italic')
+   .text('Пример: "Поставлено: асфальт - 50 тонн, щебень - 30 тонн"', { indent: 20, encoding: 'UTF-8' });
 doc.moveDown(0.3);
 doc.fontSize(11)
    .fillColor(textColor)
-   .font('Helvetica');
+   .font('default');
 doc.moveDown(0.5);
 
 addSubtitle('Шаг 6: Прикрепление фотографий (опционально)', 16);
@@ -316,15 +353,15 @@ doc.moveDown(0.5);
 addSubtitle('Важные замечания', 16);
 doc.fontSize(11)
    .fillColor(accentColor)
-   .font('Helvetica-Bold')
-   .text('• Отчеты должны подаваться ежедневно, если вы указаны в настройках отчетов', { indent: 10 });
+   .font('bold')
+   .text('• Отчеты должны подаваться ежедневно, если вы указаны в настройках отчетов', { indent: 10, encoding: 'UTF-8' });
 doc.fontSize(11)
    .fillColor(accentColor)
-   .font('Helvetica-Bold')
-   .text('• При изменении статуса на "В отпуске" вы не будете получать уведомления об отчетах', { indent: 10 });
+   .font('bold')
+   .text('• При изменении статуса на "В отпуске" вы не будете получать уведомления об отчетах', { indent: 10, encoding: 'UTF-8' });
 doc.fontSize(11)
    .fillColor(textColor)
-   .font('Helvetica');
+   .font('default');
 
 addPageWithNumber();
 
@@ -337,15 +374,15 @@ doc.moveDown(2);
 
 doc.fontSize(14)
    .fillColor(textColor)
-   .font('Helvetica')
-   .text('Если у вас возникли вопросы или проблемы при работе с ботом, обратитесь к администратору вашей организации.', { align: 'center' });
+   .font('default')
+   .text('Если у вас возникли вопросы или проблемы при работе с ботом, обратитесь к администратору вашей организации.', { align: 'center', encoding: 'UTF-8' });
 
 // Добавляем номер на последнюю страницу
 const oldY = doc.y;
 doc.fontSize(10)
    .fillColor('#95A5A6')
-   .font('Helvetica')
-   .text(`Страница ${pageNumber}`, 50, doc.page.height - 30, { align: 'center', width: doc.page.width - 100 });
+   .font('default')
+   .text(`Страница ${pageNumber}`, 50, doc.page.height - 30, { align: 'center', width: doc.page.width - 100, encoding: 'UTF-8' });
 doc.y = oldY;
 
 // Завершаем документ
