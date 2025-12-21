@@ -336,6 +336,7 @@ ${objectsList}
         const message = await ctx.reply('Выберите, что хотите редактировать:', Markup.inlineKeyboard([
             [Markup.button.callback('✏️ Название', 'admin_org_edit_name')],
             [Markup.button.callback('📱 ID чата (Telegram)', 'admin_org_edit_chatid')],
+            [Markup.button.callback('🏗 Объекты', 'admin_org_edit_objects')],
             [Markup.button.callback('↩️ Назад', `org_${orgIndex}`)]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
@@ -363,6 +364,166 @@ ${objectsList}
             [Markup.button.callback('↩️ Отмена', 'admin_org_edit')]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_org_edit_objects', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const orgName = ctx.state.userStates[userId].adminSelectedOrgName;
+        if (!orgName) {
+            await ctx.reply('Ошибка: организация не выбрана.');
+            return;
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        
+        // Получаем все объекты и объекты организации
+        const allObjects = await getAllObjects();
+        const orgObjects = await getOrganizationObjects(orgName);
+        
+        if (allObjects.length === 0) {
+            await ctx.reply('В системе нет объектов. Сначала создайте объекты.');
+            const orgIndex = ctx.state.userStates[userId].adminSelectedOrgIndex ?? 0;
+            await ctx.telegram.sendMessage(ctx.chat.id, 'Вернуться к организации', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', `org_${orgIndex}`)]
+            ]));
+            return;
+        }
+        
+        // Сохраняем текущее состояние выбранных объектов
+        ctx.state.userStates[userId].adminOrgEditSelectedObjects = [...orgObjects];
+        ctx.state.userStates[userId].adminOrgEditAvailableObjects = allObjects.map(obj => obj.name);
+        
+        // Создаем кнопки для объектов
+        const buttons = allObjects.map((obj, index) => {
+            const isSelected = orgObjects.includes(obj.name);
+            return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${obj.name}`, `admin_org_toggle_object_${index}`)];
+        });
+        buttons.push([Markup.button.callback('✅ Готово', 'admin_org_confirm_objects')]);
+        buttons.push([Markup.button.callback('↩️ Отмена', 'admin_org_edit')]);
+        
+        const message = await ctx.reply('Выберите объекты для организации (можно выбрать несколько):', Markup.inlineKeyboard(buttons));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action(/admin_org_toggle_object_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const orgName = ctx.state.userStates[userId].adminSelectedOrgName;
+        if (!orgName) {
+            await ctx.reply('Ошибка: организация не выбрана.');
+            return;
+        }
+        
+        const objectIndex = parseInt(ctx.match[1], 10);
+        const availableObjects = ctx.state.userStates[userId].adminOrgEditAvailableObjects;
+        if (!availableObjects || !availableObjects[objectIndex]) {
+            await ctx.reply('Объект не найден.');
+            return;
+        }
+        
+        const objectName = availableObjects[objectIndex];
+        let selectedObjects = ctx.state.userStates[userId].adminOrgEditSelectedObjects || [];
+        
+        const index = selectedObjects.indexOf(objectName);
+        if (index === -1) {
+            selectedObjects.push(objectName);
+        } else {
+            selectedObjects.splice(index, 1);
+        }
+        
+        ctx.state.userStates[userId].adminOrgEditSelectedObjects = selectedObjects;
+        
+        // Обновляем сообщение
+        const allObjects = await getAllObjects();
+        const buttons = allObjects.map((obj, idx) => {
+            const isSelected = selectedObjects.includes(obj.name);
+            return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${obj.name}`, `admin_org_toggle_object_${idx}`)];
+        });
+        buttons.push([Markup.button.callback('✅ Готово', 'admin_org_confirm_objects')]);
+        buttons.push([Markup.button.callback('↩️ Отмена', 'admin_org_edit')]);
+        
+        const lastMessageId = ctx.state.userStates[userId].messageIds[ctx.state.userStates[userId].messageIds.length - 1];
+        try {
+            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите объекты для организации (можно выбрать несколько):', Markup.inlineKeyboard(buttons));
+        } catch (e) {
+            await ctx.reply('Выберите объекты для организации (можно выбрать несколько):', Markup.inlineKeyboard(buttons));
+        }
+    });
+    
+    bot.action('admin_org_confirm_objects', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const orgName = ctx.state.userStates[userId].adminSelectedOrgName;
+        if (!orgName) {
+            await ctx.reply('Ошибка: организация не выбрана.');
+            return;
+        }
+        
+        const selectedObjects = ctx.state.userStates[userId].adminOrgEditSelectedObjects || [];
+        const currentOrgObjects = await getOrganizationObjects(orgName);
+        
+        // Определяем, какие объекты добавить, а какие удалить
+        const toAdd = selectedObjects.filter(obj => !currentOrgObjects.includes(obj));
+        const toRemove = currentOrgObjects.filter(obj => !selectedObjects.includes(obj));
+        
+        // Добавляем новые связи
+        for (const objName of toAdd) {
+            await addObjectToOrganization(orgName, objName);
+        }
+        
+        // Удаляем старые связи
+        for (const objName of toRemove) {
+            await removeObjectFromOrganization(orgName, objName);
+        }
+        
+        clearConfigCache();
+        ctx.state.userStates[userId].adminOrgEditSelectedObjects = null;
+        ctx.state.userStates[userId].adminOrgEditAvailableObjects = null;
+        
+        await ctx.reply(`✅ Объекты организации "${orgName}" успешно обновлены.`);
+        const orgIndex = ctx.state.userStates[userId].adminSelectedOrgIndex ?? 0;
+        
+        // Возвращаемся к просмотру организации
+        const orgNames = ctx.state.userStates[userId].adminOrganizationsList;
+        if (orgNames && orgNames[orgIndex]) {
+            // Используем существующий обработчик для отображения организации
+            const orgNameToShow = orgNames[orgIndex];
+            ctx.state.userStates[userId].adminSelectedOrgName = orgNameToShow;
+            await clearPreviousMessages(ctx, userId);
+            
+            const org = await getOrganization(orgNameToShow);
+            if (org) {
+                const orgObjects = await getOrganizationObjects(orgNameToShow);
+                const objectsList = orgObjects.length > 0 ? orgObjects.map(obj => `· ${obj}`).join('\n') : 'Не выбраны';
+                
+                const orgText = `
+🏢 **${org.name}**
+
+📱 ID чата: ${org.chatId || 'Не указан'}
+📊 Источники отчетов: ${org.reportSources.length > 0 ? org.reportSources.join(', ') : 'Нет'}
+🏗 Объекты:
+${objectsList}
+                `.trim();
+                
+                const message = await ctx.reply(orgText, {
+                    parse_mode: 'Markdown',
+                    reply_markup: Markup.inlineKeyboard([
+                        [Markup.button.callback('✏️ Редактировать', 'admin_org_edit')],
+                        [Markup.button.callback('🗑 Удалить', 'admin_org_delete')],
+                        [Markup.button.callback('↩️ Назад', 'admin_organizations')]
+                    ]).reply_markup
+                });
+                ctx.state.userStates[userId].messageIds.push(message.message_id);
+            } else {
+                await showOrganizationsList(ctx);
+            }
+        } else {
+            await showOrganizationsList(ctx);
+        }
     });
     
     // Обработчики удаления и редактирования организаций
