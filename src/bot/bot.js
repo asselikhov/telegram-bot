@@ -111,7 +111,12 @@ async function sendReportReminders() {
             const groupChatId = objectGroups[objectName];
             if (groupChatId) {
               // Форматируем сообщение с использованием шаблона
-              const reminderText = formatNotificationMessage(settings.messageTemplate, {
+              let template = settings.messageTemplate;
+              // Исправляем шаблон, если он не содержит "г." после {date}
+              if (template && !template.includes('{date}г.')) {
+                template = template.replace(/\{date\}(\.|)/g, '{date}г.');
+              }
+              const reminderText = formatNotificationMessage(template, {
                 fullName: user.fullName,
                 date: formattedDate
               });
