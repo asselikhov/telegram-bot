@@ -190,34 +190,42 @@ async function sendStatisticsNotifications() {
                   } catch (inviteError) {
                     console.error(`Ошибка при генерации invite link для объекта ${objName}:`, inviteError);
                     // Оставляем текст без ссылки, экранируем для HTML
-                    return objName.replace(/[<>&"]/g, (match) => {
+                    let escaped = objName.replace(/[<>&"]/g, (match) => {
                       const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
                       return map[match];
                     });
+                    // Заменяем пробелы на неразрывные
+                    return escaped.replace(/ /g, '&nbsp;');
                   }
                 }
                 if (objUrl) {
-                  // Экранируем только квадратные скобки в названии для HTML ссылок
-                  const escapedObjName = objName.replace(/[<>&"]/g, (match) => {
+                  // Экранируем HTML символы в названии
+                  let escapedObjName = objName.replace(/[<>&"]/g, (match) => {
                     const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
                     return map[match];
                   });
+                  // Заменяем обычные пробелы на неразрывные пробелы, чтобы название не переносилось
+                  escapedObjName = escapedObjName.replace(/ /g, '&nbsp;');
                   return `<a href="${objUrl}">${escapedObjName}</a>`;
                 }
               } catch (error) {
                 console.error(`Ошибка при получении информации о чате объекта ${objName}:`, error);
                 // Оставляем текст без ссылки, экранируем для HTML
-                return objName.replace(/[<>&"]/g, (match) => {
+                let escaped = objName.replace(/[<>&"]/g, (match) => {
                   const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
                   return map[match];
                 });
+                // Заменяем пробелы на неразрывные
+                return escaped.replace(/ /g, '&nbsp;');
               }
             }
             // Экранируем для HTML, если ссылки нет или нет telegramGroupId
-            return objName.replace(/[<>&"]/g, (match) => {
+            let escaped = objName.replace(/[<>&"]/g, (match) => {
               const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
               return map[match];
             });
+            // Заменяем пробелы на неразрывные
+            return escaped.replace(/ /g, '&nbsp;');
           })
         );
         
