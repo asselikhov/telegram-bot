@@ -175,15 +175,23 @@ async function sendStatisticsNotifications() {
         const objectsWithoutReports = objectsInWork.filter(objName => !reportedObjects.has(objName));
         
         // Формируем сообщение
-        let statsMessage = `⚠️Статистика за день:\nОбъектов в работе: ${objectsInWork.length}\n`;
+        let statsMessage = `⚠️ Статистика за день:\n<blockquote>`;
+        statsMessage += `1) Объектов в работе: ${objectsInWork.length}\n`;
         if (objectsWithoutReports.length > 0) {
-          statsMessage += `Не поданы отчеты по объектам: ${objectsWithoutReports.join(', ')}`;
+          statsMessage += `2) Не поданы отчеты по объектам:\n`;
+          objectsWithoutReports.forEach(obj => {
+            statsMessage += `   · ${obj}\n`;
+          });
         } else {
-          statsMessage += `Не поданы отчеты по объектам: Нет`;
+          statsMessage += `2) Не поданы отчеты по объектам: нет\n`;
         }
+        statsMessage += `</blockquote>`;
         
         // Отправляем в группу организации
-        await bot.telegram.sendMessage(orgChatInfo.chatId, statsMessage);
+        await bot.telegram.sendMessage(orgChatInfo.chatId, statsMessage, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true }
+        });
       } catch (error) {
         console.error(`Ошибка отправки статистики для организации ${orgName}:`, error);
       }
