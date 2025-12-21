@@ -82,17 +82,22 @@ async function initializeData() {
             }
         }
         
-        // Миграция должностей
+        // Миграция должностей (создаем для каждой организации)
         console.log('Миграция должностей...');
-        for (const positionName of OLD_CONFIG.BASE_POSITIONS_LIST) {
-            if (!(await positionExists(positionName))) {
-                await createPosition({
-                    name: positionName,
-                    isAdmin: false
-                });
-                console.log(`  Создана должность: ${positionName}`);
-            } else {
-                console.log(`  Должность уже существует: ${positionName}`);
+        for (const orgName of OLD_CONFIG.ORGANIZATIONS_LIST) {
+            for (const positionName of OLD_CONFIG.BASE_POSITIONS_LIST) {
+                // Проверяем, существует ли должность для этой организации
+                const existingPos = await positionExists(orgName, positionName);
+                if (!existingPos) {
+                    await createPosition({
+                        organization: orgName,
+                        name: positionName,
+                        isAdmin: false
+                    });
+                    console.log(`  Создана должность "${positionName}" для организации "${orgName}"`);
+                } else {
+                    console.log(`  Должность "${positionName}" уже существует для организации "${orgName}"`);
+                }
             }
         }
         
@@ -151,11 +156,11 @@ async function initializeData() {
  */
 async function isDataInitialized() {
     const { getAllOrganizations } = require('../organizationModel');
-    const { getAllPositions } = require('../positionModel');
+    const { getAllPositionsGlobally } = require('../positionModel');
     const { getAllObjects } = require('../objectModel');
     
     const organizations = await getAllOrganizations();
-    const positions = await getAllPositions();
+    const positions = await getAllPositionsGlobally();
     const objects = await getAllObjects();
     
     return organizations.length > 0 || positions.length > 0 || objects.length > 0;
