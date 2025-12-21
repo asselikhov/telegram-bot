@@ -260,6 +260,103 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 }
                 break;
                 
+            case 'admin_org_edit_name':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const oldOrgName = state.adminSelectedOrgName;
+                    if (!oldOrgName) {
+                        await ctx.reply('Ошибка: организация не выбрана.');
+                        state.step = null;
+                        break;
+                    }
+                    const newOrgName = ctx.message.text.trim();
+                    if (!newOrgName) {
+                        const msg = await ctx.reply('Название не может быть пустым. Введите снова:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    
+                    // Проверяем, не существует ли организация с таким названием
+                    if (newOrgName !== oldOrgName) {
+                        const orgExists = await organizationExists(newOrgName);
+                        if (orgExists) {
+                            const msg = await ctx.reply('Организация с таким названием уже существует. Введите другое название:');
+                            state.messageIds.push(msg.message_id);
+                            return;
+                        }
+                    }
+                    
+                    // Получаем текущую организацию
+                    const { getOrganization } = require('../../database/organizationModel');
+                    const currentOrg = await getOrganization(oldOrgName);
+                    if (!currentOrg) {
+                        await ctx.reply('Организация не найдена.');
+                        state.step = null;
+                        break;
+                    }
+                    
+                    if (newOrgName !== oldOrgName) {
+                        // Обновляем название организации
+                        await updateOrganization(oldOrgName, { name: newOrgName });
+                        // Обновляем у всех пользователей
+                        const users = await loadUsers();
+                        for (const [uid, user] of Object.entries(users)) {
+                            if (user.organization === oldOrgName) {
+                                user.organization = newOrgName;
+                                await saveUser(uid, user);
+                            }
+                        }
+                    }
+                    
+                    clearConfigCache();
+                    state.step = null;
+                    await ctx.reply(`Организация обновлена.${newOrgName !== oldOrgName ? ` Новое название: "${newOrgName}"` : ''}`);
+                    const adminModule = require('./admin');
+                    if (adminModule.showOrganizationsList) {
+                        await adminModule.showOrganizationsList(ctx);
+                    }
+                } catch (error) {
+                    await ctx.reply('Ошибка при редактировании организации: ' + error.message);
+                    state.step = null;
+                }
+                break;
+                
+            case 'admin_org_edit_chatid':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const orgName = state.adminSelectedOrgName;
+                    if (!orgName) {
+                        await ctx.reply('Ошибка: организация не выбрана.');
+                        state.step = null;
+                        break;
+                    }
+                    let chatId = ctx.message.text.trim();
+                    if (chatId === '/clear') {
+                        chatId = null;
+                    } else if (chatId) {
+                        // Проверяем формат (должно быть число или начинаться с минуса для групп)
+                        if (!/^-?\d+$/.test(chatId)) {
+                            const msg = await ctx.reply('Неверный формат ID чата. Введите числовой ID (например: -1001234567890) или /clear для очистки:');
+                            state.messageIds.push(msg.message_id);
+                            return;
+                        }
+                        chatId = chatId.toString();
+                    }
+                    
+                    await updateOrganization(orgName, { chatId });
+                    clearConfigCache();
+                    state.step = null;
+                    await ctx.reply(`ID чата организации "${orgName}" ${chatId ? `обновлен: ${chatId}` : 'очищен'}.`);
+                    const adminModule = require('./admin');
+                    if (adminModule.showOrganizationsList) {
+                        await adminModule.showOrganizationsList(ctx);
+                    }
+                } catch (error) {
+                    await ctx.reply('Ошибка при редактировании ID чата: ' + error.message);
+                    state.step = null;
+                }
+                break;
+                
             case 'admin_pos_add_name':
                 if (userId !== ADMIN_ID) break;
                 try {

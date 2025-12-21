@@ -284,6 +284,10 @@ ${objectsList}
         }
         
         const orgName = orgNames[orgIndex];
+        // Сохраняем индекс для кнопки "Назад" в редактировании
+        ctx.state.userStates[userId].adminSelectedOrgIndex = orgIndex;
+        // Сохраняем orgName для обработчиков редактирования/удаления
+        ctx.state.userStates[userId].adminSelectedOrgName = orgName;
         await clearPreviousMessages(ctx, userId);
         
         const org = await getOrganization(orgName);
@@ -305,9 +309,6 @@ ${objectsList}
 ${objectsList}
         `.trim();
         
-        // Сохраняем orgName для обработчиков редактирования/удаления
-        ctx.state.userStates[userId].adminSelectedOrgName = orgName;
-        
         const message = await ctx.reply(orgText, {
             parse_mode: 'Markdown',
             reply_markup: Markup.inlineKeyboard([
@@ -319,6 +320,51 @@ ${objectsList}
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 
+    // Обработчик редактирования организации
+    bot.action('admin_org_edit', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const orgName = ctx.state.userStates[userId].adminSelectedOrgName;
+        if (!orgName) {
+            await ctx.reply('Ошибка: организация не выбрана.');
+            return;
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        const orgIndex = ctx.state.userStates[userId].adminSelectedOrgIndex ?? ctx.state.userStates[userId].adminOrganizationsList?.indexOf(orgName) ?? 0;
+        const message = await ctx.reply('Выберите, что хотите редактировать:', Markup.inlineKeyboard([
+            [Markup.button.callback('✏️ Название', 'admin_org_edit_name')],
+            [Markup.button.callback('📱 ID чата (Telegram)', 'admin_org_edit_chatid')],
+            [Markup.button.callback('↩️ Назад', `org_${orgIndex}`)]
+        ]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_org_edit_name', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        await clearPreviousMessages(ctx, userId);
+        ctx.state.userStates[userId].step = 'admin_org_edit_name';
+        const message = await ctx.reply('Введите новое название организации:', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Отмена', 'admin_org_edit')]
+        ]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_org_edit_chatid', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        await clearPreviousMessages(ctx, userId);
+        ctx.state.userStates[userId].step = 'admin_org_edit_chatid';
+        const message = await ctx.reply('Введите новый ID чата Telegram (или /clear для очистки):', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Отмена', 'admin_org_edit')]
+        ]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
     // Обработчики удаления и редактирования организаций
     bot.action('admin_org_delete', async (ctx) => {
         const userId = ctx.from.id.toString();
