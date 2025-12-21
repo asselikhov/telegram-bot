@@ -123,15 +123,15 @@ async function showProfile(ctx) {
         objectsList = 'Не выбраны';
     }
 
-        const birthdateText = user.birthdate ? `🎂 Дата рождения: ${user.birthdate}\n\n` : '';
-        
         const profileText = `
 👤 ЛИЧНЫЙ КАБИНЕТ  
 ➖➖➖➖➖➖➖➖➖➖➖  
 ${user.position || 'Не указана'}  
 ${organizationText}  
 ${user.fullName || 'Не указано'}  
-${birthdateText}${objectsList}  
+📞 ${user.phone || 'Не указан'}
+
+${objectsList}  
 
 ${statusEmoji} ${user.status || 'Не указан'}
 `.trim();
@@ -160,6 +160,7 @@ async function showEditData(ctx) {
         [Markup.button.callback('✏️ Изменить ФИО', 'edit_fullName')],
         [Markup.button.callback('✏️ Изменить должность', 'edit_position')],
         [Markup.button.callback('✏️ Изменить организацию', 'edit_organization')],
+        [Markup.button.callback('✏️ Изменить телефон', 'edit_phone')],
         [Markup.button.callback('✏️ Изменить объекты', 'edit_object')],
         [Markup.button.callback('✏️ Изменить статус', 'edit_status')],
         [Markup.button.callback('↩️ Назад', 'profile')]
@@ -180,6 +181,15 @@ module.exports = (bot) => {
 
         ctx.state.userStates[userId].step = 'editFullNameInput';
         const message = await ctx.reply('Введите новое ФИО:');
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('edit_phone', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        await clearPreviousMessages(ctx, userId);
+
+        ctx.state.userStates[userId].step = 'editPhoneInput';
+        const message = await ctx.reply('Введите новый контактный телефон:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
 };

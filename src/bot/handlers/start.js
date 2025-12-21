@@ -91,6 +91,10 @@ module.exports = (bot) => {
                     ctx.state.userStates[telegramId] = { step: 'enterFullName', messageIds: [] };
                     const message = await ctx.reply('Введите ваше ФИО:');
                     ctx.state.userStates[telegramId].messageIds.push(message.message_id);
+                } else if (!user.phone) {
+                    ctx.state.userStates[telegramId] = { step: 'enterPhone', messageIds: [] };
+                    const message = await ctx.reply('Введите ваш контактный телефон:');
+                    ctx.state.userStates[telegramId].messageIds.push(message.message_id);
                 } else {
                     const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
                     ctx.state.userStates[telegramId] = { step: null, messageIds: [message.message_id] };

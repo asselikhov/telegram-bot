@@ -120,7 +120,27 @@ module.exports = (bot) => {
 
             case 'enterFullName':
                 const fullName = ctx.message.text.trim();
+                if (!fullName) {
+                    const message = await ctx.reply('ФИО не может быть пустым. Введите снова:');
+                    state.messageIds.push(message.message_id);
+                    return;
+                }
                 users[userId].fullName = fullName;
+                await saveUser(userId, users[userId]);
+                
+                state.step = 'enterPhone';
+                const phoneMessage = await ctx.reply('Введите ваш контактный телефон:');
+                state.messageIds.push(phoneMessage.message_id);
+                break;
+                
+            case 'enterPhone':
+                const phone = ctx.message.text.trim();
+                if (!phone) {
+                    const message = await ctx.reply('Телефон не может быть пустым. Введите снова:');
+                    state.messageIds.push(message.message_id);
+                    return;
+                }
+                users[userId].phone = phone;
                 await saveUser(userId, users[userId]);
 
                 const message = await ctx.reply('Ваша заявка на рассмотрении, ожидайте');
@@ -133,6 +153,7 @@ module.exports = (bot) => {
 
                 const adminText = `
 ${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'})
+📞 Телефон: ${users[userId].phone || 'Не указан'}
 Объекты: ${users[userId].selectedObjects.join(', ') || 'Не выбраны'}
 Пригласительный код создан: ${creatorFullName}
                 `.trim();

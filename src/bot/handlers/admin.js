@@ -185,6 +185,7 @@ module.exports = (bot) => {
 👤 **ФИО:** ${user.fullName || 'Не указано'}  
 🏢 **Организация:** ${user.organization || 'Не указано'}  
 💼 **Должность:** ${user.position || 'Не указана'}  
+📞 **Телефон:** ${user.phone || 'Не указан'}  
 🏗 **Объекты:**  
 ${objectsList}  
 🔑 **Код создан:** ${creatorFullName}  
