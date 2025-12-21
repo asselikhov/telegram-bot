@@ -28,7 +28,7 @@ async function showMainMenu(ctx) {
         buttons.splice(1, 0, [Markup.button.callback('📝 Создать отчет', 'create_report')]);
     }
     if (user.isApproved) {
-        buttons.splice(1, 0, [Markup.button.callback('📤 Выгрузить отчет', 'download_report')]);
+        buttons.splice(1, 0, [Markup.button.callback('📤 Выгрузить', 'download_report')]);
     }
     if (userId === ADMIN_ID) {
         buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);

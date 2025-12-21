@@ -5,6 +5,27 @@ const { loadUserReports, loadAllReports, saveReport } = require('../../database/
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 const { getOrganizationObjects, getObjects, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap } = require('../../database/configService');
 
+async function showDownloadMenu(ctx) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+
+    if (!users[userId]?.isApproved) {
+        return ctx.reply('У вас нет прав для выгрузки данных.');
+    }
+
+    await clearPreviousMessages(ctx, userId);
+
+    const message = await ctx.reply(
+        '📤 Выгрузка данных\nВыберите, что хотите выгрузить:',
+        Markup.inlineKeyboard([
+            [Markup.button.callback('📋 Отчеты', 'download_type_reports')],
+            [Markup.button.callback('👥 Люди', 'download_type_users')],
+            [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
+        ])
+    );
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
+}
+
 async function showDownloadReport(ctx, page = 0) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
