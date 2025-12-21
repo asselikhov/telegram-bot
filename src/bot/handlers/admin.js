@@ -1433,7 +1433,7 @@ ${objectsList}
         const typeName = type === 'reports' ? 'Отчеты' : 'Статистика';
         let settingsText = `🔔 **Настройки уведомлений: ${typeName}**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
         
-        if (type === 'reports' && settings.messageTemplate) {
+        if (settings.messageTemplate) {
             settingsText += `\n📝 Шаблон сообщения:\n${settings.messageTemplate}`;
         }
         
@@ -1442,10 +1442,8 @@ ${objectsList}
             [Markup.button.callback('⏰ Изменить время', `admin_notif_time_${type}`)]
         ];
         
-        if (type === 'reports') {
-            buttons.push([Markup.button.callback('📝 Изменить текст', `admin_notif_text_${type}`)]);
-            buttons.push([Markup.button.callback('👁 Предпросмотр', `admin_notif_preview_${type}`)]);
-        }
+        buttons.push([Markup.button.callback('📝 Изменить текст', `admin_notif_text_${type}`)]);
+        buttons.push([Markup.button.callback('👁 Предпросмотр', `admin_notif_preview_${type}`)]);
         
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_notifications')]);
         
@@ -1495,14 +1493,18 @@ ${objectsList}
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         const type = ctx.match[1];
-        if (type !== 'reports') {
-            await ctx.answerCbQuery('Изменение текста доступно только для уведомлений об отчетах');
-            return;
-        }
         await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].step = `admin_notif_edit_text_${type}`;
         ctx.state.userStates[userId].currentNotificationType = type;
-        const message = await ctx.reply('Введите новый текст шаблона. Используйте переменные {fullName} и {date}:', Markup.inlineKeyboard([
+        
+        let instructionText;
+        if (type === 'reports') {
+            instructionText = 'Введите новый текст шаблона. Используйте переменные {fullName} и {date}:';
+        } else {
+            instructionText = 'Введите новый шаблон заголовка статистики. Используйте переменные:\n{objectsInWorkCount} - количество объектов в работе\n{objectsWithoutReportsList} - список объектов без отчетов (формируется автоматически)\n\nПример: ⚠️ Статистика за день:\\n<blockquote>1) Объектов в работе: {objectsInWorkCount}\\n2) Не поданы отчеты по объектам:\\n{objectsWithoutReportsList}</blockquote>';
+        }
+        
+        const message = await ctx.reply(instructionText, Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Отмена', `admin_notif_select_${type}`)]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
@@ -1512,18 +1514,29 @@ ${objectsList}
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         const type = ctx.match[1];
-        if (type !== 'reports') {
-            await ctx.answerCbQuery('Предпросмотр доступен только для уведомлений об отчетах');
+        let previewText;
+        
+        if (type === 'reports') {
+            const settings = await getNotificationSettings(type);
+            previewText = formatNotificationMessage(settings.messageTemplate, {
+                fullName: 'Иванов Иван Иванович',
+                date: '25.12.2024'
+            });
+        } else if (type === 'statistics') {
+            // Формируем предпросмотр статистики с тестовыми данными
+            previewText = `⚠️ Статистика за день:\n<blockquote>1) Объектов в работе: 3\n2) Не поданы отчеты по объектам:\n   · Ростовка-Никольское, 595,4-608,1\u00A0км.\n   · УЗН р. Волга</blockquote>`;
+        } else {
+            await ctx.answerCbQuery('Предпросмотр недоступен для этого типа уведомлений');
             return;
         }
-        const settings = await getNotificationSettings(type);
-        const previewText = formatNotificationMessage(settings.messageTemplate, {
-            fullName: 'Иванов Иван Иванович',
-            date: '25.12.2024'
+        
+        await ctx.reply(`Предпросмотр сообщения:\n\n${previewText}`, {
+            parse_mode: 'HTML',
+            link_preview_options: { is_disabled: true },
+            reply_markup: Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', `admin_notif_select_${type}`)]
+            ]).reply_markup
         });
-        await ctx.reply(`Предпросмотр сообщения:\n\n${previewText}`, Markup.inlineKeyboard([
-            [Markup.button.callback('↩️ Назад', `admin_notif_select_${type}`)]
-        ]));
     });
     
     // ========== СТАТИСТИКА ==========

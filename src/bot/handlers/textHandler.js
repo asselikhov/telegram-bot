@@ -600,6 +600,7 @@ module.exports = (bot) => {
                 
             case 'admin_notif_edit_text':
             case 'admin_notif_edit_text_reports':
+            case 'admin_notif_edit_text_statistics':
                 if (userId !== ADMIN_ID) break;
                 try {
                     const template = ctx.message.text.trim();
@@ -609,33 +610,28 @@ module.exports = (bot) => {
                         return;
                     }
                     const type = state.currentNotificationType || 'reports';
-                    if (type !== 'reports') {
-                        await ctx.reply('Изменение текста доступно только для уведомлений об отчетах.');
-                        state.step = null;
-                        delete state.currentNotificationType;
-                        break;
-                    }
                     await updateNotificationSettings(type, { messageTemplate: template });
                     clearConfigCache();
                     state.step = null;
                     delete state.currentNotificationType;
                     await ctx.reply('Шаблон сообщения обновлен.');
-                    // Возвращаемся к настройкам отчетов
+                    // Возвращаемся к настройкам уведомлений
                     const { Markup } = require('telegraf');
                     const { clearPreviousMessages } = require('../utils');
                     await clearPreviousMessages(ctx, userId);
                     const { getNotificationSettings } = require('../../database/configService');
-                    const settings = await getNotificationSettings('reports');
+                    const settings = await getNotificationSettings(type);
                     const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
-                    let settingsText = `🔔 **Настройки уведомлений: Отчеты**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
+                    const typeName = type === 'reports' ? 'Отчеты' : 'Статистика';
+                    let settingsText = `🔔 **Настройки уведомлений: ${typeName}**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
                     if (settings.messageTemplate) {
                         settingsText += `\n📝 Шаблон сообщения:\n${settings.messageTemplate}`;
                     }
                     const buttons = [
-                        [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', 'admin_notif_toggle_reports')],
-                        [Markup.button.callback('⏰ Изменить время', 'admin_notif_time_reports')],
-                        [Markup.button.callback('📝 Изменить текст', 'admin_notif_text_reports')],
-                        [Markup.button.callback('👁 Предпросмотр', 'admin_notif_preview_reports')],
+                        [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', `admin_notif_toggle_${type}`)],
+                        [Markup.button.callback('⏰ Изменить время', `admin_notif_time_${type}`)],
+                        [Markup.button.callback('📝 Изменить текст', `admin_notif_text_${type}`)],
+                        [Markup.button.callback('👁 Предпросмотр', `admin_notif_preview_${type}`)],
                         [Markup.button.callback('↩️ Назад', 'admin_notifications')]
                     ];
                     const message = await ctx.reply(settingsText.trim(), {
@@ -643,7 +639,7 @@ module.exports = (bot) => {
                         reply_markup: Markup.inlineKeyboard(buttons).reply_markup
                     });
                     ctx.state.userStates[userId].messageIds = [message.message_id];
-                    ctx.state.userStates[userId].currentNotificationType = 'reports';
+                    ctx.state.userStates[userId].currentNotificationType = type;
                 } catch (error) {
                     await ctx.reply('Ошибка при изменении текста: ' + error.message);
                     state.step = null;
