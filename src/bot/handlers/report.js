@@ -231,6 +231,153 @@ async function downloadReportFile(ctx, objectIndex) {
     ctx.state.userStates[userId].messageIds.push(documentMessage.message_id);
 }
 
+async function showDownloadUsers(ctx, page = 0) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+
+    if (!users[userId]?.isApproved) {
+        return ctx.reply('У вас нет прав для выгрузки данных.');
+    }
+
+    const userOrganization = users[userId].organization;
+    const availableObjects = await getOrganizationObjects(userOrganization);
+
+    if (!availableObjects.length) {
+        return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
+    }
+
+    const pageNum = typeof page === 'number' ? page : 0;
+    await clearPreviousMessages(ctx, userId);
+
+    const itemsPerPage = 10;
+    const totalObjects = availableObjects.length;
+    const totalPages = Math.ceil(totalObjects / itemsPerPage);
+
+    const startIndex = pageNum * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, totalObjects);
+    const currentObjects = availableObjects.slice(startIndex, endIndex);
+
+    if (currentObjects.length === 0) {
+        return ctx.reply('Ошибка: нет объектов для отображения.');
+    }
+
+    const buttons = currentObjects.map((obj, index) =>
+        [Markup.button.callback(obj, `download_users_file_${availableObjects.indexOf(obj)}`)]
+    );
+
+    const paginationButtons = [];
+    if (totalPages > 1) {
+        if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `download_users_page_${pageNum - 1}`));
+        if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `download_users_page_${pageNum + 1}`));
+    }
+    if (paginationButtons.length > 0) buttons.push(paginationButtons);
+    buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
+
+    const message = await ctx.reply(
+        `Выберите объект для выгрузки людей (Страница ${pageNum + 1} из ${totalPages}):`,
+        Markup.inlineKeyboard(buttons)
+    );
+    ctx.state.userStates[userId].messageIds.push(message.message_id);
+}
+
+async function downloadUsersFile(ctx, objectIndex) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const userOrganization = users[userId].organization;
+    const availableObjects = await getOrganizationObjects(userOrganization);
+    const objectName = availableObjects[objectIndex];
+
+    if (!objectName) {
+        return ctx.reply('Ошибка: объект не найден.');
+    }
+
+    // Получаем всех пользователей, у которых выбранный объект есть в selectedObjects (независимо от организации)
+    const allUsers = await loadUsers();
+    const objectUsers = Object.entries(allUsers).filter(([_, user]) => 
+        Array.isArray(user.selectedObjects) && user.selectedObjects.includes(objectName)
+    );
+
+    if (objectUsers.length === 0) {
+        return ctx.reply(`Пользователи для объекта "${objectName}" не найдены.`);
+    }
+
+    await clearPreviousMessages(ctx, userId);
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Люди');
+
+    const titleStyle = {
+        font: { name: 'Arial', size: 12, bold: true },
+        alignment: { horizontal: 'center' }
+    };
+    const headerStyle = {
+        font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } },
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+        border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+    };
+    const centeredCellStyle = {
+        font: { name: 'Arial', size: 9 },
+        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+        border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+    };
+    const paddedCellStyle = {
+        font: { name: 'Arial', size: 9 },
+        alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
+        border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+    };
+
+    // Заголовок
+    worksheet.mergeCells('A1:E1');
+    const titleCell = worksheet.getCell('A1');
+    titleCell.value = objectName;
+    titleCell.style = titleStyle;
+
+    // Заголовки колонок
+    const headerRow = worksheet.getRow(2);
+    headerRow.values = ['Должность', 'Организация', 'ФИО', 'Контактный телефон', 'Статус'];
+    headerRow.eachCell((cell, colNumber) => {
+        cell.style = headerStyle;
+    });
+
+    // Данные
+    let currentRow = 3;
+    for (const [userId, user] of objectUsers) {
+        const row = worksheet.getRow(currentRow);
+        row.values = [
+            user.position || 'Не указано',
+            user.organization || 'Не указано',
+            user.fullName || 'Не указано',
+            user.phone || 'Не указано',
+            user.status || 'Не указан'
+        ];
+        
+        // Применяем стили
+        row.getCell(1).style = centeredCellStyle; // Должность
+        row.getCell(2).style = centeredCellStyle; // Организация
+        row.getCell(3).style = paddedCellStyle; // ФИО
+        row.getCell(4).style = paddedCellStyle; // Контактный телефон
+        row.getCell(5).style = centeredCellStyle; // Статус
+        
+        currentRow++;
+    }
+
+    // Настройка ширины колонок
+    worksheet.columns = [
+        { key: 'position', width: 25 },
+        { key: 'organization', width: 30 },
+        { key: 'fullName', width: 30 },
+        { key: 'phone', width: 20 },
+        { key: 'status', width: 15 }
+    ];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const filename = `${objectName}_users_${formatDate(new Date())}.xlsx`;
+
+    const documentMessage = await ctx.replyWithDocument({ source: buffer, filename });
+    ctx.state.userStates[userId].messageIds.push(documentMessage.message_id);
+}
+
 async function createReport(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
@@ -563,9 +710,13 @@ ${newReport.materials}
 }
 
 module.exports = (bot) => {
-    bot.action('download_report', async (ctx) => await showDownloadReport(ctx, 0));
+    bot.action('download_report', async (ctx) => await showDownloadMenu(ctx));
+    bot.action('download_type_reports', async (ctx) => await showDownloadReport(ctx, 0));
+    bot.action('download_type_users', async (ctx) => await showDownloadUsers(ctx, 0));
     bot.action(/download_report_page_(\d+)/, async (ctx) => await showDownloadReport(ctx, parseInt(ctx.match[1], 10)));
     bot.action(/download_report_file_(\d+)/, (ctx) => downloadReportFile(ctx, parseInt(ctx.match[1], 10)));
+    bot.action(/download_users_page_(\d+)/, async (ctx) => await showDownloadUsers(ctx, parseInt(ctx.match[1], 10)));
+    bot.action(/download_users_file_(\d+)/, (ctx) => downloadUsersFile(ctx, parseInt(ctx.match[1], 10)));
     bot.action('create_report', createReport);
     bot.action(/select_object_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
