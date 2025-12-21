@@ -15,7 +15,7 @@ const statusActions = require('./actions/status');
 const { loadUsers } = require('../database/userModel');
 const { loadUserReports } = require('../database/reportModel');
 const { formatDate } = require('./utils');
-const { getNotificationSettings, getAllNotificationSettings, getObjectGroups, getGeneralGroupChatIds, getOrganizationObjects } = require('../database/configService');
+const { getNotificationSettings, getAllNotificationSettings, getObjectGroups, getGeneralGroupChatIds, getOrganizationObjects, getReportUsers } = require('../database/configService');
 const { getAllObjects } = require('../database/objectModel');
 const { loadAllReports } = require('../database/reportModel');
 const { formatNotificationMessage, parseTimeToCron } = require('./utils/notificationHelper');
@@ -88,32 +88,39 @@ async function sendReportReminders() {
 
     const users = await loadUsers();
     const objectGroups = await getObjectGroups();
-    
-    const producers = Object.entries(users).filter(([_, user]) =>
-        user.position === 'Производитель работ' &&
-        user.isApproved &&
-        user.status === 'В работе'
-    );
 
-    for (const [userId, user] of producers) {
+    // Проверяем каждого пользователя
+    for (const [userId, user] of Object.entries(users)) {
+      // Пропускаем пользователей, которые не одобрены или находятся в отпуске
+      if (!user.isApproved || user.status !== 'В работе') {
+        continue;
+      }
+
       const reports = await loadUserReports(userId);
       const todayReports = Object.values(reports).filter(report => report.date === formattedDate);
 
+      // Проверяем каждый объект пользователя
       for (const objectName of user.selectedObjects) {
-        const hasReport = todayReports.some(report => report.objectName === objectName);
-        if (!hasReport) {
-          const groupChatId = objectGroups[objectName];
-          if (groupChatId) {
-            // Форматируем сообщение с использованием шаблона
-            const reminderText = formatNotificationMessage(settings.messageTemplate, {
-              fullName: user.fullName,
-              date: formattedDate
-            });
-            
-            try {
-              await bot.telegram.sendMessage(groupChatId, reminderText);
-            } catch (error) {
-              console.error(`Ошибка отправки напоминания для ${userId} в чат ${groupChatId}:`, error);
+        // Получаем список пользователей, которые должны подавать отчеты для пары организация+объект
+        const reportUsers = await getReportUsers(user.organization, objectName);
+        
+        // Проверяем, должен ли этот пользователь подавать отчет по этому объекту
+        if (reportUsers && reportUsers.includes(userId)) {
+          const hasReport = todayReports.some(report => report.objectName === objectName);
+          if (!hasReport) {
+            const groupChatId = objectGroups[objectName];
+            if (groupChatId) {
+              // Форматируем сообщение с использованием шаблона
+              const reminderText = formatNotificationMessage(settings.messageTemplate, {
+                fullName: user.fullName,
+                date: formattedDate
+              });
+              
+              try {
+                await bot.telegram.sendMessage(groupChatId, reminderText);
+              } catch (error) {
+                console.error(`Ошибка отправки напоминания для ${userId} в чат ${groupChatId}:`, error);
+              }
             }
           }
         }

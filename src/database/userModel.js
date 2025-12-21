@@ -35,6 +35,7 @@ async function loadUsers() {
             nextReportId: user.nextReportId || 1,
             reports: user.reports || {},
             phone: user.phone || '',
+            birthdate: user.birthdate || null,
             createdAt: user.createdAt || null
         };
     });
@@ -61,7 +62,8 @@ async function saveUser(telegramId, userData) {
             isApproved: userData.isApproved || 0,
             nextReportId: userData.nextReportId || 1,
             reports: userData.reports || {},
-            phone: userData.phone || ''
+            phone: userData.phone || '',
+            birthdate: userData.birthdate || null
         };
         
         // Устанавливаем createdAt только если пользователь новый

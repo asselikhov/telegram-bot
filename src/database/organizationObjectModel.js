@@ -23,6 +23,13 @@ async function getOrganizationObjects(organizationName) {
     return links.map(link => link.objectName);
 }
 
+async function getOrganizationsByObject(objectName) {
+    await ensureIndexes();
+    const collection = (await getDb()).collection('organization_objects');
+    const links = await collection.find({ objectName }).toArray();
+    return links.map(link => link.organizationName);
+}
+
 async function getAllOrganizationObjects() {
     await ensureIndexes();
     const collection = (await getDb()).collection('organization_objects');
@@ -78,6 +85,7 @@ async function linkExists(organizationName, objectName) {
 module.exports = {
     getOrganizationObjects,
     getAllOrganizationObjects,
+    getOrganizationsByObject,
     addObjectToOrganization,
     removeObjectFromOrganization,
     removeAllObjectsFromOrganization,

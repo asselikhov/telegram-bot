@@ -123,14 +123,15 @@ async function showProfile(ctx) {
         objectsList = 'Не выбраны';
     }
 
-    const profileText = `
+        const birthdateText = user.birthdate ? `🎂 Дата рождения: ${user.birthdate}\n\n` : '';
+        
+        const profileText = `
 👤 ЛИЧНЫЙ КАБИНЕТ  
 ➖➖➖➖➖➖➖➖➖➖➖  
 ${user.position || 'Не указана'}  
 ${organizationText}  
 ${user.fullName || 'Не указано'}  
-
-${objectsList}  
+${birthdateText}${objectsList}  
 
 ${statusEmoji} ${user.status || 'Не указан'}
 `.trim();

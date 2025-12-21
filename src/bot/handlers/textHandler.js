@@ -681,6 +681,73 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 }
                 break;
                 
+            case 'admin_user_edit_birthdate':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const targetUserId = state.adminSelectedUserId;
+                    if (!targetUserId) {
+                        await ctx.reply('Ошибка: пользователь не выбран.');
+                        state.step = null;
+                        break;
+                    }
+                    const birthdateInput = ctx.message.text.trim();
+                    
+                    // Проверка на команду очистки
+                    if (birthdateInput === '/clear') {
+                        const users = await loadUsers();
+                        if (users[targetUserId]) {
+                            const oldValue = users[targetUserId].birthdate;
+                            users[targetUserId].birthdate = null;
+                            await saveUser(targetUserId, users[targetUserId]);
+                            
+                            // Логируем изменение
+                            const { logUserChange } = require('../../database/auditLogModel');
+                            await logUserChange(targetUserId, userId, 'update', 'birthdate', oldValue, null);
+                            
+                            state.step = null;
+                            await ctx.reply('Дата рождения очищена.');
+                            const adminModule = require('./admin');
+                            if (adminModule.showUserDetails) {
+                                const returnPage = state.adminUsersReturnPage || 0;
+                                await adminModule.showUserDetails(ctx, targetUserId, returnPage);
+                            }
+                        }
+                        break;
+                    }
+                    
+                    // Валидация формата и корректности даты
+                    const { validateBirthdate } = require('../utils');
+                    const validation = validateBirthdate(birthdateInput);
+                    if (!validation.valid) {
+                        const msg = await ctx.reply(`${validation.error}\n\nВведите дату в формате ДД.ММ.ГГГГ (например, 15.05.1990) или /clear для очистки:`);
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    
+                    const users = await loadUsers();
+                    if (users[targetUserId]) {
+                        const oldValue = users[targetUserId].birthdate;
+                        users[targetUserId].birthdate = birthdateInput;
+                        await saveUser(targetUserId, users[targetUserId]);
+                        
+                        // Логируем изменение
+                        const { logUserChange } = require('../../database/auditLogModel');
+                        await logUserChange(targetUserId, userId, 'update', 'birthdate', oldValue, birthdateInput);
+                        
+                        state.step = null;
+                        await ctx.reply(`Дата рождения изменена на "${birthdateInput}".`);
+                        const adminModule = require('./admin');
+                        if (adminModule.showUserDetails) {
+                            const returnPage = state.adminUsersReturnPage || 0;
+                            await adminModule.showUserDetails(ctx, targetUserId, returnPage);
+                        }
+                    }
+                } catch (error) {
+                    await ctx.reply('Ошибка при изменении даты рождения: ' + error.message);
+                    state.step = null;
+                }
+                break;
+                
             // ========== АДМИН-ПАНЕЛЬ: ДОБАВЛЕНИЕ ПОЛЬЗОВАТЕЛЕЙ ==========
             case 'admin_user_add_telegramid':
                 if (userId !== ADMIN_ID) break;

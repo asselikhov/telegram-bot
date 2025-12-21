@@ -328,14 +328,14 @@ async function downloadUsersFile(ctx, objectIndex) {
     };
 
     // Заголовок
-    worksheet.mergeCells('A1:E1');
+    worksheet.mergeCells('A1:F1');
     const titleCell = worksheet.getCell('A1');
     titleCell.value = objectName;
     titleCell.style = titleStyle;
 
     // Заголовки колонок
     const headerRow = worksheet.getRow(2);
-    headerRow.values = ['Должность', 'Организация', 'ФИО', 'Контактный телефон', 'Статус'];
+    headerRow.values = ['Должность', 'Организация', 'ФИО', 'Контактный телефон', 'Дата рождения', 'Статус'];
     headerRow.eachCell((cell, colNumber) => {
         cell.style = headerStyle;
     });
@@ -349,6 +349,7 @@ async function downloadUsersFile(ctx, objectIndex) {
             user.organization || 'Не указано',
             user.fullName || 'Не указано',
             user.phone || 'Не указано',
+            user.birthdate || 'Не указано',
             user.status || 'Не указан'
         ];
         
@@ -357,7 +358,8 @@ async function downloadUsersFile(ctx, objectIndex) {
         row.getCell(2).style = centeredCellStyle; // Организация
         row.getCell(3).style = paddedCellStyle; // ФИО
         row.getCell(4).style = paddedCellStyle; // Контактный телефон
-        row.getCell(5).style = centeredCellStyle; // Статус
+        row.getCell(5).style = centeredCellStyle; // Дата рождения
+        row.getCell(6).style = centeredCellStyle; // Статус
         
         currentRow++;
     }
@@ -368,6 +370,7 @@ async function downloadUsersFile(ctx, objectIndex) {
         { key: 'organization', width: 30 },
         { key: 'fullName', width: 30 },
         { key: 'phone', width: 20 },
+        { key: 'birthdate', width: 15 },
         { key: 'status', width: 15 }
     ];
 

@@ -27,6 +27,7 @@ const {
 } = require('../../database/objectModel');
 const { 
     getOrganizationObjects, 
+    getOrganizationsByObject,
     addObjectToOrganization, 
     removeObjectFromOrganization,
     removeAllObjectsFromOrganization,
@@ -41,12 +42,19 @@ const {
     loadAllReports,
     loadUserReports
 } = require('../../database/reportModel');
+const {
+    setReportUsers,
+    removeReportUsers,
+    removeAllForOrganization,
+    removeAllForObject
+} = require('../../database/objectReportUsersModel');
 const { 
     getOrganizations: getOrgFromService,
     getPositions: getPosFromService,
     getObjects: getObjFromService,
     getNotificationSettings,
     getAllNotificationSettings,
+    getReportUsers,
     clearConfigCache 
 } = require('../../database/configService');
 const { 
@@ -484,6 +492,7 @@ ${objectsList}
         // Удаляем старые связи
         for (const objName of toRemove) {
             await removeObjectFromOrganization(orgName, objName);
+            await removeReportUsers(orgName, objName);
         }
         
         clearConfigCache();
@@ -577,6 +586,7 @@ ${objectsList}
         
         // Если нет пользователей, удаляем организацию
         await removeAllObjectsFromOrganization(orgName);
+        await removeAllForOrganization(orgName);
         await deleteOrganization(orgName);
         clearConfigCache();
         
@@ -610,6 +620,8 @@ ${objectsList}
         
         // Удаляем связи организации с объектами
         await removeAllObjectsFromOrganization(context.orgName);
+        // Удаляем настройки пользователей для отчетов
+        await removeAllForOrganization(context.orgName);
         // Удаляем организацию
         await deleteOrganization(context.orgName);
         clearConfigCache();
@@ -787,6 +799,7 @@ ${objectsList}
         const objText = `🏗 **${obj.name}**\n\n📱 ID группы: ${obj.telegramGroupId || 'Не указан'}\n📊 Статус: ${statusEmoji} ${obj.status || 'В работе'}\n👥 Используется пользователями: ${usersWithObj.length}\n📄 Отчетов: ${reportsWithObj.length}`;
         const buttons = [
             [Markup.button.callback('✏️ Редактировать', 'admin_obj_edit')],
+            [Markup.button.callback('📋 Настройка отчетов', `admin_obj_report_users_${objIndex}`)],
             [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
             [Markup.button.callback('↩️ Назад', 'admin_objects')]
         ];
@@ -970,6 +983,241 @@ ${objectsList}
         }
     });
     
+    // ========== НАСТРОЙКА ПОЛЬЗОВАТЕЛЕЙ ДЛЯ ОТЧЕТОВ ПО ОБЪЕКТУ ==========
+    bot.action(/admin_obj_report_users_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objIndex = parseInt(ctx.match[1], 10);
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        if (!objNames || !objNames[objIndex]) {
+            await ctx.reply('Объект не найден.');
+            return;
+        }
+        const objName = objNames[objIndex];
+        ctx.state.userStates[userId].adminSelectedObjName = objName;
+        ctx.state.userStates[userId].adminSelectedObjIndex = objIndex;
+        
+        await showObjectReportOrganizationsList(ctx, objIndex);
+    });
+    
+    async function showObjectReportOrganizationsList(ctx, objIndex) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        if (!objNames || !objNames[objIndex]) {
+            await ctx.reply('Объект не найден.');
+            return;
+        }
+        const objName = objNames[objIndex];
+        
+        const organizations = await getOrganizationsByObject(objName);
+        if (organizations.length === 0) {
+            await ctx.reply(`Для объекта "${objName}" не найдено организаций.`);
+            const objIndexBack = ctx.state.userStates[userId].adminSelectedObjIndex ?? 0;
+            // Возвращаемся к детальному просмотру объекта
+            const obj = await getObject(objName);
+            const usersWithObj = await getUsersByObject(objName);
+            const reportsWithObj = await getReportsByObject(objName);
+            await clearPreviousMessages(ctx, userId);
+            const statusEmoji = obj.status === 'В работе' ? '🟢' : '❄️';
+            const objText = `🏗 **${obj.name}**\n\n📱 ID группы: ${obj.telegramGroupId || 'Не указан'}\n📊 Статус: ${statusEmoji} ${obj.status || 'В работе'}\n👥 Используется пользователями: ${usersWithObj.length}\n📄 Отчетов: ${reportsWithObj.length}`;
+            const buttons = [
+                [Markup.button.callback('✏️ Редактировать', 'admin_obj_edit')],
+                [Markup.button.callback('📋 Настройка отчетов', `admin_obj_report_users_${objIndexBack}`)],
+                [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
+                [Markup.button.callback('↩️ Назад', 'admin_objects')]
+            ];
+            const message = await ctx.reply(objText, {
+                parse_mode: 'Markdown',
+                reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+            });
+            ctx.state.userStates[userId].messageIds.push(message.message_id);
+            return;
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        ctx.state.userStates[userId].adminReportOrgList = organizations;
+        
+        const buttons = organizations.map((orgName, orgIndex) => [
+            Markup.button.callback(`✏️ ${orgName}`, `admin_obj_org_report_users_${objIndex}_${orgIndex}`)
+        ]);
+        buttons.push([Markup.button.callback('↩️ Назад', `obj_${objIndex}`)]);
+        
+        const message = await ctx.reply(
+            `📋 Настройка отчетов по объекту "${objName}"\n\nВыберите организацию:`,
+            Markup.inlineKeyboard(buttons)
+        );
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    }
+    
+    bot.action(/admin_obj_org_report_users_(\d+)_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objIndex = parseInt(ctx.match[1], 10);
+        const orgIndex = parseInt(ctx.match[2], 10);
+        
+        await showOrganizationUsersForObjectReport(ctx, objIndex, orgIndex);
+    });
+    
+    async function showOrganizationUsersForObjectReport(ctx, objIndex, orgIndex) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        const orgNames = ctx.state.userStates[userId].adminReportOrgList;
+        
+        if (!objNames || !objNames[objIndex] || !orgNames || !orgNames[orgIndex]) {
+            await ctx.reply('Ошибка: объект или организация не найдены.');
+            return;
+        }
+        
+        const objName = objNames[objIndex];
+        const orgName = orgNames[orgIndex];
+        
+        // Получаем всех пользователей организации, у которых есть этот объект
+        const allUsers = await loadUsers();
+        const orgUsers = Object.entries(allUsers).filter(([_, user]) => 
+            user.organization === orgName && 
+            Array.isArray(user.selectedObjects) && 
+            user.selectedObjects.includes(objName)
+        );
+        
+        if (orgUsers.length === 0) {
+            await ctx.reply(`Для организации "${orgName}" и объекта "${objName}" не найдено пользователей с этим объектом в личном кабинете.`);
+            await showObjectReportOrganizationsList(ctx, objIndex);
+            return;
+        }
+        
+        // Получаем текущий список выбранных пользователей для отчетов
+        const currentReportUsers = await getReportUsers(orgName, objName);
+        
+        // Инициализируем состояние выбранных пользователей, если его нет
+        const stateKey = `objReportSelectedUsers_${objIndex}_${orgIndex}`;
+        if (!ctx.state.userStates[userId][stateKey]) {
+            ctx.state.userStates[userId][stateKey] = {};
+            // Загружаем текущие настройки в состояние
+            orgUsers.forEach(([uid, _], userIndex) => {
+                if (currentReportUsers.includes(uid)) {
+                    ctx.state.userStates[userId][stateKey][userIndex] = uid;
+                }
+            });
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        
+        const selectedUsers = ctx.state.userStates[userId][stateKey];
+        const buttons = orgUsers.map(([uid, user], userIndex) => {
+            const isSelected = selectedUsers[userIndex] === uid;
+            const marker = isSelected ? '✅' : '☐';
+            return [Markup.button.callback(
+                `${marker} ${user.fullName || uid}`,
+                `admin_obj_org_report_user_toggle_${objIndex}_${orgIndex}_${userIndex}`
+            )];
+        });
+        buttons.push([Markup.button.callback('✅ Сохранить', `admin_obj_org_report_users_save_${objIndex}_${orgIndex}`)]);
+        buttons.push([Markup.button.callback('↩️ Назад', `admin_obj_report_users_${objIndex}`)]);
+        
+        const selectedCount = Object.keys(selectedUsers).length;
+        const message = await ctx.reply(
+            `📋 Настройка пользователей для отчетов\n\nОбъект: **${objName}**\nОрганизация: **${orgName}**\n\nВыберите пользователей (выбрано: ${selectedCount}):`,
+            {
+                parse_mode: 'Markdown',
+                reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+            }
+        );
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    }
+    
+    bot.action(/admin_obj_org_report_user_toggle_(\d+)_(\d+)_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objIndex = parseInt(ctx.match[1], 10);
+        const orgIndex = parseInt(ctx.match[2], 10);
+        const userIndex = parseInt(ctx.match[3], 10);
+        
+        const stateKey = `objReportSelectedUsers_${objIndex}_${orgIndex}`;
+        if (!ctx.state.userStates[userId][stateKey]) {
+            ctx.state.userStates[userId][stateKey] = {};
+        }
+        
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        const orgNames = ctx.state.userStates[userId].adminReportOrgList;
+        
+        if (!objNames || !objNames[objIndex] || !orgNames || !orgNames[orgIndex]) {
+            await ctx.reply('Ошибка: объект или организация не найдены.');
+            return;
+        }
+        
+        const objName = objNames[objIndex];
+        const orgName = orgNames[orgIndex];
+        
+        // Получаем список пользователей организации с этим объектом
+        const allUsers = await loadUsers();
+        const orgUsers = Object.entries(allUsers).filter(([_, user]) => 
+            user.organization === orgName && 
+            Array.isArray(user.selectedObjects) && 
+            user.selectedObjects.includes(objName)
+        );
+        
+        if (!orgUsers[userIndex]) {
+            await ctx.reply('Пользователь не найден.');
+            return;
+        }
+        
+        const [uid, _] = orgUsers[userIndex];
+        
+        // Переключаем выбор
+        if (ctx.state.userStates[userId][stateKey][userIndex] === uid) {
+            delete ctx.state.userStates[userId][stateKey][userIndex];
+        } else {
+            ctx.state.userStates[userId][stateKey][userIndex] = uid;
+        }
+        
+        // Обновляем отображение
+        await showOrganizationUsersForObjectReport(ctx, objIndex, orgIndex);
+    });
+    
+    bot.action(/admin_obj_org_report_users_save_(\d+)_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objIndex = parseInt(ctx.match[1], 10);
+        const orgIndex = parseInt(ctx.match[2], 10);
+        
+        const stateKey = `objReportSelectedUsers_${objIndex}_${orgIndex}`;
+        const selectedUsers = ctx.state.userStates[userId][stateKey] || {};
+        
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        const orgNames = ctx.state.userStates[userId].adminReportOrgList;
+        
+        if (!objNames || !objNames[objIndex] || !orgNames || !orgNames[orgIndex]) {
+            await ctx.reply('Ошибка: объект или организация не найдены.');
+            return;
+        }
+        
+        const objName = objNames[objIndex];
+        const orgName = orgNames[orgIndex];
+        
+        // Получаем список userIds из выбранных
+        const userIds = Object.values(selectedUsers).filter(uid => uid);
+        
+        // Сохраняем настройки
+        await setReportUsers(orgName, objName, userIds);
+        clearConfigCache();
+        
+        // Очищаем состояние
+        delete ctx.state.userStates[userId][stateKey];
+        
+        await ctx.reply(`✅ Настройки сохранены для организации "${orgName}" и объекта "${objName}". Выбрано пользователей: ${userIds.length}`);
+        
+        // Возвращаемся к списку организаций
+        await showObjectReportOrganizationsList(ctx, objIndex);
+    });
+    
     bot.action('admin_obj_delete', async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
@@ -1033,6 +1281,7 @@ ${objectsList}
         
         // Если нет пользователей и отчетов, удаляем объект
         await removeOrganizationFromObject(objName);
+        await removeAllForObject(objName);
         await deleteObject(objName);
         clearConfigCache();
         await ctx.reply(`✅ Объект "${objName}" удален.`);
@@ -1141,6 +1390,8 @@ ${objectsList}
             
             // Удаляем связи объекта с организациями
             await removeOrganizationFromObject(objName);
+            // Удаляем настройки пользователей для отчетов
+            await removeAllForObject(objName);
             // Удаляем объект
             await deleteObject(objName);
             clearConfigCache();
@@ -1541,7 +1792,8 @@ ${objectsList}
         const buttons = [];
         for (let i = 0; i < pageUsers.length; i++) {
             const [uid, user] = pageUsers[i];
-            const buttonText = `${user.fullName || 'Без имени'} (${user.organization || 'Без организации'}) - ${user.position || 'Без должности'}`;
+            const birthdateText = user.birthdate ? ` 🎂 ${user.birthdate}` : '';
+            const buttonText = `${user.fullName || 'Без имени'} (${user.organization || 'Без организации'}) - ${user.position || 'Без должности'}${birthdateText}`;
             buttons.push([Markup.button.callback(buttonText, `admin_user_view_${i}`)]);
         }
         
@@ -1847,6 +2099,7 @@ ${objectsList}
             { header: 'Должность', key: 'position', width: 25 },
             { header: 'Организация', key: 'organization', width: 30 },
             { header: 'Телефон', key: 'phone', width: 15 },
+            { header: 'Дата рождения', key: 'birthdate', width: 15 },
             { header: 'Объекты', key: 'objects', width: 40 },
             { header: 'Статус', key: 'status', width: 15 },
             { header: 'Одобрен', key: 'isApproved', width: 12 },
@@ -1867,6 +2120,7 @@ ${objectsList}
                 position: user.position || '',
                 organization: user.organization || '',
                 phone: user.phone || '',
+                birthdate: user.birthdate || '',
                 objects: Array.isArray(user.selectedObjects) ? user.selectedObjects.join(', ') : '',
                 status: user.status || '',
                 isApproved: user.isApproved ? 'Да' : 'Нет',
@@ -1982,6 +2236,8 @@ ${objectsList}
         ctx.state.userStates[userId].adminBreadcrumbs = ['Админ-панель', 'Пользователи', user.fullName || 'Без имени'];
         const breadcrumbsText = getBreadcrumbsText(ctx.state.userStates[userId].adminBreadcrumbs);
         
+        const birthdateText = user.birthdate ? `🎂 Дата рождения: ${user.birthdate}` : '';
+        
         const userText = `
 ${breadcrumbsText}👤 **${user.fullName || 'Без имени'}**
 
@@ -1989,6 +2245,7 @@ ${breadcrumbsText}👤 **${user.fullName || 'Без имени'}**
 💼 Должность: ${user.position || 'Не указана'}
 🏢 Организация: ${user.organization || 'Не указана'}
 📞 Телефон: ${user.phone || 'Не указан'}
+${birthdateText}
 ${statusEmoji} Статус: ${user.status || 'Не указан'}
 ${approvedStatus}
 
@@ -2022,6 +2279,7 @@ ${objectsList}
             [Markup.button.callback('✏️ Редактировать должность', 'admin_user_edit_position')],
             [Markup.button.callback('✏️ Редактировать организацию', 'admin_user_edit_organization')],
             [Markup.button.callback('✏️ Редактировать телефон', 'admin_user_edit_phone')],
+            [Markup.button.callback('✏️ Редактировать дату рождения', 'admin_user_edit_birthdate')],
             [Markup.button.callback('✏️ Редактировать объекты', 'admin_user_edit_objects')],
             [Markup.button.callback('✏️ Изменить статус', 'admin_user_edit_status')],
             [Markup.button.callback(user.isApproved ? '❌ Отклонить' : '✅ Одобрить', 'admin_user_toggle_approved')],
@@ -2144,6 +2402,24 @@ ${objectsList}
         await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].step = 'admin_user_edit_phone';
         const message = await ctx.reply('Введите новый телефон:', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Отмена', 'admin_user_back')]
+        ]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_user_edit_birthdate', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const targetUserId = ctx.state.userStates[userId].adminSelectedUserId;
+        if (!targetUserId) {
+            await ctx.reply('Ошибка: пользователь не выбран.');
+            return;
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        ctx.state.userStates[userId].step = 'admin_user_edit_birthdate';
+        const message = await ctx.reply('Введите дату рождения в формате ДД.ММ.ГГГГ (например, 15.05.1990) или отправьте /clear для очистки:', Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Отмена', 'admin_user_back')]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
