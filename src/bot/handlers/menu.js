@@ -50,20 +50,84 @@ async function showProfile(ctx) {
     const generalGroupChatIds = await getGeneralGroupChatIds();
     const allObjects = await getAllObjects();
     
-    // Формируем текст профиля (объекты как текст для отображения, но кнопки будут отдельно)
-    const objectsList = filteredObjects.length > 0
-        ? filteredObjects.map(obj => `· ${obj}`).join('\n')
-        : 'Не выбраны';
-
     await clearPreviousMessages(ctx, userId);
 
     const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
+
+    // Формируем название организации со ссылкой
+    let organizationText = user.organization || 'Не указана';
+    if (user.organization) {
+        const orgChatInfo = generalGroupChatIds[user.organization];
+        if (orgChatInfo && orgChatInfo.chatId) {
+            try {
+                const chat = await ctx.telegram.getChat(orgChatInfo.chatId);
+                let orgUrl;
+                if (chat.username) {
+                    orgUrl = `https://t.me/${chat.username}`;
+                } else {
+                    try {
+                        orgUrl = await ctx.telegram.exportChatInviteLink(orgChatInfo.chatId);
+                    } catch (inviteError) {
+                        console.error('Ошибка при генерации invite link для организации:', inviteError);
+                        // Оставляем текст без ссылки
+                    }
+                }
+                if (orgUrl) {
+                    // Экранируем только квадратные скобки в названии для Markdown ссылок
+                    const escapedOrgName = user.organization.replace(/[\[\]]/g, '\\$&');
+                    organizationText = `[${escapedOrgName}](${orgUrl})`;
+                }
+            } catch (error) {
+                console.error('Ошибка при получении информации о чате организации:', error);
+                // Оставляем текст без ссылки
+            }
+        }
+    }
+
+    // Формируем список объектов со ссылками
+    let objectsList;
+    if (filteredObjects.length > 0) {
+        const objectsWithLinks = await Promise.all(
+            filteredObjects.map(async (objName) => {
+                const objInfo = allObjects.find(obj => obj.name === objName);
+                if (objInfo && objInfo.telegramGroupId) {
+                    try {
+                        const chat = await ctx.telegram.getChat(objInfo.telegramGroupId);
+                        let objUrl;
+                        if (chat.username) {
+                            objUrl = `https://t.me/${chat.username}`;
+                        } else {
+                            try {
+                                objUrl = await ctx.telegram.exportChatInviteLink(objInfo.telegramGroupId);
+                            } catch (inviteError) {
+                                console.error(`Ошибка при генерации invite link для объекта ${objName}:`, inviteError);
+                                // Оставляем текст без ссылки
+                                return `· ${objName}`;
+                            }
+                        }
+                        if (objUrl) {
+                            // Экранируем только квадратные скобки в названии для Markdown ссылок
+                            const escapedObjName = objName.replace(/[\[\]]/g, '\\$&');
+                            return `· [${escapedObjName}](${objUrl})`;
+                        }
+                    } catch (error) {
+                        console.error(`Ошибка при получении информации о чате объекта ${objName}:`, error);
+                        // Оставляем текст без ссылки
+                    }
+                }
+                return `· ${objName}`;
+            })
+        );
+        objectsList = objectsWithLinks.join('\n');
+    } else {
+        objectsList = 'Не выбраны';
+    }
 
     const profileText = `
 👤 ЛИЧНЫЙ КАБИНЕТ  
 ➖➖➖➖➖➖➖➖➖➖➖  
 ${user.position || 'Не указана'}  
-${user.organization || 'Не указана'}  
+${organizationText}  
 ${user.fullName || 'Не указано'}  
 
 ${objectsList}  
@@ -71,81 +135,18 @@ ${objectsList}
 ${statusEmoji} ${user.status || 'Не указан'}
 `.trim();
 
-    const buttons = [];
-    
-    // Кнопка для организации
-    if (user.organization) {
-        const orgChatInfo = generalGroupChatIds[user.organization];
-        if (orgChatInfo && orgChatInfo.chatId) {
-            try {
-                const chat = await ctx.telegram.getChat(orgChatInfo.chatId);
-                if (chat.username) {
-                    // Группа с username - прямая ссылка
-                    buttons.push([Markup.button.url(`🏢 ${user.organization}`, `https://t.me/${chat.username}`)]);
-                } else {
-                    // Группа без username - используем прямое название (если короткое) или хэш
-                    // Сохраняем организацию в state для использования в обработчике
-                    if (!ctx.state.userStates[userId].profileOrgName) {
-                        ctx.state.userStates[userId].profileOrgName = user.organization;
-                    }
-                    const callbackData = `org_group_link_0`; // Используем индекс 0, т.к. организация одна
-                    const callbackDataBytes = Buffer.from(callbackData, 'utf8').length;
-                    if (callbackDataBytes > 64) {
-                        // Если все же превышает (маловероятно), используем только первые символы
-                        console.warn(`Callback data слишком длинный для организации: ${callbackDataBytes} байт`);
-                    }
-                    buttons.push([Markup.button.callback(`🏢 ${user.organization}`, callbackData)]);
-                }
-            } catch (error) {
-                // Если не удалось получить информацию о чате, используем callback
-                if (!ctx.state.userStates[userId].profileOrgName) {
-                    ctx.state.userStates[userId].profileOrgName = user.organization;
-                }
-                const callbackData = `org_group_link_0`;
-                buttons.push([Markup.button.callback(`🏢 ${user.organization}`, callbackData)]);
-            }
-        }
-    }
-    
-    // Сохраняем список объектов для использования в обработчике
-    ctx.state.userStates[userId].profileObjects = filteredObjects;
-    
-    // Кнопки для объектов
-    for (let objIndex = 0; objIndex < filteredObjects.length; objIndex++) {
-        const objName = filteredObjects[objIndex];
-        const objInfo = allObjects.find(obj => obj.name === objName);
-        if (objInfo && objInfo.telegramGroupId) {
-            try {
-                const chat = await ctx.telegram.getChat(objInfo.telegramGroupId);
-                if (chat.username) {
-                    // Группа с username - прямая ссылка
-                    buttons.push([Markup.button.url(`🏗 ${objName}`, `https://t.me/${chat.username}`)]);
-                } else {
-                    // Группа без username - используем индекс вместо encodeURIComponent
-                    const callbackData = `object_group_link_${objIndex}`;
-                    const callbackDataBytes = Buffer.from(callbackData, 'utf8').length;
-                    if (callbackDataBytes > 64) {
-                        console.warn(`Callback data слишком длинный для объекта: ${callbackDataBytes} байт`);
-                    }
-                    buttons.push([Markup.button.callback(`🏗 ${objName}`, callbackData)]);
-                }
-            } catch (error) {
-                // Если не удалось получить информацию о чате, используем callback
-                const callbackData = `object_group_link_${objIndex}`;
-                buttons.push([Markup.button.callback(`🏗 ${objName}`, callbackData)]);
-            }
-        }
-    }
-    
     // Основные кнопки меню
-    buttons.push(
+    const buttons = [
         [Markup.button.callback('✏️ Изменить данные', 'edit_data')],
         [Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')],
         [Markup.button.callback('🔑 Пригласительный код', userId === ADMIN_ID ? 'admin_invite_code_menu' : 'generate_invite_code')],
         [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
-    );
+    ];
 
-    const message = await ctx.reply(profileText, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(profileText, {
+        parse_mode: 'Markdown',
+        reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+    });
     ctx.state.userStates[userId].messageIds.push(message.message_id);
 }
 
@@ -178,82 +179,6 @@ module.exports = (bot) => {
         ctx.state.userStates[userId].step = 'editFullNameInput';
         const message = await ctx.reply('Введите новое ФИО:');
         ctx.state.userStates[userId].messageIds.push(message.message_id);
-    });
-    
-    // Обработчик для генерации invite link для объекта
-    bot.action(/^object_group_link_(\d+)$/, async (ctx) => {
-        const userId = ctx.from.id.toString();
-        const objIndex = parseInt(ctx.match[1], 10);
-        const profileObjects = ctx.state.userStates[userId]?.profileObjects;
-        if (!profileObjects || !profileObjects[objIndex]) {
-            await ctx.answerCbQuery('Ошибка: объект не найден.');
-            return;
-        }
-        const objName = profileObjects[objIndex];
-        
-        try {
-            const allObjects = await getAllObjects();
-            const objInfo = allObjects.find(obj => obj.name === objName);
-            
-            if (!objInfo || !objInfo.telegramGroupId) {
-                await ctx.answerCbQuery('Группа для этого объекта не настроена.');
-                return;
-            }
-            
-            const inviteLink = await ctx.telegram.exportChatInviteLink(objInfo.telegramGroupId);
-            await ctx.reply(`🔗 Ссылка на группу объекта "${objName}":\n\n${inviteLink}`);
-            await ctx.answerCbQuery();
-        } catch (error) {
-            console.error('Ошибка при генерации invite link для объекта:', error);
-            let errorMessage = 'Не удалось получить ссылку на группу.';
-            if (error.response?.description) {
-                if (error.response.description.includes('not found')) {
-                    errorMessage = 'Группа не найдена. Проверьте настройки объекта.';
-                } else if (error.response.description.includes('not enough rights')) {
-                    errorMessage = 'Бот не имеет прав для создания ссылки на группу.';
-                } else if (error.response.description.includes('not a member')) {
-                    errorMessage = 'Бот не является участником группы.';
-                }
-            }
-            await ctx.answerCbQuery(errorMessage, { show_alert: true });
-        }
-    });
-    
-    // Обработчик для генерации invite link для организации
-    bot.action(/^org_group_link_(\d+)$/, async (ctx) => {
-        const userId = ctx.from.id.toString();
-        const orgName = ctx.state.userStates[userId]?.profileOrgName;
-        if (!orgName) {
-            await ctx.answerCbQuery('Ошибка: организация не найдена.');
-            return;
-        }
-        
-        try {
-            const generalGroupChatIds = await getGeneralGroupChatIds();
-            const orgChatInfo = generalGroupChatIds[orgName];
-            
-            if (!orgChatInfo || !orgChatInfo.chatId) {
-                await ctx.answerCbQuery('Группа для этой организации не настроена.');
-                return;
-            }
-            
-            const inviteLink = await ctx.telegram.exportChatInviteLink(orgChatInfo.chatId);
-            await ctx.reply(`🔗 Ссылка на группу организации "${orgName}":\n\n${inviteLink}`);
-            await ctx.answerCbQuery();
-        } catch (error) {
-            console.error('Ошибка при генерации invite link для организации:', error);
-            let errorMessage = 'Не удалось получить ссылку на группу.';
-            if (error.response?.description) {
-                if (error.response.description.includes('not found')) {
-                    errorMessage = 'Группа не найдена. Проверьте настройки организации.';
-                } else if (error.response.description.includes('not enough rights')) {
-                    errorMessage = 'Бот не имеет прав для создания ссылки на группу.';
-                } else if (error.response.description.includes('not a member')) {
-                    errorMessage = 'Бот не является участником группы.';
-                }
-            }
-            await ctx.answerCbQuery(errorMessage, { show_alert: true });
-        }
     });
 };
 
