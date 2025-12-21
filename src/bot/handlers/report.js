@@ -3,7 +3,7 @@ const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, loadAllReports, saveReport } = require('../../database/reportModel');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
-const { getOrganizationObjects, getObjects, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap } = require('../../database/configService');
+const { getOrganizationObjects, getObjects, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap, getReportUsers } = require('../../database/configService');
 
 async function showDownloadMenu(ctx) {
     const userId = ctx.from.id.toString();
@@ -384,13 +384,31 @@ async function downloadUsersFile(ctx, objectIndex) {
 async function createReport(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
-    if (users[userId].position !== 'Производитель работ' || !users[userId].isApproved) {
+    const user = users[userId];
+    
+    if (!user || !user.isApproved) {
+        return ctx.reply('У вас нет прав для создания отчетов.');
+    }
+    
+    // Проверяем, должен ли пользователь подавать отчеты
+    let hasReportPermission = false;
+    if (user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+        for (const objectName of user.selectedObjects) {
+            const reportUsers = await getReportUsers(user.organization, objectName);
+            if (reportUsers && reportUsers.includes(userId)) {
+                hasReportPermission = true;
+                break;
+            }
+        }
+    }
+    
+    if (!hasReportPermission) {
         return ctx.reply('У вас нет прав для создания отчетов.');
     }
 
     await clearPreviousMessages(ctx, userId);
 
-    const userObjects = users[userId].selectedObjects;
+    const userObjects = user.selectedObjects;
     if (!userObjects || userObjects.length === 0) {
         return ctx.reply('У вас не выбрано ни одного объекта в личном кабинете.');
     }
