@@ -174,13 +174,60 @@ async function sendStatisticsNotifications() {
         // Объекты без отчетов за сегодня
         const objectsWithoutReports = objectsInWork.filter(objName => !reportedObjects.has(objName));
         
+        // Формируем список объектов со ссылками
+        const objectsWithLinks = await Promise.all(
+          objectsWithoutReports.map(async (objName) => {
+            const objInfo = allObjects.find(obj => obj.name === objName);
+            if (objInfo && objInfo.telegramGroupId) {
+              try {
+                const chat = await bot.telegram.getChat(objInfo.telegramGroupId);
+                let objUrl;
+                if (chat.username) {
+                  objUrl = `https://t.me/${chat.username}`;
+                } else {
+                  try {
+                    objUrl = await bot.telegram.exportChatInviteLink(objInfo.telegramGroupId);
+                  } catch (inviteError) {
+                    console.error(`Ошибка при генерации invite link для объекта ${objName}:`, inviteError);
+                    // Оставляем текст без ссылки, экранируем для HTML
+                    return objName.replace(/[<>&"]/g, (match) => {
+                      const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
+                      return map[match];
+                    });
+                  }
+                }
+                if (objUrl) {
+                  // Экранируем только квадратные скобки в названии для HTML ссылок
+                  const escapedObjName = objName.replace(/[<>&"]/g, (match) => {
+                    const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
+                    return map[match];
+                  });
+                  return `<a href="${objUrl}">${escapedObjName}</a>`;
+                }
+              } catch (error) {
+                console.error(`Ошибка при получении информации о чате объекта ${objName}:`, error);
+                // Оставляем текст без ссылки, экранируем для HTML
+                return objName.replace(/[<>&"]/g, (match) => {
+                  const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
+                  return map[match];
+                });
+              }
+            }
+            // Экранируем для HTML, если ссылки нет или нет telegramGroupId
+            return objName.replace(/[<>&"]/g, (match) => {
+              const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
+              return map[match];
+            });
+          })
+        );
+        
         // Формируем сообщение
         let statsMessage = `⚠️ Статистика за день:\n<blockquote>`;
         statsMessage += `1) Объектов в работе: ${objectsInWork.length}\n`;
         if (objectsWithoutReports.length > 0) {
           statsMessage += `2) Не поданы отчеты по объектам:\n`;
-          objectsWithoutReports.forEach(obj => {
-            statsMessage += `   · ${obj}\n`;
+          objectsWithLinks.forEach(objLink => {
+            statsMessage += `   · ${objLink}\n`;
           });
         } else {
           statsMessage += `2) Не поданы отчеты по объектам: нет\n`;
