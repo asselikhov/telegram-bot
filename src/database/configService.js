@@ -3,7 +3,7 @@ const { getAllOrganizations } = require('./organizationModel');
 const { getAllPositions } = require('./positionModel');
 const { getAllObjects } = require('./objectModel');
 const { getOrganizationObjects: getOrgObjects, getAllOrganizationObjects } = require('./organizationObjectModel');
-const { getNotificationSettings: getNotifSettings } = require('./notificationSettingsModel');
+const { getNotificationSettings: getNotifSettings, getAllNotificationSettings: getAllNotifSettings } = require('./notificationSettingsModel');
 
 // Создаем кэш с TTL 5 минут (300 секунд)
 const configCache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
@@ -144,17 +144,33 @@ async function getGeneralGroupChatIds() {
 }
 
 /**
- * Получить настройки уведомлений
+ * Получить настройки уведомлений по типу
  */
-async function getNotificationSettings() {
-    const cached = configCache.get(CACHE_KEYS.NOTIFICATION_SETTINGS);
+async function getNotificationSettings(type = 'reports') {
+    const cacheKey = `${CACHE_KEYS.NOTIFICATION_SETTINGS}_${type}`;
+    const cached = configCache.get(cacheKey);
     if (cached) {
         return cached;
     }
     
-    const settings = await getNotifSettings();
-    configCache.set(CACHE_KEYS.NOTIFICATION_SETTINGS, settings);
+    const settings = await getNotifSettings(type);
+    configCache.set(cacheKey, settings);
     return settings;
+}
+
+/**
+ * Получить все настройки уведомлений
+ */
+async function getAllNotificationSettings() {
+    const cacheKey = `${CACHE_KEYS.NOTIFICATION_SETTINGS}_all`;
+    const cached = configCache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+    
+    const allSettings = await getAllNotifSettings();
+    configCache.set(cacheKey, allSettings);
+    return allSettings;
 }
 
 module.exports = {
@@ -166,6 +182,7 @@ module.exports = {
     getObjectGroups,
     getGeneralGroupChatIds,
     getNotificationSettings,
+    getAllNotificationSettings,
     clearConfigCache
 };
 

@@ -15,7 +15,9 @@ const statusActions = require('./actions/status');
 const { loadUsers } = require('../database/userModel');
 const { loadUserReports } = require('../database/reportModel');
 const { formatDate } = require('./utils');
-const { getNotificationSettings, getObjectGroups } = require('../database/configService');
+const { getNotificationSettings, getAllNotificationSettings, getObjectGroups, getGeneralGroupChatIds, getOrganizationObjects } = require('../database/configService');
+const { getAllObjects } = require('../database/objectModel');
+const { loadAllReports } = require('../database/reportModel');
 const { formatNotificationMessage, parseTimeToCron } = require('./utils/notificationHelper');
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -67,16 +69,16 @@ bot.action(/.*/, (ctx, next) => {
   return next();
 });
 
-let reminderCronTask = null;
+let cronTasks = {};
 
 async function sendReportReminders() {
   try {
-    // Загружаем настройки уведомлений
-    const settings = await getNotificationSettings();
+    // Загружаем настройки уведомлений типа 'reports'
+    const settings = await getNotificationSettings('reports');
     
     // Проверяем, включены ли уведомления
     if (!settings.enabled) {
-      console.log('Уведомления отключены, пропускаем отправку напоминаний');
+      console.log('Уведомления об отчетах отключены, пропускаем отправку напоминаний');
       return;
     }
 
@@ -122,35 +124,115 @@ async function sendReportReminders() {
   }
 }
 
-async function setupReminderCron() {
+async function sendStatisticsNotifications() {
   try {
-    const settings = await getNotificationSettings();
+    // Загружаем настройки уведомлений типа 'statistics'
+    const settings = await getNotificationSettings('statistics');
     
-    // Останавливаем предыдущую задачу, если она существует
-    if (reminderCronTask) {
-      reminderCronTask.stop();
-      reminderCronTask = null;
+    // Проверяем, включены ли уведомления
+    if (!settings.enabled) {
+      console.log('Уведомления статистики отключены, пропускаем отправку');
+      return;
+    }
+
+    const moscowTime = new Date().toLocaleString('en-US', { timeZone: settings.timezone || 'Europe/Moscow' });
+    const currentDate = new Date(moscowTime);
+    const formattedDate = formatDate(currentDate);
+
+    const generalGroupChatIds = await getGeneralGroupChatIds();
+    const allObjects = await getAllObjects();
+    const allReports = await loadAllReports();
+    const allReportsArray = Object.values(allReports);
+    
+    // Получаем отчеты за сегодня
+    const todayReports = allReportsArray.filter(report => report.date === formattedDate);
+    const reportedObjects = new Set(todayReports.map(report => report.objectName));
+
+    // Обрабатываем каждую организацию
+    for (const [orgName, orgChatInfo] of Object.entries(generalGroupChatIds)) {
+      if (!orgChatInfo || !orgChatInfo.chatId) {
+        continue; // Пропускаем организации без группы
+      }
+
+      try {
+        // Получаем объекты организации
+        const orgObjects = await getOrganizationObjects(orgName);
+        
+        // Фильтруем только объекты со статусом "В работе"
+        const objectsInWork = orgObjects.filter(objName => {
+          const objInfo = allObjects.find(obj => obj.name === objName);
+          return objInfo && objInfo.status === 'В работе';
+        });
+        
+        // Объекты без отчетов за сегодня
+        const objectsWithoutReports = objectsInWork.filter(objName => !reportedObjects.has(objName));
+        
+        // Формируем сообщение
+        let statsMessage = `⚠️Статистика за день:\nОбъектов в работе: ${objectsInWork.length}\n`;
+        if (objectsWithoutReports.length > 0) {
+          statsMessage += `Не поданы отчеты по объектам: ${objectsWithoutReports.join(', ')}`;
+        } else {
+          statsMessage += `Не поданы отчеты по объектам: Нет`;
+        }
+        
+        // Отправляем в группу организации
+        await bot.telegram.sendMessage(orgChatInfo.chatId, statsMessage);
+      } catch (error) {
+        console.error(`Ошибка отправки статистики для организации ${orgName}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('Ошибка при отправке статистики:', error);
+  }
+}
+
+async function setupAllNotificationCrons() {
+  try {
+    // Останавливаем все существующие задачи
+    for (const [type, task] of Object.entries(cronTasks)) {
+      if (task) {
+        task.stop();
+      }
+    }
+    cronTasks = {};
+    
+    // Получаем все настройки уведомлений
+    const allSettings = await getAllNotificationSettings();
+    
+    // Настраиваем задачу для отчетов
+    if (allSettings.reports && allSettings.reports.enabled) {
+      try {
+        const cronExpression = parseTimeToCron(allSettings.reports.time, allSettings.reports.timezone);
+        cronTasks['reports'] = cron.schedule(cronExpression, () => {
+          console.log(`Запуск задачи отправки напоминаний об отчетах в ${allSettings.reports.time}`);
+          sendReportReminders();
+        }, {
+          timezone: allSettings.reports.timezone || "Europe/Moscow"
+        });
+        console.log(`Настроена задача уведомлений об отчетах: ${allSettings.reports.time} (${allSettings.reports.timezone})`);
+      } catch (error) {
+        console.error('Ошибка настройки задачи уведомлений об отчетах:', error);
+      }
     }
     
-    // Создаем новую задачу cron с настройками из БД
-    const cronExpression = parseTimeToCron(settings.time, settings.timezone);
-    reminderCronTask = cron.schedule(cronExpression, () => {
-      console.log(`Запуск задачи отправки напоминаний об отчетах в ${settings.time}`);
-      sendReportReminders();
-    }, {
-      timezone: settings.timezone || "Europe/Moscow"
-    });
+    // Настраиваем задачу для статистики
+    if (allSettings.statistics && allSettings.statistics.enabled) {
+      try {
+        const cronExpression = parseTimeToCron(allSettings.statistics.time, allSettings.statistics.timezone);
+        cronTasks['statistics'] = cron.schedule(cronExpression, () => {
+          console.log(`Запуск задачи отправки статистики в ${allSettings.statistics.time}`);
+          sendStatisticsNotifications();
+        }, {
+          timezone: allSettings.statistics.timezone || "Europe/Moscow"
+        });
+        console.log(`Настроена задача уведомлений статистики: ${allSettings.statistics.time} (${allSettings.statistics.timezone})`);
+      } catch (error) {
+        console.error('Ошибка настройки задачи уведомлений статистики:', error);
+      }
+    }
     
-    console.log(`Настроена задача напоминаний: ${settings.time} (${settings.timezone}), включено: ${settings.enabled}`);
   } catch (error) {
-    console.error('Ошибка настройки задачи напоминаний:', error);
-    // Fallback на значения по умолчанию
-    reminderCronTask = cron.schedule('0 19 * * *', () => {
-      console.log('Запуск задачи отправки напоминаний об отчетах (fallback)');
-      sendReportReminders();
-    }, {
-      timezone: "Europe/Moscow"
-    });
+    console.error('Ошибка настройки задач уведомлений:', error);
   }
 }
 
@@ -172,6 +254,7 @@ statusActions(bot);
 console.log('Все обработчики инициализированы');
 
 // Добавляем функцию setupReminderCron к экспортируемому объекту bot
-bot.setupReminderCron = setupReminderCron;
+bot.setupReminderCron = setupAllNotificationCrons; // Для обратной совместимости
+bot.setupAllNotificationCrons = setupAllNotificationCrons;
 
 module.exports = bot;

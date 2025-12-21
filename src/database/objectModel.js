@@ -21,6 +21,7 @@ async function getAllObjects() {
     return objects.map(obj => ({
         name: obj.name,
         telegramGroupId: obj.telegramGroupId || null,
+        status: obj.status || 'В работе', // По умолчанию "В работе" для обратной совместимости
         createdAt: obj.createdAt,
         updatedAt: obj.updatedAt
     }));
@@ -33,6 +34,7 @@ async function getObject(name) {
     return {
         name: obj.name,
         telegramGroupId: obj.telegramGroupId || null,
+        status: obj.status || 'В работе', // По умолчанию "В работе" для обратной совместимости
         createdAt: obj.createdAt,
         updatedAt: obj.updatedAt
     };
@@ -45,6 +47,7 @@ async function createObject(objectData) {
     const obj = {
         name: objectData.name,
         telegramGroupId: objectData.telegramGroupId || null,
+        status: objectData.status || 'В работе', // По умолчанию "В работе"
         createdAt: now,
         updatedAt: now
     };

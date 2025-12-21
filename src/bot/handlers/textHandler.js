@@ -17,7 +17,7 @@ const {
     createObject, updateObject, objectExists
 } = require('../../database/objectModel');
 const {
-    clearConfigCache, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap
+    clearConfigCache, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap, getNotificationSettings
 } = require('../../database/configService');
 const {
     updateNotificationSettings
@@ -448,6 +448,8 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 break;
                 
             case 'admin_notif_edit_time':
+            case 'admin_notif_edit_time_reports':
+            case 'admin_notif_edit_time_statistics':
                 if (userId !== ADMIN_ID) break;
                 try {
                     const timeString = ctx.message.text.trim();
@@ -456,20 +458,74 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                         state.messageIds.push(msg.message_id);
                         return;
                     }
-                    await updateNotificationSettings({ time: timeString });
+                    const type = state.currentNotificationType || (state.step === 'admin_notif_edit_time' ? 'reports' : state.step.replace('admin_notif_edit_time_', ''));
+                    await updateNotificationSettings(type, { time: timeString });
                     clearConfigCache();
                     state.step = null;
-                    const bot = require('../bot');
-                    if (bot.setupReminderCron) await bot.setupReminderCron();
-                    await ctx.reply(`Время уведомлений изменено на ${timeString}.`);
-                    const { showAdminPanel } = require('./admin');
-                    await showAdminPanel(ctx);
+                    delete state.currentNotificationType;
+                    const botInstance = require('../bot');
+                    if (botInstance.setupAllNotificationCrons) await botInstance.setupAllNotificationCrons();
+                    await ctx.reply(`Время уведомлений "${type === 'reports' ? 'Отчеты' : 'Статистика'}" изменено на ${timeString}.`);
+                    // Возвращаемся к настройкам конкретного типа через имитацию callback
+                    const { Markup } = require('telegraf');
+                    const botInstance = require('../bot');
+                    const fakeCtx = {
+                        ...ctx,
+                        match: [null, type],
+                        state: ctx.state
+                    };
+                    // Вызываем обработчик выбора типа напрямую
+                    if (type === 'reports') {
+                        const { clearPreviousMessages } = require('../utils');
+                        await clearPreviousMessages(ctx, userId);
+                        const { getNotificationSettings } = require('../../database/configService');
+                        const settings = await getNotificationSettings(type);
+                        const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
+                        let settingsText = `🔔 **Настройки уведомлений: Отчеты**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
+                        if (settings.messageTemplate) {
+                            settingsText += `\n📝 Шаблон сообщения:\n${settings.messageTemplate}`;
+                        }
+                        const buttons = [
+                            [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', 'admin_notif_toggle_reports')],
+                            [Markup.button.callback('⏰ Изменить время', 'admin_notif_time_reports')],
+                            [Markup.button.callback('📝 Изменить текст', 'admin_notif_text_reports')],
+                            [Markup.button.callback('👁 Предпросмотр', 'admin_notif_preview_reports')],
+                            [Markup.button.callback('↩️ Назад', 'admin_notifications')]
+                        ];
+                        const message = await ctx.reply(settingsText.trim(), {
+                            parse_mode: 'Markdown',
+                            reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+                        });
+                        ctx.state.userStates[userId].messageIds = [message.message_id];
+                        ctx.state.userStates[userId].currentNotificationType = type;
+                    } else {
+                        const { clearPreviousMessages } = require('../utils');
+                        await clearPreviousMessages(ctx, userId);
+                        const { getNotificationSettings } = require('../../database/configService');
+                        const settings = await getNotificationSettings(type);
+                        const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
+                        const settingsText = `🔔 **Настройки уведомлений: Статистика**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
+                        const buttons = [
+                            [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', 'admin_notif_toggle_statistics')],
+                            [Markup.button.callback('⏰ Изменить время', 'admin_notif_time_statistics')],
+                            [Markup.button.callback('↩️ Назад', 'admin_notifications')]
+                        ];
+                        const message = await ctx.reply(settingsText.trim(), {
+                            parse_mode: 'Markdown',
+                            reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+                        });
+                        ctx.state.userStates[userId].messageIds = [message.message_id];
+                        ctx.state.userStates[userId].currentNotificationType = type;
+                    }
                 } catch (error) {
                     await ctx.reply('Ошибка при изменении времени: ' + error.message);
+                    state.step = null;
+                    delete state.currentNotificationType;
                 }
                 break;
                 
             case 'admin_notif_edit_text':
+            case 'admin_notif_edit_text_reports':
                 if (userId !== ADMIN_ID) break;
                 try {
                     const template = ctx.message.text.trim();
@@ -478,14 +534,46 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                         state.messageIds.push(msg.message_id);
                         return;
                     }
-                    await updateNotificationSettings({ messageTemplate: template });
+                    const type = state.currentNotificationType || 'reports';
+                    if (type !== 'reports') {
+                        await ctx.reply('Изменение текста доступно только для уведомлений об отчетах.');
+                        state.step = null;
+                        delete state.currentNotificationType;
+                        break;
+                    }
+                    await updateNotificationSettings(type, { messageTemplate: template });
                     clearConfigCache();
                     state.step = null;
+                    delete state.currentNotificationType;
                     await ctx.reply('Шаблон сообщения обновлен.');
-                    const { showAdminPanel } = require('./admin');
-                    await showAdminPanel(ctx);
+                    // Возвращаемся к настройкам отчетов
+                    const { Markup } = require('telegraf');
+                    const { clearPreviousMessages } = require('../utils');
+                    await clearPreviousMessages(ctx, userId);
+                    const { getNotificationSettings } = require('../../database/configService');
+                    const settings = await getNotificationSettings('reports');
+                    const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
+                    let settingsText = `🔔 **Настройки уведомлений: Отчеты**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
+                    if (settings.messageTemplate) {
+                        settingsText += `\n📝 Шаблон сообщения:\n${settings.messageTemplate}`;
+                    }
+                    const buttons = [
+                        [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', 'admin_notif_toggle_reports')],
+                        [Markup.button.callback('⏰ Изменить время', 'admin_notif_time_reports')],
+                        [Markup.button.callback('📝 Изменить текст', 'admin_notif_text_reports')],
+                        [Markup.button.callback('👁 Предпросмотр', 'admin_notif_preview_reports')],
+                        [Markup.button.callback('↩️ Назад', 'admin_notifications')]
+                    ];
+                    const message = await ctx.reply(settingsText.trim(), {
+                        parse_mode: 'Markdown',
+                        reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+                    });
+                    ctx.state.userStates[userId].messageIds = [message.message_id];
+                    ctx.state.userStates[userId].currentNotificationType = 'reports';
                 } catch (error) {
                     await ctx.reply('Ошибка при изменении текста: ' + error.message);
+                    state.step = null;
+                    delete state.currentNotificationType;
                 }
                 break;
                 

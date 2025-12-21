@@ -33,7 +33,8 @@ const {
     removeOrganizationFromObject
 } = require('../../database/organizationObjectModel');
 const { 
-    getNotificationSettings, 
+    getNotificationSettings: getNotifSettingsModel, 
+    getAllNotificationSettings: getAllNotifSettingsModel,
     updateNotificationSettings 
 } = require('../../database/notificationSettingsModel');
 const { 
@@ -44,6 +45,8 @@ const {
     getOrganizations: getOrgFromService,
     getPositions: getPosFromService,
     getObjects: getObjFromService,
+    getNotificationSettings,
+    getAllNotificationSettings,
     clearConfigCache 
 } = require('../../database/configService');
 const { 
@@ -744,7 +747,8 @@ ${objectsList}
         const reportsWithObj = await getReportsByObject(objName);
         await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].adminSelectedObjIndex = objIndex;
-        const objText = `🏗 **${obj.name}**\n\n📱 ID группы: ${obj.telegramGroupId || 'Не указан'}\n👥 Используется пользователями: ${usersWithObj.length}\n📄 Отчетов: ${reportsWithObj.length}`;
+        const statusEmoji = obj.status === 'В работе' ? '🟢' : '❄️';
+        const objText = `🏗 **${obj.name}**\n\n📱 ID группы: ${obj.telegramGroupId || 'Не указан'}\n📊 Статус: ${statusEmoji} ${obj.status || 'В работе'}\n👥 Используется пользователями: ${usersWithObj.length}\n📄 Отчетов: ${reportsWithObj.length}`;
         const buttons = [
             [Markup.button.callback('✏️ Редактировать', 'admin_obj_edit')],
             [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
@@ -770,12 +774,110 @@ ${objectsList}
         const objIndex = ctx.state.userStates[userId].adminSelectedObjIndex ?? 0;
         
         await clearPreviousMessages(ctx, userId);
-        const message = await ctx.reply(`✏️ Редактирование объекта "${objName}"`, Markup.inlineKeyboard([
+        const statusEmoji = obj.status === 'В работе' ? '🟢' : '❄️';
+        const message = await ctx.reply(`✏️ Редактирование объекта "${objName}"\n\n📊 Статус: ${statusEmoji} ${obj.status || 'В работе'}`, Markup.inlineKeyboard([
+            [Markup.button.callback('📊 Статус', 'admin_obj_edit_status')],
             [Markup.button.callback('📱 ID группы (Telegram)', 'admin_obj_edit_groupid')],
             [Markup.button.callback('👁 Просмотреть группу', 'admin_obj_view_group')],
             [Markup.button.callback('↩️ Назад', `obj_${objIndex}`)]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_obj_edit_status', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const objName = ctx.state.userStates[userId].adminSelectedObjName;
+        if (!objName) {
+            await ctx.reply('Ошибка: объект не выбран.');
+            return;
+        }
+        
+        const obj = await getObject(objName);
+        const objIndex = ctx.state.userStates[userId].adminSelectedObjIndex ?? 0;
+        const currentStatus = obj.status || 'В работе';
+        
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply(`📊 Выберите статус для объекта "${objName}":\n\nТекущий статус: ${currentStatus === 'В работе' ? '🟢 В работе' : '❄️ Заморожен'}`, Markup.inlineKeyboard([
+            [Markup.button.callback(currentStatus === 'В работе' ? '✅ 🟢 В работе' : '🟢 В работе', 'admin_obj_set_status_work')],
+            [Markup.button.callback(currentStatus === 'Заморожен' ? '✅ ❄️ Заморожен' : '❄️ Заморожен', 'admin_obj_set_status_frozen')],
+            [Markup.button.callback('↩️ Назад', 'admin_obj_edit')]
+        ]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_obj_set_status_work', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const objName = ctx.state.userStates[userId].adminSelectedObjName;
+        if (!objName) {
+            await ctx.reply('Ошибка: объект не выбран.');
+            return;
+        }
+        
+        await updateObject(objName, { status: 'В работе' });
+        clearConfigCache();
+        await ctx.answerCbQuery('Статус изменен на "В работе"');
+        
+        // Возвращаемся к редактированию объекта
+        const objIndex = ctx.state.userStates[userId].adminSelectedObjIndex ?? 0;
+        const fakeCtx = {
+            ...ctx,
+            match: [null, objIndex.toString()],
+            state: ctx.state
+        };
+        // Имитируем клик на объект для обновления отображения
+        const obj = await getObject(objName);
+        await clearPreviousMessages(ctx, userId);
+        const usersWithObj = await getUsersByObject(objName);
+        const reportsWithObj = await getReportsByObject(objName);
+        ctx.state.userStates[userId].adminSelectedObjIndex = objIndex;
+        const statusEmoji = '🟢';
+        const objText = `🏗 **${obj.name}**\n\n📱 ID группы: ${obj.telegramGroupId || 'Не указан'}\n📊 Статус: ${statusEmoji} ${obj.status || 'В работе'}\n👥 Используется пользователями: ${usersWithObj.length}\n📄 Отчетов: ${reportsWithObj.length}`;
+        const buttons = [
+            [Markup.button.callback('✏️ Редактировать', 'admin_obj_edit')],
+            [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
+            [Markup.button.callback('↩️ Назад', 'admin_objects')]
+        ];
+        const message = await ctx.reply(objText, {
+            parse_mode: 'Markdown',
+            reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+        });
+        ctx.state.userStates[userId].messageIds = [message.message_id];
+    });
+    
+    bot.action('admin_obj_set_status_frozen', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const objName = ctx.state.userStates[userId].adminSelectedObjName;
+        if (!objName) {
+            await ctx.reply('Ошибка: объект не выбран.');
+            return;
+        }
+        
+        await updateObject(objName, { status: 'Заморожен' });
+        clearConfigCache();
+        await ctx.answerCbQuery('Статус изменен на "Заморожен"');
+        
+        // Возвращаемся к редактированию объекта
+        const objIndex = ctx.state.userStates[userId].adminSelectedObjIndex ?? 0;
+        const obj = await getObject(objName);
+        await clearPreviousMessages(ctx, userId);
+        const usersWithObj = await getUsersByObject(objName);
+        const reportsWithObj = await getReportsByObject(objName);
+        ctx.state.userStates[userId].adminSelectedObjIndex = objIndex;
+        const statusEmoji = '❄️';
+        const objText = `🏗 **${obj.name}**\n\n📱 ID группы: ${obj.telegramGroupId || 'Не указан'}\n📊 Статус: ${statusEmoji} ${obj.status || 'В работе'}\n👥 Используется пользователями: ${usersWithObj.length}\n📄 Отчетов: ${reportsWithObj.length}`;
+        const buttons = [
+            [Markup.button.callback('✏️ Редактировать', 'admin_obj_edit')],
+            [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
+            [Markup.button.callback('↩️ Назад', 'admin_objects')]
+        ];
+        const message = await ctx.reply(objText, {
+            parse_mode: 'Markdown',
+            reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+        });
+        ctx.state.userStates[userId].messageIds = [message.message_id];
     });
     
     bot.action('admin_obj_edit_groupid', async (ctx) => {
@@ -1019,94 +1121,120 @@ ${objectsList}
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         await clearPreviousMessages(ctx, userId);
-        const settings = await getNotificationSettings();
-        const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
-        const settingsText = `
-🔔 **Настройки уведомлений**
-
-${enabledText}
-⏰ Время: ${settings.time}
-🌍 Часовой пояс: ${settings.timezone}
-📝 Шаблон сообщения:
-${settings.messageTemplate}
-        `.trim();
-        const message = await ctx.reply(settingsText, {
-            parse_mode: 'Markdown',
-            reply_markup: Markup.inlineKeyboard([
-                [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', 'admin_notif_toggle')],
-                [Markup.button.callback('⏰ Изменить время', 'admin_notif_time')],
-                [Markup.button.callback('📝 Изменить текст', 'admin_notif_text')],
-                [Markup.button.callback('👁 Предпросмотр', 'admin_notif_preview')],
-                [Markup.button.callback('↩️ Назад', 'admin_panel')]
-            ]).reply_markup
-        });
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
-    });
-    
-    bot.action('admin_notif_toggle', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        if (userId !== ADMIN_ID) return;
-        const settings = await getNotificationSettings();
-        await updateNotificationSettings({ enabled: !settings.enabled });
-        clearConfigCache();
-        const botInstance = require('../bot');
-        if (botInstance.setupReminderCron) await botInstance.setupReminderCron();
-        await ctx.answerCbQuery('Настройки сохранены');
-        // Перезагружаем страницу настроек - просто вызываем обработчик заново
-        const actionHandler = async (ctx) => {
-            const userId = ctx.from.id.toString();
-            if (userId !== ADMIN_ID) return;
-            await clearPreviousMessages(ctx, userId);
-            const settings = await getNotificationSettings();
-            const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
-            const settingsText = `🔔 **Настройки уведомлений**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}\n📝 Шаблон сообщения:\n${settings.messageTemplate}`.trim();
-            const message = await ctx.reply(settingsText, {
+        
+        const message = await ctx.reply(
+            '🔔 **Настройки уведомлений**\n\nВыберите тип уведомлений для настройки:',
+            {
                 parse_mode: 'Markdown',
                 reply_markup: Markup.inlineKeyboard([
-                    [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', 'admin_notif_toggle')],
-                    [Markup.button.callback('⏰ Изменить время', 'admin_notif_time')],
-                    [Markup.button.callback('📝 Изменить текст', 'admin_notif_text')],
-                    [Markup.button.callback('👁 Предпросмотр', 'admin_notif_preview')],
+                    [Markup.button.callback('📋 Отчеты', 'admin_notif_select_reports')],
+                    [Markup.button.callback('📊 Статистика', 'admin_notif_select_statistics')],
                     [Markup.button.callback('↩️ Назад', 'admin_panel')]
                 ]).reply_markup
-            });
-            ctx.state.userStates[userId].messageIds.push(message.message_id);
-        };
-        await actionHandler(ctx);
+            }
+        );
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
     
-    bot.action('admin_notif_time', async (ctx) => {
+    const showNotificationSettings = async (ctx, type) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId].step = 'admin_notif_edit_time';
+        const settings = await getNotificationSettings(type);
+        const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
+        const typeName = type === 'reports' ? 'Отчеты' : 'Статистика';
+        let settingsText = `🔔 **Настройки уведомлений: ${typeName}**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
+        
+        if (type === 'reports' && settings.messageTemplate) {
+            settingsText += `\n📝 Шаблон сообщения:\n${settings.messageTemplate}`;
+        }
+        
+        const buttons = [
+            [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', `admin_notif_toggle_${type}`)],
+            [Markup.button.callback('⏰ Изменить время', `admin_notif_time_${type}`)]
+        ];
+        
+        if (type === 'reports') {
+            buttons.push([Markup.button.callback('📝 Изменить текст', `admin_notif_text_${type}`)]);
+            buttons.push([Markup.button.callback('👁 Предпросмотр', `admin_notif_preview_${type}`)]);
+        }
+        
+        buttons.push([Markup.button.callback('↩️ Назад', 'admin_notifications')]);
+        
+        const message = await ctx.reply(settingsText.trim(), {
+            parse_mode: 'Markdown',
+            reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+        });
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        ctx.state.userStates[userId].currentNotificationType = type;
+    };
+    
+    bot.action('admin_notif_select_reports', async (ctx) => {
+        await showNotificationSettings(ctx, 'reports');
+    });
+    
+    bot.action('admin_notif_select_statistics', async (ctx) => {
+        await showNotificationSettings(ctx, 'statistics');
+    });
+    
+    bot.action(/^admin_notif_toggle_(reports|statistics)$/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const type = ctx.match[1];
+        const settings = await getNotificationSettings(type);
+        await updateNotificationSettings(type, { enabled: !settings.enabled });
+        clearConfigCache();
+        const botInstance = require('../bot');
+        if (botInstance.setupAllNotificationCrons) await botInstance.setupAllNotificationCrons();
+        await ctx.answerCbQuery('Настройки сохранены');
+        await showNotificationSettings(ctx, type);
+    });
+    
+    bot.action(/^admin_notif_time_(reports|statistics)$/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const type = ctx.match[1];
+        await clearPreviousMessages(ctx, userId);
+        ctx.state.userStates[userId].step = `admin_notif_edit_time_${type}`;
+        ctx.state.userStates[userId].currentNotificationType = type;
         const message = await ctx.reply('Введите новое время в формате HH:mm (например, 19:00):', Markup.inlineKeyboard([
-            [Markup.button.callback('↩️ Отмена', 'admin_notifications')]
+            [Markup.button.callback('↩️ Отмена', `admin_notif_select_${type}`)]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
     
-    bot.action('admin_notif_text', async (ctx) => {
+    bot.action(/^admin_notif_text_(reports|statistics)$/, async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
+        const type = ctx.match[1];
+        if (type !== 'reports') {
+            await ctx.answerCbQuery('Изменение текста доступно только для уведомлений об отчетах');
+            return;
+        }
         await clearPreviousMessages(ctx, userId);
-        ctx.state.userStates[userId].step = 'admin_notif_edit_text';
+        ctx.state.userStates[userId].step = `admin_notif_edit_text_${type}`;
+        ctx.state.userStates[userId].currentNotificationType = type;
         const message = await ctx.reply('Введите новый текст шаблона. Используйте переменные {fullName} и {date}:', Markup.inlineKeyboard([
-            [Markup.button.callback('↩️ Отмена', 'admin_notifications')]
+            [Markup.button.callback('↩️ Отмена', `admin_notif_select_${type}`)]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
     
-    bot.action('admin_notif_preview', async (ctx) => {
+    bot.action(/^admin_notif_preview_(reports|statistics)$/, async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
-        const settings = await getNotificationSettings();
+        const type = ctx.match[1];
+        if (type !== 'reports') {
+            await ctx.answerCbQuery('Предпросмотр доступен только для уведомлений об отчетах');
+            return;
+        }
+        const settings = await getNotificationSettings(type);
         const previewText = formatNotificationMessage(settings.messageTemplate, {
             fullName: 'Иванов Иван Иванович',
             date: '25.12.2024'
         });
         await ctx.reply(`Предпросмотр сообщения:\n\n${previewText}`, Markup.inlineKeyboard([
-            [Markup.button.callback('↩️ Назад', 'admin_notifications')]
+            [Markup.button.callback('↩️ Назад', `admin_notif_select_${type}`)]
         ]));
     });
     
