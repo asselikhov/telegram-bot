@@ -357,6 +357,43 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                 }
                 break;
                 
+            case 'admin_obj_edit_groupid':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const objName = state.adminSelectedObjName;
+                    if (!objName) {
+                        await ctx.reply('Ошибка: объект не выбран.');
+                        state.step = null;
+                        break;
+                    }
+                    let telegramGroupId = ctx.message.text.trim();
+                    if (telegramGroupId === '/clear') {
+                        telegramGroupId = null;
+                    } else if (telegramGroupId) {
+                        // Проверяем формат (должно быть число или начинаться с минуса для групп)
+                        if (!/^-?\d+$/.test(telegramGroupId)) {
+                            const msg = await ctx.reply('Неверный формат ID группы. Введите числовой ID (например: -1001234567890) или /clear для очистки:');
+                            state.messageIds.push(msg.message_id);
+                            return;
+                        }
+                        telegramGroupId = telegramGroupId.toString();
+                    }
+                    
+                    await updateObject(objName, { telegramGroupId });
+                    clearConfigCache();
+                    state.step = null;
+                    await ctx.reply(`ID группы объекта "${objName}" ${telegramGroupId ? `обновлен: ${telegramGroupId}` : 'очищен'}.`);
+                    // Возвращаемся к списку объектов
+                    const adminModule = require('./admin');
+                    if (adminModule.showObjectsList) {
+                        await adminModule.showObjectsList(ctx);
+                    }
+                } catch (error) {
+                    await ctx.reply('Ошибка при редактировании ID группы: ' + error.message);
+                    state.step = null;
+                }
+                break;
+                
             case 'admin_pos_add_name':
                 if (userId !== ADMIN_ID) break;
                 try {

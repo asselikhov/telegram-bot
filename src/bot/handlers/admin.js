@@ -124,7 +124,10 @@ async function getReportsByObject(objectName) {
 }
 
 // Экспортируем функции для использования в других модулях
-const exportedFunctions = {};
+const exportedFunctions = {
+    getUsersByObject,
+    getReportsByObject
+};
 
 module.exports = (bot) => {
     bot.action('admin_panel', showAdminPanel);
@@ -740,15 +743,93 @@ ${objectsList}
         const usersWithObj = await getUsersByObject(objName);
         const reportsWithObj = await getReportsByObject(objName);
         await clearPreviousMessages(ctx, userId);
+        ctx.state.userStates[userId].adminSelectedObjIndex = objIndex;
         const objText = `🏗 **${obj.name}**\n\n📱 ID группы: ${obj.telegramGroupId || 'Не указан'}\n👥 Используется пользователями: ${usersWithObj.length}\n📄 Отчетов: ${reportsWithObj.length}`;
+        const buttons = [
+            [Markup.button.callback('✏️ Редактировать', 'admin_obj_edit')],
+            [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
+            [Markup.button.callback('↩️ Назад', 'admin_objects')]
+        ];
         const message = await ctx.reply(objText, {
             parse_mode: 'Markdown',
-            reply_markup: Markup.inlineKeyboard([
-                [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
-                [Markup.button.callback('↩️ Назад', 'admin_objects')]
-            ]).reply_markup
+            reply_markup: Markup.inlineKeyboard(buttons).reply_markup
         });
         ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_obj_edit', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const objName = ctx.state.userStates[userId].adminSelectedObjName;
+        if (!objName) {
+            await ctx.reply('Ошибка: объект не выбран.');
+            return;
+        }
+        
+        const obj = await getObject(objName);
+        const objIndex = ctx.state.userStates[userId].adminSelectedObjIndex ?? 0;
+        
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply(`✏️ Редактирование объекта "${objName}"`, Markup.inlineKeyboard([
+            [Markup.button.callback('📱 ID группы (Telegram)', 'admin_obj_edit_groupid')],
+            [Markup.button.callback('👁 Просмотреть группу', 'admin_obj_view_group')],
+            [Markup.button.callback('↩️ Назад', `obj_${objIndex}`)]
+        ]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_obj_edit_groupid', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        await clearPreviousMessages(ctx, userId);
+        ctx.state.userStates[userId].step = 'admin_obj_edit_groupid';
+        const message = await ctx.reply('Введите новый ID группы Telegram (или /clear для очистки):', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Отмена', 'admin_obj_edit')]
+        ]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_obj_view_group', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objName = ctx.state.userStates[userId].adminSelectedObjName;
+        if (!objName) {
+            await ctx.reply('Ошибка: объект не выбран.');
+            return;
+        }
+        
+        const obj = await getObject(objName);
+        if (!obj || !obj.telegramGroupId) {
+            await ctx.reply('ID группы не указан для этого объекта.');
+            return;
+        }
+        
+        try {
+            const chatId = obj.telegramGroupId;
+            const chat = await ctx.telegram.getChat(chatId);
+            
+            let chatInfo = `📱 Информация о группе для объекта "${objName}":\n\n`;
+            chatInfo += `ID: ${chatId}\n`;
+            
+            if (chat.title) {
+                chatInfo += `Название: ${chat.title}\n`;
+            }
+            if (chat.type) {
+                chatInfo += `Тип: ${chat.type}\n`;
+            }
+            if (chat.username) {
+                chatInfo += `Username: @${chat.username}\n`;
+            }
+            if (chat.description) {
+                chatInfo += `Описание: ${chat.description}\n`;
+            }
+            
+            await ctx.reply(chatInfo);
+        } catch (error) {
+            await ctx.reply(`❌ Ошибка при получении информации о группе: ${error.message}\n\nПроверьте, что:\n1. ID группы корректный\n2. Бот добавлен в группу\n3. Бот имеет права на просмотр информации о группе`);
+        }
     });
     
     bot.action('admin_obj_delete', async (ctx) => {
