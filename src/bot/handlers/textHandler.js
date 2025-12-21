@@ -151,12 +151,10 @@ module.exports = (bot) => {
                 const creator = creatorId ? users[creatorId] : null;
                 const creatorFullName = creator ? creator.fullName : 'Неизвестно';
 
-                const adminText = `
-${users[userId].fullName || 'Не указано'} - ${users[userId].position || 'Не указано'} (${users[userId].organization || 'Не указано'})
+                const adminText = `${users[userId].position || 'Не указано'} ${users[userId].organization || 'Не указано'} ${users[userId].fullName || 'Не указано'} 
 📞 Телефон: ${users[userId].phone || 'Не указан'}
 Объекты: ${users[userId].selectedObjects.join(', ') || 'Не выбраны'}
-Пригласительный код создан: ${creatorFullName}
-                `.trim();
+Пригласительный код создан: ${creatorFullName}`;
                 await ctx.telegram.sendMessage(ADMIN_ID, `📝 НОВАЯ ЗАЯВКА\n${adminText}`, Markup.inlineKeyboard([
                     [Markup.button.callback(`✅ Одобрить (${users[userId].fullName || 'Не указано'})`, `approve_${userId}`)],
                     [Markup.button.callback(`❌ Отклонить (${users[userId].fullName || 'Не указано'})`, `reject_${userId}`)]
