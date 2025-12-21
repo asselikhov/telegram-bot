@@ -186,6 +186,29 @@ ${users[userId].fullName || 'Не указано'} - ${users[userId].position ||
                     await ctx.reply('Произошла ошибка при изменении ФИО. Попробуйте снова.');
                 }
                 break;
+                
+            case 'editPhoneInput':
+                try {
+                    const newPhone = ctx.message.text.trim();
+                    if (!newPhone) {
+                        const message = await ctx.reply('Телефон не может быть пустым. Введите снова:');
+                        state.messageIds.push(message.message_id);
+                        return;
+                    }
+
+                    await clearPreviousMessages(ctx, userId);
+                    users[userId].phone = newPhone;
+                    await saveUser(userId, users[userId]);
+
+                    state.step = null;
+                    state.messageIds = [];
+
+                    await ctx.reply(`Ваш телефон изменен на "${newPhone}"`);
+                    await showProfile(ctx);
+                } catch (error) {
+                    await ctx.reply('Произошла ошибка при изменении телефона. Попробуйте снова.');
+                }
+                break;
 
             case 'customOrganizationInput':
                 users[userId].organization = ctx.message.text.trim();
