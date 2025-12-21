@@ -1523,8 +1523,43 @@ ${objectsList}
                 date: '25.12.2024'
             });
         } else if (type === 'statistics') {
-            // Формируем предпросмотр статистики с тестовыми данными
-            previewText = `⚠️ Статистика за день:\n<blockquote>1) Объектов в работе: 3\n2) Не поданы отчеты по объектам:\n   · Ростовка-Никольское, 595,4-608,1\u00A0км.\n   · УЗН р. Волга</blockquote>`;
+            // Функция для обрезки длинных названий объектов
+            function truncateObjectName(name, maxLength = 30) {
+                if (name.length <= maxLength) {
+                    return name;
+                }
+                return name.substring(0, maxLength - 3) + '...';
+            }
+            
+            // Тестовые данные для предпросмотра
+            const testObjects = [
+                'Ростовка-Никольское, 595,4-608,1км.',
+                'УЗН р. Волга'
+            ];
+            
+            // Формируем список объектов с обрезкой и кликабельными ссылками
+            const objectsWithLinks = testObjects.map((objName) => {
+                // Обрезаем название для отображения
+                const displayName = truncateObjectName(objName);
+                
+                // Экранируем HTML символы в отображаемом названии
+                let escapedObjName = displayName.replace(/[<>&"]/g, (match) => {
+                    const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
+                    return map[match];
+                });
+                // Заменяем обычные пробелы на неразрывные пробелы (Unicode U+00A0)
+                escapedObjName = escapedObjName.replace(/ /g, '\u00A0');
+                
+                // Для предпросмотра используем тестовую ссылку
+                return `<a href="https://t.me/example">${escapedObjName}</a>`;
+            });
+            
+            // Формируем сообщение
+            previewText = `⚠️ Статистика за день:\n<blockquote>1) Объектов в работе: 3\n2) Не поданы отчеты по объектам:\n`;
+            objectsWithLinks.forEach(objLink => {
+                previewText += `   · ${objLink}\n`;
+            });
+            previewText += `</blockquote>`;
         } else {
             await ctx.answerCbQuery('Предпросмотр недоступен для этого типа уведомлений');
             return;
