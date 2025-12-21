@@ -139,7 +139,7 @@ async function initializeData() {
             enabled: true,
             time: '19:00',
             timezone: 'Europe/Moscow',
-            messageTemplate: '⚠️ Напоминание\n{fullName}, вы не предоставили отчет за {date}.\n\nПожалуйста, внесите данные.'
+            messageTemplate: '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\n\nПожалуйста, внесите данные.</blockquote>'
         });
         console.log('  Настройки уведомлений инициализированы');
         

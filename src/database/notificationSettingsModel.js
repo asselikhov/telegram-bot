@@ -41,7 +41,7 @@ async function getNotificationSettings(type = 'reports') {
                 enabled: true,
                 time: '19:00',
                 timezone: 'Europe/Moscow',
-                messageTemplate: '⚠️ Напоминание\n{fullName}, вы не предоставили отчет за {date}.\n\nПожалуйста, внесите данные.',
+                messageTemplate: '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\n\nПожалуйста, внесите данные.</blockquote>',
                 updatedAt: new Date()
             };
         await collection.insertOne(defaultSettings);
@@ -54,7 +54,7 @@ async function getNotificationSettings(type = 'reports') {
         enabled: settings.enabled !== false,
         time: settings.time || (type === 'statistics' ? '20:00' : '19:00'),
         timezone: settings.timezone || 'Europe/Moscow',
-        messageTemplate: settings.messageTemplate || (type === 'statistics' ? null : '⚠️ Напоминание\n{fullName}, вы не предоставили отчет за {date}.\n\nПожалуйста, внесите данные.'),
+        messageTemplate: settings.messageTemplate || (type === 'statistics' ? null : '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\n\nПожалуйста, внесите данные.</blockquote>'),
         updatedAt: settings.updatedAt
     };
 }
@@ -97,7 +97,7 @@ async function getAllNotificationSettings() {
                     enabled: true,
                     time: '19:00',
                     timezone: 'Europe/Moscow',
-                    messageTemplate: '⚠️ Напоминание\n{fullName}, вы не предоставили отчет за {date}.\n\nПожалуйста, внесите данные.',
+                    messageTemplate: '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\n\nПожалуйста, внесите данные.</blockquote>',
                     updatedAt: new Date()
                 };
             await collection.insertOne(defaultSettings);
@@ -109,7 +109,7 @@ async function getAllNotificationSettings() {
             enabled: settings.enabled !== false,
             time: settings.time || (type === 'statistics' ? '20:00' : '19:00'),
             timezone: settings.timezone || 'Europe/Moscow',
-            messageTemplate: settings.messageTemplate || (type === 'statistics' ? null : '⚠️ Напоминание\n{fullName}, вы не предоставили отчет за {date}.\n\nПожалуйста, внесите данные.'),
+            messageTemplate: settings.messageTemplate || (type === 'statistics' ? null : '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\n\nПожалуйста, внесите данные.</blockquote>'),
             updatedAt: settings.updatedAt
         };
     }

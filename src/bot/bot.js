@@ -117,7 +117,10 @@ async function sendReportReminders() {
               });
               
               try {
-                await bot.telegram.sendMessage(groupChatId, reminderText);
+                await bot.telegram.sendMessage(groupChatId, reminderText, {
+                  parse_mode: 'HTML',
+                  link_preview_options: { is_disabled: true }
+                });
               } catch (error) {
                 console.error(`Ошибка отправки напоминания для ${userId} в чат ${groupChatId}:`, error);
               }
