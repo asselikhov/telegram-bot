@@ -200,16 +200,28 @@ async function sendStatisticsNotifications() {
                   objUrl = `https://t.me/${chat.username}`;
                 } else {
                   try {
-                    objUrl = await bot.telegram.exportChatInviteLink(objInfo.telegramGroupId);
-                  } catch (inviteError) {
-                    console.error(`Ошибка при генерации invite link для объекта ${objName}:`, inviteError);
-                    // Оставляем текст без ссылки, экранируем для HTML
-                    let escaped = displayName.replace(/[<>&"]/g, (match) => {
-                      const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
-                      return map[match];
+                    // Создаем новую постоянную ссылку без ограничений по времени и количеству использований
+                    // Это гарантирует, что ссылка будет работать, даже если старая устарела
+                    const inviteLink = await bot.telegram.createChatInviteLink(objInfo.telegramGroupId, {
+                      name: `Объект ${objName}`,
+                      creates_join_request: false
                     });
-                    // Заменяем пробелы на неразрывные (Unicode U+00A0)
-                    return escaped.replace(/ /g, '\u00A0');
+                    objUrl = inviteLink.invite_link;
+                  } catch (inviteError) {
+                    console.error(`Ошибка при создании invite link для объекта ${objName}:`, inviteError);
+                    // Если не удалось создать новую ссылку, пытаемся получить существующую
+                    try {
+                      objUrl = await bot.telegram.exportChatInviteLink(objInfo.telegramGroupId);
+                    } catch (exportError) {
+                      console.error(`Не удалось получить ссылку для объекта ${objName}:`, exportError);
+                      // Оставляем текст без ссылки, экранируем для HTML
+                      let escaped = displayName.replace(/[<>&"]/g, (match) => {
+                        const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
+                        return map[match];
+                      });
+                      // Заменяем пробелы на неразрывные (Unicode U+00A0)
+                      return escaped.replace(/ /g, '\u00A0');
+                    }
                   }
                 }
                 if (objUrl) {
