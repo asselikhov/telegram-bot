@@ -83,20 +83,36 @@ ${statusEmoji} ${user.status || 'Не указан'}
                     // Группа с username - прямая ссылка
                     buttons.push([Markup.button.url(`🏢 ${user.organization}`, `https://t.me/${chat.username}`)]);
                 } else {
-                    // Группа без username - callback для генерации invite link
-                    const orgNameEncoded = encodeURIComponent(user.organization);
-                    buttons.push([Markup.button.callback(`🏢 ${user.organization}`, `org_group_link_${orgNameEncoded}`)]);
+                    // Группа без username - используем прямое название (если короткое) или хэш
+                    // Сохраняем организацию в state для использования в обработчике
+                    if (!ctx.state.userStates[userId].profileOrgName) {
+                        ctx.state.userStates[userId].profileOrgName = user.organization;
+                    }
+                    const callbackData = `org_group_link_0`; // Используем индекс 0, т.к. организация одна
+                    const callbackDataBytes = Buffer.from(callbackData, 'utf8').length;
+                    if (callbackDataBytes > 64) {
+                        // Если все же превышает (маловероятно), используем только первые символы
+                        console.warn(`Callback data слишком длинный для организации: ${callbackDataBytes} байт`);
+                    }
+                    buttons.push([Markup.button.callback(`🏢 ${user.organization}`, callbackData)]);
                 }
             } catch (error) {
                 // Если не удалось получить информацию о чате, используем callback
-                const orgNameEncoded = encodeURIComponent(user.organization);
-                buttons.push([Markup.button.callback(`🏢 ${user.organization}`, `org_group_link_${orgNameEncoded}`)]);
+                if (!ctx.state.userStates[userId].profileOrgName) {
+                    ctx.state.userStates[userId].profileOrgName = user.organization;
+                }
+                const callbackData = `org_group_link_0`;
+                buttons.push([Markup.button.callback(`🏢 ${user.organization}`, callbackData)]);
             }
         }
     }
     
+    // Сохраняем список объектов для использования в обработчике
+    ctx.state.userStates[userId].profileObjects = filteredObjects;
+    
     // Кнопки для объектов
-    for (const objName of filteredObjects) {
+    for (let objIndex = 0; objIndex < filteredObjects.length; objIndex++) {
+        const objName = filteredObjects[objIndex];
         const objInfo = allObjects.find(obj => obj.name === objName);
         if (objInfo && objInfo.telegramGroupId) {
             try {
@@ -105,14 +121,18 @@ ${statusEmoji} ${user.status || 'Не указан'}
                     // Группа с username - прямая ссылка
                     buttons.push([Markup.button.url(`🏗 ${objName}`, `https://t.me/${chat.username}`)]);
                 } else {
-                    // Группа без username - callback для генерации invite link
-                    const objNameEncoded = encodeURIComponent(objName);
-                    buttons.push([Markup.button.callback(`🏗 ${objName}`, `object_group_link_${objNameEncoded}`)]);
+                    // Группа без username - используем индекс вместо encodeURIComponent
+                    const callbackData = `object_group_link_${objIndex}`;
+                    const callbackDataBytes = Buffer.from(callbackData, 'utf8').length;
+                    if (callbackDataBytes > 64) {
+                        console.warn(`Callback data слишком длинный для объекта: ${callbackDataBytes} байт`);
+                    }
+                    buttons.push([Markup.button.callback(`🏗 ${objName}`, callbackData)]);
                 }
             } catch (error) {
                 // Если не удалось получить информацию о чате, используем callback
-                const objNameEncoded = encodeURIComponent(objName);
-                buttons.push([Markup.button.callback(`🏗 ${objName}`, `object_group_link_${objNameEncoded}`)]);
+                const callbackData = `object_group_link_${objIndex}`;
+                buttons.push([Markup.button.callback(`🏗 ${objName}`, callbackData)]);
             }
         }
     }
@@ -161,10 +181,15 @@ module.exports = (bot) => {
     });
     
     // Обработчик для генерации invite link для объекта
-    bot.action(/^object_group_link_(.+)$/, async (ctx) => {
+    bot.action(/^object_group_link_(\d+)$/, async (ctx) => {
         const userId = ctx.from.id.toString();
-        const objNameEncoded = ctx.match[1];
-        const objName = decodeURIComponent(objNameEncoded);
+        const objIndex = parseInt(ctx.match[1], 10);
+        const profileObjects = ctx.state.userStates[userId]?.profileObjects;
+        if (!profileObjects || !profileObjects[objIndex]) {
+            await ctx.answerCbQuery('Ошибка: объект не найден.');
+            return;
+        }
+        const objName = profileObjects[objIndex];
         
         try {
             const allObjects = await getAllObjects();
@@ -195,10 +220,13 @@ module.exports = (bot) => {
     });
     
     // Обработчик для генерации invite link для организации
-    bot.action(/^org_group_link_(.+)$/, async (ctx) => {
+    bot.action(/^org_group_link_(\d+)$/, async (ctx) => {
         const userId = ctx.from.id.toString();
-        const orgNameEncoded = ctx.match[1];
-        const orgName = decodeURIComponent(orgNameEncoded);
+        const orgName = ctx.state.userStates[userId]?.profileOrgName;
+        if (!orgName) {
+            await ctx.answerCbQuery('Ошибка: организация не найдена.');
+            return;
+        }
         
         try {
             const generalGroupChatIds = await getGeneralGroupChatIds();
