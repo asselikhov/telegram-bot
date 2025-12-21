@@ -1434,7 +1434,16 @@ ${objectsList}
         let settingsText = `🔔 **Настройки уведомлений: ${typeName}**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
         
         if (settings.messageTemplate) {
-            settingsText += `\n📝 Шаблон сообщения:\n${settings.messageTemplate}`;
+            // Для отчетов исправляем шаблон, чтобы показать правильный формат с "г." после даты
+            let templateToDisplay = settings.messageTemplate;
+            if (type === 'reports') {
+                // Исправляем шаблон, если он не содержит "г." после {date}
+                if (!templateToDisplay.includes('{date}г.')) {
+                    templateToDisplay = templateToDisplay.replace(/\{date\}\./g, '{date}г.');
+                    templateToDisplay = templateToDisplay.replace(/\{date\}(?![г.])/g, '{date}г.');
+                }
+            }
+            settingsText += `\n📝 Шаблон сообщения:\n${templateToDisplay}`;
         }
         
         const buttons = [
