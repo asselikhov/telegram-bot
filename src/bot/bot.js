@@ -174,9 +174,20 @@ async function sendStatisticsNotifications() {
         // Объекты без отчетов за сегодня
         const objectsWithoutReports = objectsInWork.filter(objName => !reportedObjects.has(objName));
         
+        // Функция для обрезки длинных названий объектов
+        function truncateObjectName(name, maxLength = 30) {
+          if (name.length <= maxLength) {
+            return name;
+          }
+          return name.substring(0, maxLength - 3) + '...';
+        }
+        
         // Формируем список объектов со ссылками
         const objectsWithLinks = await Promise.all(
           objectsWithoutReports.map(async (objName) => {
+            // Обрезаем название для отображения
+            const displayName = truncateObjectName(objName);
+            
             const objInfo = allObjects.find(obj => obj.name === objName);
             if (objInfo && objInfo.telegramGroupId) {
               try {
@@ -190,7 +201,7 @@ async function sendStatisticsNotifications() {
                   } catch (inviteError) {
                     console.error(`Ошибка при генерации invite link для объекта ${objName}:`, inviteError);
                     // Оставляем текст без ссылки, экранируем для HTML
-                    let escaped = objName.replace(/[<>&"]/g, (match) => {
+                    let escaped = displayName.replace(/[<>&"]/g, (match) => {
                       const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
                       return map[match];
                     });
@@ -199,8 +210,8 @@ async function sendStatisticsNotifications() {
                   }
                 }
                 if (objUrl) {
-                  // Экранируем HTML символы в названии
-                  let escapedObjName = objName.replace(/[<>&"]/g, (match) => {
+                  // Экранируем HTML символы в отображаемом названии
+                  let escapedObjName = displayName.replace(/[<>&"]/g, (match) => {
                     const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
                     return map[match];
                   });
@@ -211,7 +222,7 @@ async function sendStatisticsNotifications() {
               } catch (error) {
                 console.error(`Ошибка при получении информации о чате объекта ${objName}:`, error);
                 // Оставляем текст без ссылки, экранируем для HTML
-                let escaped = objName.replace(/[<>&"]/g, (match) => {
+                let escaped = displayName.replace(/[<>&"]/g, (match) => {
                   const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
                   return map[match];
                 });
@@ -220,7 +231,7 @@ async function sendStatisticsNotifications() {
               }
             }
             // Экранируем для HTML, если ссылки нет или нет telegramGroupId
-            let escaped = objName.replace(/[<>&"]/g, (match) => {
+            let escaped = displayName.replace(/[<>&"]/g, (match) => {
               const map = { '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' };
               return map[match];
             });
