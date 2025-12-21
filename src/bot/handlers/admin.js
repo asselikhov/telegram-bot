@@ -1517,8 +1517,16 @@ ${objectsList}
         let previewText;
         
         if (type === 'reports') {
+            // Используем правильный шаблон для предпросмотра, гарантируя правильный формат
+            const correctTemplate = '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>';
             const settings = await getNotificationSettings(type);
-            previewText = formatNotificationMessage(settings.messageTemplate, {
+            // Используем шаблон из настроек, но гарантируем наличие "г." после даты
+            let template = settings.messageTemplate || correctTemplate;
+            // Исправляем шаблон, если он не содержит "г." после {date}
+            if (template && !template.includes('{date}г.')) {
+                template = template.replace(/\{date\}(\.|)/g, '{date}г.');
+            }
+            previewText = formatNotificationMessage(template, {
                 fullName: 'Иванов Иван Иванович',
                 date: '25.12.2024'
             });
