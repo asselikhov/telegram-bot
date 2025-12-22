@@ -48,6 +48,26 @@ async function getNotificationSettings(type = 'reports') {
         settings = defaultSettings;
     }
     
+    // Исправляем шаблон в базе данных, если он не содержит blockquote (миграция)
+    if (type === 'reports' && settings.messageTemplate && !settings.messageTemplate.includes('<blockquote>')) {
+        let fixedTemplate = settings.messageTemplate;
+        // Если шаблон начинается с "⚠️ Напоминание\n", оборачиваем остальное в blockquote
+        if (fixedTemplate.startsWith('⚠️ Напоминание\n')) {
+            const content = fixedTemplate.substring('⚠️ Напоминание\n'.length);
+            fixedTemplate = `⚠️ Напоминание\n<blockquote>${content}</blockquote>`;
+        } else {
+            // Иначе просто оборачиваем весь шаблон в blockquote
+            fixedTemplate = `<blockquote>${fixedTemplate}</blockquote>`;
+        }
+        // Обновляем шаблон в базе данных
+        await collection.updateOne(
+            { type },
+            { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
+        );
+        settings.messageTemplate = fixedTemplate;
+        console.log('Шаблон уведомлений исправлен в базе данных (добавлен blockquote)');
+    }
+    
     return {
         type: settings.type || type,
         id: settings.id || settings.type || type,
@@ -103,6 +123,27 @@ async function getAllNotificationSettings() {
             await collection.insertOne(defaultSettings);
             settings = defaultSettings;
         }
+        
+        // Исправляем шаблон в базе данных, если он не содержит blockquote (миграция)
+        if (type === 'reports' && settings.messageTemplate && !settings.messageTemplate.includes('<blockquote>')) {
+            let fixedTemplate = settings.messageTemplate;
+            // Если шаблон начинается с "⚠️ Напоминание\n", оборачиваем остальное в blockquote
+            if (fixedTemplate.startsWith('⚠️ Напоминание\n')) {
+                const content = fixedTemplate.substring('⚠️ Напоминание\n'.length);
+                fixedTemplate = `⚠️ Напоминание\n<blockquote>${content}</blockquote>`;
+            } else {
+                // Иначе просто оборачиваем весь шаблон в blockquote
+                fixedTemplate = `<blockquote>${fixedTemplate}</blockquote>`;
+            }
+            // Обновляем шаблон в базе данных
+            await collection.updateOne(
+                { type },
+                { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
+            );
+            settings.messageTemplate = fixedTemplate;
+            console.log('Шаблон уведомлений исправлен в базе данных (добавлен blockquote)');
+        }
+        
         result[type] = {
             type: settings.type || type,
             id: settings.id || settings.type || type,
