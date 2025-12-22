@@ -121,6 +121,14 @@ async function sendReportReminders() {
                 date: formattedDate
               });
               
+              console.log('=== РЕАЛЬНОЕ УВЕДОМЛЕНИЕ ===');
+              console.log('Шаблон:', template);
+              console.log('Отформатированный текст:', reminderText);
+              console.log('Длина текста:', reminderText.length);
+              console.log('Содержит blockquote:', reminderText.includes('<blockquote>'));
+              console.log('Parse mode: HTML');
+              console.log('============================');
+              
               try {
                 await bot.telegram.sendMessage(groupChatId, reminderText, {
                   parse_mode: 'HTML',

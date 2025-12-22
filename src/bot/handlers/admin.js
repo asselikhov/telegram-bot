@@ -1532,6 +1532,12 @@ ${objectsList}
                 fullName: 'Иванов Иван Иванович',
                 date: '25.12.2024'
             });
+            console.log('=== ПРЕДПРОСМОТР УВЕДОМЛЕНИЯ ===');
+            console.log('Шаблон:', template);
+            console.log('Отформатированный текст:', previewText);
+            console.log('Длина текста:', previewText.length);
+            console.log('Содержит blockquote:', previewText.includes('<blockquote>'));
+            console.log('================================');
         } else if (type === 'statistics') {
             // Функция для обрезки длинных названий объектов
             function truncateObjectName(name, maxLength = 30) {
