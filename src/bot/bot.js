@@ -112,6 +112,17 @@ async function sendReportReminders() {
             if (groupChatId) {
               // Форматируем сообщение с использованием шаблона
               let template = settings.messageTemplate;
+              // Исправляем шаблон, если он не содержит blockquote
+              if (template && !template.includes('<blockquote>')) {
+                // Если шаблон начинается с "⚠️ Напоминание\n", оборачиваем остальное в blockquote
+                if (template.startsWith('⚠️ Напоминание\n')) {
+                  const content = template.substring('⚠️ Напоминание\n'.length);
+                  template = `⚠️ Напоминание\n<blockquote>${content}</blockquote>`;
+                } else {
+                  // Иначе просто оборачиваем весь шаблон в blockquote
+                  template = `<blockquote>${template}</blockquote>`;
+                }
+              }
               // Исправляем шаблон, если он не содержит "г." после {date}
               if (template && !template.includes('{date}г.')) {
                 template = template.replace(/\{date\}(\.|)/g, '{date}г.');

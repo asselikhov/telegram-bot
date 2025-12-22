@@ -1519,6 +1519,17 @@ ${objectsList}
             const settings = await getNotificationSettings(type);
             // Используем шаблон из настроек
             let template = settings.messageTemplate || correctTemplate;
+            // Исправляем шаблон, если он не содержит blockquote
+            if (template && !template.includes('<blockquote>')) {
+                // Если шаблон начинается с "⚠️ Напоминание\n", оборачиваем остальное в blockquote
+                if (template.startsWith('⚠️ Напоминание\n')) {
+                    const content = template.substring('⚠️ Напоминание\n'.length);
+                    template = `⚠️ Напоминание\n<blockquote>${content}</blockquote>`;
+                } else {
+                    // Иначе просто оборачиваем весь шаблон в blockquote
+                    template = `<blockquote>${template}</blockquote>`;
+                }
+            }
             // Исправляем шаблон, если он не содержит "г." после {date}
             if (template) {
                 if (!template.includes('{date}г.')) {
