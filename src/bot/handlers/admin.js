@@ -1526,15 +1526,14 @@ ${objectsList}
         let previewText;
         
         if (type === 'reports') {
-            // Используем правильный шаблон для предпросмотра, гарантируя правильный формат
+            // Используем правильный шаблон для предпросмотра
             const correctTemplate = '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>';
             // Очищаем кэш перед получением настроек для предпросмотра, чтобы получить актуальные данные
             clearConfigCache();
             const settings = await getNotificationSettings(type);
-            // Используем шаблон из настроек, но гарантируем наличие "г." после даты
+            // Используем шаблон из настроек
             let template = settings.messageTemplate || correctTemplate;
             // Исправляем шаблон, если он не содержит "г." после {date}
-            // Заменяем {date}. на {date}г. и {date} на {date}г. (если после {date} нет г.)
             if (template) {
                 if (!template.includes('{date}г.')) {
                     // Заменяем {date}. на {date}г.
@@ -1590,7 +1589,7 @@ ${objectsList}
             return;
         }
         
-        await ctx.reply(`Предпросмотр сообщения:\n\n${previewText}`, {
+        await ctx.reply(previewText, {
             parse_mode: 'HTML',
             link_preview_options: { is_disabled: true },
             reply_markup: Markup.inlineKeyboard([
@@ -2338,7 +2337,10 @@ ${objectsList}
         // Быстрые действия
         const quickActions = [];
         if (user.phone) {
-            quickActions.push(Markup.button.url('📞 Позвонить', `tel:${user.phone}`));
+            // Очищаем номер телефона от пробелов и форматируем для tel: URL
+            const cleanPhone = user.phone.replace(/\s+/g, '').trim();
+            // Используем callback вместо URL, так как Telegram строго валидирует tel: URLs
+            quickActions.push(Markup.button.callback('📞 Позвонить', `admin_user_call_${targetUserId}`));
         }
         quickActions.push(Markup.button.url('💬 Написать', `tg://user?id=${targetUserId}`));
         
@@ -2383,6 +2385,30 @@ ${objectsList}
         
         const targetUserId = userList[userIndex];
         await showUserDetails(ctx, targetUserId, returnPage);
+    });
+    
+    // Обработчик кнопки "Позвонить"
+    bot.action(/admin_user_call_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const targetUserId = ctx.match[1];
+        const users = await loadUsers();
+        const user = users[targetUserId];
+        
+        if (!user || !user.phone) {
+            await ctx.answerCbQuery('Номер телефона не найден.');
+            return;
+        }
+        
+        // Очищаем номер телефона
+        const cleanPhone = user.phone.replace(/\s+/g, '').trim();
+        // Отправляем номер как кликабельную ссылку в тексте сообщения
+        // Markdown ссылки с tel: работают в тексте, даже если не работают в кнопках
+        await ctx.reply(`📞 Номер телефона: [${cleanPhone}](tel:${cleanPhone})`, {
+            parse_mode: 'Markdown'
+        });
+        await ctx.answerCbQuery();
     });
     
     // Быстрые действия из списка
