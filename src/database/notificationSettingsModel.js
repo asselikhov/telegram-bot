@@ -48,40 +48,58 @@ async function getNotificationSettings(type = 'reports') {
         settings = defaultSettings;
     }
     
-    // Исправляем шаблон в базе данных, если он не содержит blockquote (миграция)
-    if (type === 'reports' && settings.messageTemplate && !settings.messageTemplate.includes('<blockquote>')) {
+        // Исправляем шаблон в базе данных, если он не содержит blockquote (миграция)
+        if (type === 'reports' && settings.messageTemplate && !settings.messageTemplate.includes('<blockquote>')) {
+            let fixedTemplate = settings.messageTemplate;
+            // Если шаблон начинается с "⚠️ Напоминание\n", оборачиваем остальное в blockquote
+            if (fixedTemplate.startsWith('⚠️ Напоминание\n')) {
+                const content = fixedTemplate.substring('⚠️ Напоминание\n'.length);
+                fixedTemplate = `⚠️ Напоминание\n<blockquote>${content}</blockquote>`;
+            } else {
+                // Иначе просто оборачиваем весь шаблон в blockquote
+                fixedTemplate = `<blockquote>${fixedTemplate}</blockquote>`;
+            }
+            // Исправляем форматирование: добавляем переносы строк где нужно
+            // Паттерн: {fullName}, вы не предоставили -> {fullName},\nвы не предоставили
+            fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не предоставили/g, '$1,\nвы не предоставили');
+            // Паттерн: ...г. Пожалуйста -> ...г.\nПожалуйста
+            fixedTemplate = fixedTemplate.replace(/(\{date\}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
+            fixedTemplate = fixedTemplate.replace(/(\d{2}\.\d{2}\.\d{4}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
+            // Убираем лишние пустые строки (3+ переносов строк заменяем на 2, затем 2+ на 1)
+            fixedTemplate = fixedTemplate.replace(/\n{3,}/g, '\n\n');
+            fixedTemplate = fixedTemplate.replace(/\n{2,}/g, '\n');
+            // Обновляем шаблон в базе данных
+            await collection.updateOne(
+                { type },
+                { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
+            );
+            settings.messageTemplate = fixedTemplate;
+            console.log('Шаблон уведомлений исправлен в базе данных (добавлен blockquote, исправлено форматирование)');
+    } else if (type === 'reports' && settings.messageTemplate) {
+        // Исправляем форматирование шаблона: добавляем переносы строк где нужно
         let fixedTemplate = settings.messageTemplate;
-        // Если шаблон начинается с "⚠️ Напоминание\n", оборачиваем остальное в blockquote
-        if (fixedTemplate.startsWith('⚠️ Напоминание\n')) {
-            const content = fixedTemplate.substring('⚠️ Напоминание\n'.length);
-            fixedTemplate = `⚠️ Напоминание\n<blockquote>${content}</blockquote>`;
-        } else {
-            // Иначе просто оборачиваем весь шаблон в blockquote
-            fixedTemplate = `<blockquote>${fixedTemplate}</blockquote>`;
-        }
+        const originalTemplate = fixedTemplate;
+        
+        // Исправляем формат внутри blockquote: добавляем перенос строки после запятой после {fullName}
+        // Паттерн: {fullName}, вы не предоставили -> {fullName},\nвы не предоставили
+        fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не предоставили/g, '$1,\nвы не предоставили');
+        
+        // Исправляем формат: добавляем перенос строки перед "Пожалуйста"
+        // Паттерн: ...г.\nПожалуйста или ...г. Пожалуйста -> ...г.\nПожалуйста
+        fixedTemplate = fixedTemplate.replace(/(\{date\}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
+        fixedTemplate = fixedTemplate.replace(/(\d{2}\.\d{2}\.\d{4}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
+        
         // Убираем лишние пустые строки (3+ переносов строк заменяем на 2, затем 2+ на 1)
         fixedTemplate = fixedTemplate.replace(/\n{3,}/g, '\n\n');
         fixedTemplate = fixedTemplate.replace(/\n{2,}/g, '\n');
-        // Обновляем шаблон в базе данных
-        await collection.updateOne(
-            { type },
-            { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
-        );
-        settings.messageTemplate = fixedTemplate;
-        console.log('Шаблон уведомлений исправлен в базе данных (добавлен blockquote, убраны пустые строки)');
-    } else if (type === 'reports' && settings.messageTemplate) {
-        // Убираем лишние пустые строки из существующего шаблона
-        let fixedTemplate = settings.messageTemplate;
-        const originalTemplate = fixedTemplate;
-        fixedTemplate = fixedTemplate.replace(/\n{3,}/g, '\n\n');
-        fixedTemplate = fixedTemplate.replace(/\n{2,}/g, '\n');
+        
         if (fixedTemplate !== originalTemplate) {
             await collection.updateOne(
                 { type },
                 { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
             );
             settings.messageTemplate = fixedTemplate;
-            console.log('Шаблон уведомлений исправлен в базе данных (убраны пустые строки)');
+            console.log('Шаблон уведомлений исправлен в базе данных (исправлено форматирование)');
         }
     }
     
@@ -152,6 +170,12 @@ async function getAllNotificationSettings() {
                 // Иначе просто оборачиваем весь шаблон в blockquote
                 fixedTemplate = `<blockquote>${fixedTemplate}</blockquote>`;
             }
+            // Исправляем форматирование: добавляем переносы строк где нужно
+            // Паттерн: {fullName}, вы не предоставили -> {fullName},\nвы не предоставили
+            fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не предоставили/g, '$1,\nвы не предоставили');
+            // Паттерн: ...г. Пожалуйста -> ...г.\nПожалуйста
+            fixedTemplate = fixedTemplate.replace(/(\{date\}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
+            fixedTemplate = fixedTemplate.replace(/(\d{2}\.\d{2}\.\d{4}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
             // Убираем лишние пустые строки (3+ переносов строк заменяем на 2, затем 2+ на 1)
             fixedTemplate = fixedTemplate.replace(/\n{3,}/g, '\n\n');
             fixedTemplate = fixedTemplate.replace(/\n{2,}/g, '\n');
@@ -161,20 +185,32 @@ async function getAllNotificationSettings() {
                 { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
             );
             settings.messageTemplate = fixedTemplate;
-            console.log('Шаблон уведомлений исправлен в базе данных (добавлен blockquote, убраны пустые строки)');
+            console.log('Шаблон уведомлений исправлен в базе данных (добавлен blockquote, исправлено форматирование)');
         } else if (type === 'reports' && settings.messageTemplate) {
-            // Убираем лишние пустые строки из существующего шаблона
+            // Исправляем форматирование шаблона: добавляем переносы строк где нужно
             let fixedTemplate = settings.messageTemplate;
             const originalTemplate = fixedTemplate;
+            
+            // Исправляем формат внутри blockquote: добавляем перенос строки после запятой после {fullName}
+            // Паттерн: {fullName}, вы не предоставили -> {fullName},\nвы не предоставили
+            fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не предоставили/g, '$1,\nвы не предоставили');
+            
+            // Исправляем формат: добавляем перенос строки перед "Пожалуйста"
+            // Паттерн: ...г.\nПожалуйста или ...г. Пожалуйста -> ...г.\nПожалуйста
+            fixedTemplate = fixedTemplate.replace(/(\{date\}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
+            fixedTemplate = fixedTemplate.replace(/(\d{2}\.\d{2}\.\d{4}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
+            
+            // Убираем лишние пустые строки (3+ переносов строк заменяем на 2, затем 2+ на 1)
             fixedTemplate = fixedTemplate.replace(/\n{3,}/g, '\n\n');
             fixedTemplate = fixedTemplate.replace(/\n{2,}/g, '\n');
+            
             if (fixedTemplate !== originalTemplate) {
                 await collection.updateOne(
                     { type },
                     { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
                 );
                 settings.messageTemplate = fixedTemplate;
-                console.log('Шаблон уведомлений исправлен в базе данных (убраны пустые строки)');
+                console.log('Шаблон уведомлений исправлен в базе данных (исправлено форматирование)');
             }
         }
         
