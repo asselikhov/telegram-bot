@@ -41,7 +41,7 @@ async function getNotificationSettings(type = 'reports') {
                 enabled: true,
                 time: '19:00',
                 timezone: 'Europe/Moscow',
-                messageTemplate: '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>',
+                messageTemplate: '⚠️ Напоминание\n<blockquote>{fullName},\nвы не подали отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>',
                 updatedAt: new Date()
             };
         await collection.insertOne(defaultSettings);
@@ -59,9 +59,11 @@ async function getNotificationSettings(type = 'reports') {
                 // Иначе просто оборачиваем весь шаблон в blockquote
                 fixedTemplate = `<blockquote>${fixedTemplate}</blockquote>`;
             }
+            // Заменяем "предоставили" на "подали"
+            fixedTemplate = fixedTemplate.replace(/предоставили отчет/g, 'подали отчет');
             // Исправляем форматирование: добавляем переносы строк где нужно
-            // Паттерн: {fullName}, вы не предоставили -> {fullName},\nвы не предоставили
-            fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не предоставили/g, '$1,\nвы не предоставили');
+            // Паттерн: {fullName}, вы не подали -> {fullName},\nвы не подали
+            fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не подали/g, '$1,\nвы не подали');
             // Паттерн: ...г. Пожалуйста -> ...г.\nПожалуйста
             fixedTemplate = fixedTemplate.replace(/(\{date\}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
             fixedTemplate = fixedTemplate.replace(/(\d{2}\.\d{2}\.\d{4}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
@@ -80,9 +82,12 @@ async function getNotificationSettings(type = 'reports') {
         let fixedTemplate = settings.messageTemplate;
         const originalTemplate = fixedTemplate;
         
+        // Заменяем "предоставили" на "подали"
+        fixedTemplate = fixedTemplate.replace(/предоставили отчет/g, 'подали отчет');
+        
         // Исправляем формат внутри blockquote: добавляем перенос строки после запятой после {fullName}
-        // Паттерн: {fullName}, вы не предоставили -> {fullName},\nвы не предоставили
-        fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не предоставили/g, '$1,\nвы не предоставили');
+        // Паттерн: {fullName}, вы не подали -> {fullName},\nвы не подали
+        fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не подали/g, '$1,\nвы не подали');
         
         // Исправляем формат: добавляем перенос строки перед "Пожалуйста"
         // Паттерн: ...г.\nПожалуйста или ...г. Пожалуйста -> ...г.\nПожалуйста
@@ -109,7 +114,7 @@ async function getNotificationSettings(type = 'reports') {
         enabled: settings.enabled !== false,
         time: settings.time || (type === 'statistics' ? '20:00' : '19:00'),
         timezone: settings.timezone || 'Europe/Moscow',
-        messageTemplate: settings.messageTemplate || (type === 'statistics' ? null : '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>'),
+        messageTemplate: settings.messageTemplate || (type === 'statistics' ? null : '⚠️ Напоминание\n<blockquote>{fullName},\nвы не подали отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>'),
         updatedAt: settings.updatedAt
     };
 }
@@ -152,7 +157,7 @@ async function getAllNotificationSettings() {
                     enabled: true,
                     time: '19:00',
                     timezone: 'Europe/Moscow',
-                    messageTemplate: '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>',
+                    messageTemplate: '⚠️ Напоминание\n<blockquote>{fullName},\nвы не подали отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>',
                     updatedAt: new Date()
                 };
             await collection.insertOne(defaultSettings);
@@ -170,9 +175,11 @@ async function getAllNotificationSettings() {
                 // Иначе просто оборачиваем весь шаблон в blockquote
                 fixedTemplate = `<blockquote>${fixedTemplate}</blockquote>`;
             }
+            // Заменяем "предоставили" на "подали"
+            fixedTemplate = fixedTemplate.replace(/предоставили отчет/g, 'подали отчет');
             // Исправляем форматирование: добавляем переносы строк где нужно
-            // Паттерн: {fullName}, вы не предоставили -> {fullName},\nвы не предоставили
-            fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не предоставили/g, '$1,\nвы не предоставили');
+            // Паттерн: {fullName}, вы не подали -> {fullName},\nвы не подали
+            fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не подали/g, '$1,\nвы не подали');
             // Паттерн: ...г. Пожалуйста -> ...г.\nПожалуйста
             fixedTemplate = fixedTemplate.replace(/(\{date\}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
             fixedTemplate = fixedTemplate.replace(/(\d{2}\.\d{2}\.\d{4}г\.)\s*Пожалуйста/g, '$1\nПожалуйста');
@@ -191,9 +198,12 @@ async function getAllNotificationSettings() {
             let fixedTemplate = settings.messageTemplate;
             const originalTemplate = fixedTemplate;
             
+            // Заменяем "предоставили" на "подали"
+            fixedTemplate = fixedTemplate.replace(/предоставили отчет/g, 'подали отчет');
+            
             // Исправляем формат внутри blockquote: добавляем перенос строки после запятой после {fullName}
-            // Паттерн: {fullName}, вы не предоставили -> {fullName},\nвы не предоставили
-            fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не предоставили/g, '$1,\nвы не предоставили');
+            // Паттерн: {fullName}, вы не подали -> {fullName},\nвы не подали
+            fixedTemplate = fixedTemplate.replace(/(\{fullName\}),\s*вы не подали/g, '$1,\nвы не подали');
             
             // Исправляем формат: добавляем перенос строки перед "Пожалуйста"
             // Паттерн: ...г.\nПожалуйста или ...г. Пожалуйста -> ...г.\nПожалуйста
@@ -220,7 +230,7 @@ async function getAllNotificationSettings() {
             enabled: settings.enabled !== false,
             time: settings.time || (type === 'statistics' ? '20:00' : '19:00'),
             timezone: settings.timezone || 'Europe/Moscow',
-            messageTemplate: settings.messageTemplate || (type === 'statistics' ? null : '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>'),
+            messageTemplate: settings.messageTemplate || (type === 'statistics' ? null : '⚠️ Напоминание\n<blockquote>{fullName},\nвы не подали отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>'),
             updatedAt: settings.updatedAt
         };
     }

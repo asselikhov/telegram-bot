@@ -1513,7 +1513,7 @@ ${objectsList}
         
         if (type === 'reports') {
             // Используем правильный шаблон для предпросмотра
-            const correctTemplate = '⚠️ Напоминание\n<blockquote>{fullName},\nвы не предоставили отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>';
+            const correctTemplate = '⚠️ Напоминание\n<blockquote>{fullName},\nвы не подали отчет за {date}г.\nПожалуйста, внесите данные.</blockquote>';
             // Очищаем кэш перед получением настроек для предпросмотра, чтобы получить актуальные данные
             clearConfigCache();
             const settings = await getNotificationSettings(type);
