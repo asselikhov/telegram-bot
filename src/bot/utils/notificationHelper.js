@@ -13,6 +13,11 @@ function formatNotificationMessage(template, variables) {
         message = message.replace(regex, variables[key] || '');
     });
     
+    // Убираем лишние пустые строки (двойные и более переносы строк)
+    // Заменяем 3+ переноса строк на 2, и 2+ переноса строк на 1
+    message = message.replace(/\n{3,}/g, '\n\n');
+    message = message.replace(/\n{2,}/g, '\n');
+    
     return message;
 }
 

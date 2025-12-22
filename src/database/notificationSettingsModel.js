@@ -59,13 +59,30 @@ async function getNotificationSettings(type = 'reports') {
             // Иначе просто оборачиваем весь шаблон в blockquote
             fixedTemplate = `<blockquote>${fixedTemplate}</blockquote>`;
         }
+        // Убираем лишние пустые строки (3+ переносов строк заменяем на 2, затем 2+ на 1)
+        fixedTemplate = fixedTemplate.replace(/\n{3,}/g, '\n\n');
+        fixedTemplate = fixedTemplate.replace(/\n{2,}/g, '\n');
         // Обновляем шаблон в базе данных
         await collection.updateOne(
             { type },
             { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
         );
         settings.messageTemplate = fixedTemplate;
-        console.log('Шаблон уведомлений исправлен в базе данных (добавлен blockquote)');
+        console.log('Шаблон уведомлений исправлен в базе данных (добавлен blockquote, убраны пустые строки)');
+    } else if (type === 'reports' && settings.messageTemplate) {
+        // Убираем лишние пустые строки из существующего шаблона
+        let fixedTemplate = settings.messageTemplate;
+        const originalTemplate = fixedTemplate;
+        fixedTemplate = fixedTemplate.replace(/\n{3,}/g, '\n\n');
+        fixedTemplate = fixedTemplate.replace(/\n{2,}/g, '\n');
+        if (fixedTemplate !== originalTemplate) {
+            await collection.updateOne(
+                { type },
+                { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
+            );
+            settings.messageTemplate = fixedTemplate;
+            console.log('Шаблон уведомлений исправлен в базе данных (убраны пустые строки)');
+        }
     }
     
     return {
@@ -135,13 +152,30 @@ async function getAllNotificationSettings() {
                 // Иначе просто оборачиваем весь шаблон в blockquote
                 fixedTemplate = `<blockquote>${fixedTemplate}</blockquote>`;
             }
+            // Убираем лишние пустые строки (3+ переносов строк заменяем на 2, затем 2+ на 1)
+            fixedTemplate = fixedTemplate.replace(/\n{3,}/g, '\n\n');
+            fixedTemplate = fixedTemplate.replace(/\n{2,}/g, '\n');
             // Обновляем шаблон в базе данных
             await collection.updateOne(
                 { type },
                 { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
             );
             settings.messageTemplate = fixedTemplate;
-            console.log('Шаблон уведомлений исправлен в базе данных (добавлен blockquote)');
+            console.log('Шаблон уведомлений исправлен в базе данных (добавлен blockquote, убраны пустые строки)');
+        } else if (type === 'reports' && settings.messageTemplate) {
+            // Убираем лишние пустые строки из существующего шаблона
+            let fixedTemplate = settings.messageTemplate;
+            const originalTemplate = fixedTemplate;
+            fixedTemplate = fixedTemplate.replace(/\n{3,}/g, '\n\n');
+            fixedTemplate = fixedTemplate.replace(/\n{2,}/g, '\n');
+            if (fixedTemplate !== originalTemplate) {
+                await collection.updateOne(
+                    { type },
+                    { $set: { messageTemplate: fixedTemplate, updatedAt: new Date() } }
+                );
+                settings.messageTemplate = fixedTemplate;
+                console.log('Шаблон уведомлений исправлен в базе данных (убраны пустые строки)');
+            }
         }
         
         result[type] = {
