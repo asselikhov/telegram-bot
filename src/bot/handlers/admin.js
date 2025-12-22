@@ -1431,20 +1431,7 @@ ${objectsList}
         const settings = await getNotificationSettings(type);
         const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
         const typeName = type === 'reports' ? 'Отчеты' : 'Статистика';
-        let settingsText = `🔔 **Настройки уведомлений: ${typeName}**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
-        
-        if (settings.messageTemplate) {
-            // Для отчетов исправляем шаблон, чтобы показать правильный формат с "г." после даты
-            let templateToDisplay = settings.messageTemplate;
-            if (type === 'reports') {
-                // Исправляем шаблон, если он не содержит "г." после {date}
-                if (!templateToDisplay.includes('{date}г.')) {
-                    templateToDisplay = templateToDisplay.replace(/\{date\}\./g, '{date}г.');
-                    templateToDisplay = templateToDisplay.replace(/\{date\}(?![г.])/g, '{date}г.');
-                }
-            }
-            settingsText += `\n📝 Шаблон сообщения:\n${templateToDisplay}`;
-        }
+        const settingsText = `🔔 Настройки уведомлений: ${typeName}\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
         
         const buttons = [
             [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', `admin_notif_toggle_${type}`)],
@@ -1457,7 +1444,6 @@ ${objectsList}
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_notifications')]);
         
         const message = await ctx.reply(settingsText.trim(), {
-            parse_mode: 'Markdown',
             reply_markup: Markup.inlineKeyboard(buttons).reply_markup
         });
         ctx.state.userStates[userId].messageIds.push(message.message_id);

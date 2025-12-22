@@ -555,10 +555,7 @@ module.exports = (bot) => {
                         const { getNotificationSettings } = require('../../database/configService');
                         const settings = await getNotificationSettings(type);
                         const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
-                        let settingsText = `🔔 **Настройки уведомлений: Отчеты**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
-                        if (settings.messageTemplate) {
-                            settingsText += `\n📝 Шаблон сообщения:\n${settings.messageTemplate}`;
-                        }
+                        const settingsText = `🔔 Настройки уведомлений: Отчеты\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
                         const buttons = [
                             [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', 'admin_notif_toggle_reports')],
                             [Markup.button.callback('⏰ Изменить время', 'admin_notif_time_reports')],
@@ -567,7 +564,6 @@ module.exports = (bot) => {
                             [Markup.button.callback('↩️ Назад', 'admin_notifications')]
                         ];
                         const message = await ctx.reply(settingsText.trim(), {
-                            parse_mode: 'Markdown',
                             reply_markup: Markup.inlineKeyboard(buttons).reply_markup
                         });
                         ctx.state.userStates[userId].messageIds = [message.message_id];
@@ -578,14 +574,13 @@ module.exports = (bot) => {
                         const { getNotificationSettings } = require('../../database/configService');
                         const settings = await getNotificationSettings(type);
                         const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
-                        const settingsText = `🔔 **Настройки уведомлений: Статистика**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
+                        const settingsText = `🔔 Настройки уведомлений: Статистика\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
                         const buttons = [
                             [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', 'admin_notif_toggle_statistics')],
                             [Markup.button.callback('⏰ Изменить время', 'admin_notif_time_statistics')],
                             [Markup.button.callback('↩️ Назад', 'admin_notifications')]
                         ];
                         const message = await ctx.reply(settingsText.trim(), {
-                            parse_mode: 'Markdown',
                             reply_markup: Markup.inlineKeyboard(buttons).reply_markup
                         });
                         ctx.state.userStates[userId].messageIds = [message.message_id];
@@ -623,10 +618,7 @@ module.exports = (bot) => {
                     const settings = await getNotificationSettings(type);
                     const enabledText = settings.enabled ? '✅ Включены' : '❌ Выключены';
                     const typeName = type === 'reports' ? 'Отчеты' : 'Статистика';
-                    let settingsText = `🔔 **Настройки уведомлений: ${typeName}**\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
-                    if (settings.messageTemplate) {
-                        settingsText += `\n📝 Шаблон сообщения:\n${settings.messageTemplate}`;
-                    }
+                    const settingsText = `🔔 Настройки уведомлений: ${typeName}\n\n${enabledText}\n⏰ Время: ${settings.time}\n🌍 Часовой пояс: ${settings.timezone}`;
                     const buttons = [
                         [Markup.button.callback(settings.enabled ? '❌ Выключить' : '✅ Включить', `admin_notif_toggle_${type}`)],
                         [Markup.button.callback('⏰ Изменить время', `admin_notif_time_${type}`)],
@@ -635,7 +627,6 @@ module.exports = (bot) => {
                         [Markup.button.callback('↩️ Назад', 'admin_notifications')]
                     ];
                     const message = await ctx.reply(settingsText.trim(), {
-                        parse_mode: 'Markdown',
                         reply_markup: Markup.inlineKeyboard(buttons).reply_markup
                     });
                     ctx.state.userStates[userId].messageIds = [message.message_id];
