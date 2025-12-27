@@ -951,6 +951,12 @@ module.exports = (bot) => {
         const state = ctx.state.userStates[userId];
         if (!state || state.step !== 'photos') return;
 
+        // Проверяем наличие state.report и его обязательных полей
+        if (!state.report || !state.report.objectName || state.report.workDone === undefined || state.report.materials === undefined) {
+            await ctx.reply('Ошибка: данные отчета неполные. Пожалуйста, создайте отчет заново.');
+            return;
+        }
+
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
                 await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
@@ -961,6 +967,12 @@ module.exports = (bot) => {
         state.messageIds = [];
 
         const users = await loadUsers();
+        
+        // Проверяем наличие пользователя в базе
+        if (!users[userId]) {
+            await ctx.reply('Ошибка: пользователь не найден в базе данных.');
+            return;
+        }
 
         const date = new Date();
         const formattedDate = formatDate(date);
@@ -976,7 +988,7 @@ module.exports = (bot) => {
             materials: state.report.materials,
             groupMessageIds: {},
             messageLink: null,
-            fullName: users[userId].fullName,
+            fullName: users[userId].fullName || '',
             photos: state.report.photos || []
         };
         const reportText = `
@@ -1088,6 +1100,12 @@ ${report.materials}
         const state = ctx.state.userStates[userId];
         if (!state || state.step !== 'editPhotos') return;
 
+        // Проверяем наличие state.report и его обязательных полей
+        if (!state.report || !state.report.date || !state.report.objectName || state.report.workDone === undefined || state.report.materials === undefined) {
+            await ctx.reply('Ошибка: данные отчета неполные. Пожалуйста, попробуйте редактировать отчет заново.');
+            return;
+        }
+
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
                 await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
@@ -1098,6 +1116,12 @@ ${report.materials}
         state.messageIds = [];
 
         const users = await loadUsers();
+        
+        // Проверяем наличие пользователя в базе
+        if (!users[userId]) {
+            await ctx.reply('Ошибка: пользователь не найден в базе данных.');
+            return;
+        }
 
         const newTimestamp = new Date().toISOString();
         const formattedDate = parseAndFormatDate(state.report.date);
@@ -1112,7 +1136,7 @@ ${report.materials}
             materials: state.report.materials,
             groupMessageIds: {},
             messageLink: null,
-            fullName: users[userId].fullName,
+            fullName: users[userId].fullName || '',
             photos: state.report.photos || []
         };
         const newReportText = `

@@ -35,6 +35,9 @@ async function showDownloadReport(ctx, page = 0) {
     }
 
     // Показываем только объекты организации пользователя
+    if (!users[userId]) {
+        return ctx.reply('Ошибка: пользователь не найден в базе данных.');
+    }
     const userOrganization = users[userId].organization;
     const availableObjects = await getOrganizationObjects(userOrganization);
     
@@ -86,6 +89,9 @@ async function downloadReportFile(ctx, objectIndex) {
     const users = await loadUsers();
     
     // Получаем объект из списка объектов организации пользователя
+    if (!users[userId]) {
+        return ctx.reply('Ошибка: пользователь не найден в базе данных.');
+    }
     const userOrganization = users[userId].organization;
     const availableObjects = await getOrganizationObjects(userOrganization);
     const objectName = availableObjects[objectIndex];
@@ -249,6 +255,9 @@ async function showDownloadUsers(ctx, page = 0) {
     }
 
     // Показываем только объекты организации пользователя
+    if (!users[userId]) {
+        return ctx.reply('Ошибка: пользователь не найден в базе данных.');
+    }
     const userOrganization = users[userId].organization;
     const availableObjects = await getOrganizationObjects(userOrganization);
     
@@ -295,6 +304,9 @@ async function downloadUsersFile(ctx, objectIndex) {
     const users = await loadUsers();
 
     // Получаем объект из списка объектов организации пользователя
+    if (!users[userId]) {
+        return ctx.reply('Ошибка: пользователь не найден в базе данных.');
+    }
     const userOrganization = users[userId].organization;
     const availableObjects = await getOrganizationObjects(userOrganization);
     const objectName = availableObjects[objectIndex];
@@ -770,6 +782,9 @@ module.exports = (bot) => {
         const userId = ctx.from.id.toString();
         const objectIndex = parseInt(ctx.match[1], 10);
         const users = await loadUsers();
+        if (!users[userId] || !Array.isArray(users[userId].selectedObjects)) {
+            return ctx.reply('Ошибка: пользователь или объекты не найдены.');
+        }
         const selectedObject = users[userId].selectedObjects[objectIndex];
         if (!selectedObject) return;
 

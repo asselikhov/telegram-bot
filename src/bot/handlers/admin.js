@@ -464,10 +464,15 @@ ${objectsList}
         buttons.push([Markup.button.callback('✅ Готово', 'admin_org_confirm_objects')]);
         buttons.push([Markup.button.callback('↩️ Отмена', 'admin_org_edit')]);
         
-        const lastMessageId = ctx.state.userStates[userId].messageIds[ctx.state.userStates[userId].messageIds.length - 1];
-        try {
-            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите объекты для организации (можно выбрать несколько):', Markup.inlineKeyboard(buttons));
-        } catch (e) {
+        const messageIds = ctx.state.userStates[userId].messageIds || [];
+        const lastMessageId = messageIds.length > 0 ? messageIds[messageIds.length - 1] : null;
+        if (lastMessageId) {
+            try {
+                await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите объекты для организации (можно выбрать несколько):', Markup.inlineKeyboard(buttons));
+            } catch (e) {
+                await ctx.reply('Выберите объекты для организации (можно выбрать несколько):', Markup.inlineKeyboard(buttons));
+            }
+        } else {
             await ctx.reply('Выберите объекты для организации (можно выбрать несколько):', Markup.inlineKeyboard(buttons));
         }
     });

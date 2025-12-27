@@ -60,12 +60,12 @@ async function loadUserReports(userId) {
     // Нормализуем userid до строки для консистентности поиска
     const normalizedUserId = String(userId);
     // Ищем отчеты как по строке, так и по числу (на случай если в базе есть разные типы)
-    const reports = await reportsCollection.find({ 
-        $or: [
-            { userid: normalizedUserId },
-            { userid: Number(userId) }
-        ]
-    }).toArray();
+    // Проверяем, можно ли преобразовать в число, чтобы избежать ошибок
+    const query = [{ userid: normalizedUserId }];
+    if (!isNaN(userId) && userId !== '') {
+        query.push({ userid: Number(userId) });
+    }
+    const reports = await reportsCollection.find({ $or: query }).toArray();
     const reportsMap = {};
     reports.forEach(row => {
         let groupMessageIds = row.groupmessageids;
@@ -103,11 +103,16 @@ async function loadUserReports(userId) {
 async function getReportText(objectName) {
     const reportsCollection = (await getDb()).collection('reports');
     const usersCollection = (await getDb()).collection('users');
-    const reports = await reportsCollection.find({ objectname: objectName }).sort({ timestamp: 1 }).toArray();
+    // Нормализуем название объекта для поиска
+    const normalizedObjectName = objectName ? objectName.trim() : objectName;
+    const reports = await reportsCollection.find({ 
+        objectname: normalizedObjectName 
+    }).sort({ timestamp: 1 }).toArray();
     if (reports.length === 0) return '';
     const userIds = [...new Set(reports.map(r => r.userid))];
-    const users = await usersCollection.find({ userid: { $in: userIds } }).toArray();
-    const usersMap = Object.fromEntries(users.map(u => [u.userid, u]));
+    // В коллекции users поле называется telegramId, а не userid
+    const users = await usersCollection.find({ telegramId: { $in: userIds } }).toArray();
+    const usersMap = Object.fromEntries(users.map(u => [u.telegramId, u]));
     return reports.map(row => {
         const user = usersMap[row.userid] || {};
         const date = row.date;
