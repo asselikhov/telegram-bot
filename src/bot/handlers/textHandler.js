@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const { connectMongo } = require('../../config/mongoConfig');
-const { loadUsers, saveUser } = require('../../database/userModel');
+const { loadUsers, saveUser, incrementNextReportId } = require('../../database/userModel');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 const { loadInviteCode, markInviteCodeAsUsed, validateInviteCode } = require('../../database/inviteCodeModel');
 const { showObjectSelection } = require('../actions/objects');
@@ -974,10 +974,20 @@ module.exports = (bot) => {
             return;
         }
 
+        // Атомарно инкрементируем nextReportId для избежания race conditions
+        let nextReportId;
+        try {
+            nextReportId = await incrementNextReportId(userId);
+        } catch (error) {
+            console.error(`Ошибка получения nextReportId для пользователя ${userId}:`, error);
+            await ctx.reply('❌ Ошибка при создании отчета. Пожалуйста, попробуйте позже.');
+            return;
+        }
+
         const date = new Date();
         const formattedDate = formatDate(date);
         const timestamp = date.toISOString();
-        const reportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`;
+        const reportId = `${formattedDate.replace(/\./g, '_')}_${nextReportId}`;
         const report = {
             reportId,
             userId,
@@ -1056,14 +1066,12 @@ ${report.materials}
 
         try {
             await saveReport(userId, report);
-            await saveUser(userId, users[userId]);
+            // nextReportId уже инкрементирован атомарно, не нужно вызывать saveUser для этого
         } catch (error) {
             console.error(`Ошибка сохранения отчета для пользователя ${userId}:`, error);
             await ctx.reply('❌ Ошибка при сохранении отчета. Пожалуйста, попробуйте создать отчет заново.');
-            // Откатываем инкремент nextReportId, так как отчет не был сохранен
-            if (users[userId] && users[userId].nextReportId > 1) {
-                users[userId].nextReportId--;
-            }
+            // Примечание: nextReportId уже инкрементирован в БД, но это нормально - просто будет пропуск в ID
+            // Это лучше, чем race condition при одновременных запросах
             return;
         }
 
@@ -1133,9 +1141,19 @@ ${report.materials}
             return;
         }
 
+        // Атомарно инкрементируем nextReportId для избежания race conditions
+        let nextReportId;
+        try {
+            nextReportId = await incrementNextReportId(userId);
+        } catch (error) {
+            console.error(`Ошибка получения nextReportId для пользователя ${userId}:`, error);
+            await ctx.reply('❌ Ошибка при обновлении отчета. Пожалуйста, попробуйте позже.');
+            return;
+        }
+
         const newTimestamp = new Date().toISOString();
         const formattedDate = parseAndFormatDate(state.report.date);
-        const newReportId = `${formattedDate.replace(/\./g, '_')}_${users[userId].nextReportId++}`;
+        const newReportId = `${formattedDate.replace(/\./g, '_')}_${nextReportId}`;
         const newReport = {
             reportId: newReportId,
             userId,
@@ -1221,14 +1239,12 @@ ${newReport.materials}
 
         try {
             await saveReport(userId, newReport);
-            await saveUser(userId, users[userId]);
+            // nextReportId уже инкрементирован атомарно, не нужно вызывать saveUser для этого
         } catch (error) {
             console.error(`Ошибка сохранения отредактированного отчета для пользователя ${userId}:`, error);
             await ctx.reply('❌ Ошибка при сохранении отчета. Пожалуйста, попробуйте отредактировать отчет заново.');
-            // Откатываем инкремент nextReportId, так как отчет не был сохранен
-            if (users[userId] && users[userId].nextReportId > 1) {
-                users[userId].nextReportId--;
-            }
+            // Примечание: nextReportId уже инкрементирован в БД, но это нормально - просто будет пропуск в ID
+            // Это лучше, чем race condition при одновременных запросах
             return;
         }
         

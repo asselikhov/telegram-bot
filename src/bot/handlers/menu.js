@@ -4,6 +4,7 @@ const { clearPreviousMessages } = require('../utils');
 const { ADMIN_ID } = require('../../config/config');
 const { getOrganizationObjects, getObjectGroups, getGeneralGroupChatIds, getReportUsers } = require('../../database/configService');
 const { getAllObjects } = require('../../database/objectModel');
+const { ensureUserState, addMessageId } = require('../utils/stateHelper');
 
 async function showMainMenu(ctx) {
     const userId = ctx.from.id.toString();
@@ -11,8 +12,9 @@ async function showMainMenu(ctx) {
     const user = users[userId] || {};
 
     await clearPreviousMessages(ctx, userId);
-    if (ctx.state.userStates[userId]) {
-        ctx.state.userStates[userId].messageIds = [];
+    const state = ensureUserState(ctx);
+    if (state) {
+        state.messageIds = [];
     }
 
     const menuText = `
@@ -48,7 +50,7 @@ async function showMainMenu(ctx) {
     }
 
     const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 async function showProfile(ctx) {
@@ -162,7 +164,7 @@ ${statusEmoji} ${user.status || 'Не указан'}
         link_preview_options: { is_disabled: true },
         reply_markup: Markup.inlineKeyboard(buttons).reply_markup
     });
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 async function showEditData(ctx) {
@@ -180,7 +182,7 @@ async function showEditData(ctx) {
     ];
 
     const message = await ctx.reply('Выберите, что хотите изменить:', Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 module.exports = (bot) => {
@@ -194,16 +196,19 @@ module.exports = (bot) => {
 
         ctx.state.userStates[userId].step = 'editFullNameInput';
         const message = await ctx.reply('Введите новое ФИО:');
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        addMessageId(ctx, message.message_id);
     });
     
     bot.action('edit_phone', async (ctx) => {
         const userId = ctx.from.id.toString();
         await clearPreviousMessages(ctx, userId);
 
-        ctx.state.userStates[userId].step = 'editPhoneInput';
+        const state = ensureUserState(ctx);
+        if (state) {
+            state.step = 'editPhoneInput';
+        }
         const message = await ctx.reply('Введите новый контактный телефон:');
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        addMessageId(ctx, message.message_id);
     });
 };
 

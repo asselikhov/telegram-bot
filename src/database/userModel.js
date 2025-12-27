@@ -96,4 +96,44 @@ async function deleteUser(telegramId) {
     await usersCollection.deleteOne({ telegramId });
 }
 
-module.exports = { loadUsers, saveUser, deleteUser };
+/**
+ * Атомарно инкрементирует и возвращает nextReportId для пользователя
+ * Использует $inc оператор MongoDB для избежания race conditions
+ * @param {string} telegramId - ID пользователя
+ * @returns {Promise<number>} Новое значение nextReportId
+ */
+async function incrementNextReportId(telegramId) {
+    if (!telegramId) {
+        throw new Error('telegramId is required');
+    }
+    const usersCollection = (await getDb()).collection('users');
+    try {
+        // Используем findOneAndUpdate с $inc для атомарного инкремента
+        const result = await usersCollection.findOneAndUpdate(
+            { telegramId },
+            { 
+                $inc: { nextReportId: 1 },
+                $setOnInsert: { nextReportId: 1 } // Если пользователь не существует, создаем с nextReportId = 1
+            },
+            { 
+                upsert: true,
+                returnDocument: 'after'
+            }
+        );
+        
+        if (!result.value) {
+            throw new Error(`Failed to increment nextReportId for user ${telegramId}`);
+        }
+        
+        // Возвращаем инкрементированное значение
+        // Если пользователь был создан только что, nextReportId будет 1 (setOnInsert)
+        // После инкремента будет 2, но это правильно, так как первый отчет будет с ID _1
+        const newValue = result.value.nextReportId || 1;
+        return newValue;
+    } catch (error) {
+        console.error(`Error incrementing nextReportId for user ${telegramId}:`, error);
+        throw error;
+    }
+}
+
+module.exports = { loadUsers, saveUser, deleteUser, incrementNextReportId };

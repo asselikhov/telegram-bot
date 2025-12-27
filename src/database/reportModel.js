@@ -24,27 +24,34 @@ async function saveReport(userId, report) {
     try {
         const reportsCollection = (await getDb()).collection('reports');
         const { reportId, userId: reportUserId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
+        
+        // Проверяем, что reportId не пустой
+        if (!reportId) {
+            throw new Error('reportId is required and cannot be null or undefined');
+        }
+        
         const normalizedMessageLink = normalizeMessageLink(messageLink);
         // Нормализуем название объекта (убираем пробелы в начале и конце)
         const normalizedObjectName = objectName ? objectName.trim() : objectName;
         // Нормализуем userid до строки для консистентности
         const normalizedUserId = String(reportUserId || userId);
-        const result = await reportsCollection.updateOne(
+        
+        // Используем replaceOne для полной замены документа, что избегает проблем с уникальным индексом
+        // Это также удалит возможные старые поля с другими регистрами (reportId vs reportid)
+        const result = await reportsCollection.replaceOne(
             { reportid: reportId },
             {
-                $set: {
-                    reportid: reportId,
-                    userid: normalizedUserId,
-                    objectname: normalizedObjectName,
-                    date,
-                    timestamp,
-                    workdone: workDone,
-                    materials,
-                    groupmessageids: JSON.stringify(groupMessageIds || {}),
-                    messagelink: normalizedMessageLink || null,
-                    fullname: fullName,
-                    photos: JSON.stringify(photos || [])
-                }
+                reportid: reportId,
+                userid: normalizedUserId,
+                objectname: normalizedObjectName,
+                date,
+                timestamp,
+                workdone: workDone,
+                materials,
+                groupmessageids: JSON.stringify(groupMessageIds || {}),
+                messagelink: normalizedMessageLink || null,
+                fullname: fullName,
+                photos: JSON.stringify(photos || [])
             },
             { upsert: true }
         );

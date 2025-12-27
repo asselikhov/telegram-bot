@@ -65,8 +65,17 @@ bot.use((ctx, next) => {
   return next();
 });
 
-bot.action(/.*/, (ctx, next) => {
-  return next();
+bot.action(/.*/, async (ctx, next) => {
+  try {
+    return await next();
+  } catch (error) {
+    console.error('Ошибка в action handler:', error);
+    try {
+      await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    } catch (e) {
+      // Игнорируем ошибки при отправке сообщения об ошибке
+    }
+  }
 });
 
 let cronTasks = {};

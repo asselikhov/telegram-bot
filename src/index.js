@@ -32,3 +32,9 @@ process.on('uncaughtException', (err) => {
     console.error('Неперехваченная ошибка:', err);
     process.exit(1);
 });
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // Не завершаем процесс, так как это может быть не критичная ошибка
+    // Но логируем для дальнейшего анализа
+});

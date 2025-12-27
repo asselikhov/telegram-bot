@@ -4,6 +4,7 @@ const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, loadAllReports, saveReport } = require('../../database/reportModel');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 const { getOrganizationObjects, getObjects, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap, getReportUsers } = require('../../database/configService');
+const { addMessageId } = require('../utils/stateHelper');
 
 async function showDownloadMenu(ctx) {
     const userId = ctx.from.id.toString();
@@ -23,7 +24,7 @@ async function showDownloadMenu(ctx) {
             [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
         ])
     );
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 async function showDownloadReport(ctx, page = 0) {
@@ -76,7 +77,7 @@ async function showDownloadReport(ctx, page = 0) {
         `Выберите объект для выгрузки отчета (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 function parseDateFromDDMMYYYY(dateString) {
@@ -296,7 +297,7 @@ async function showDownloadUsers(ctx, page = 0) {
         `Выберите объект для выгрузки людей (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 async function downloadUsersFile(ctx, objectIndex) {
@@ -444,7 +445,7 @@ async function createReport(ctx) {
     buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
 
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 async function showReportObjects(ctx) {
@@ -458,7 +459,7 @@ async function showReportObjects(ctx) {
 
     if (Object.keys(reports).length === 0) {
         const message = await ctx.reply('У вас пока нет отчетов.');
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        addMessageId(ctx, message.message_id);
         return;
     }
 
@@ -467,7 +468,7 @@ async function showReportObjects(ctx) {
     buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
     const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 async function showReportDates(ctx, objectIndex, page = 0) {
@@ -516,7 +517,7 @@ async function showReportDates(ctx, objectIndex, page = 0) {
         `Выберите дату для объекта "${objectName}" (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
@@ -569,7 +570,7 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
         `Выберите время отчета для "${objectName}" за ${selectedDate} (Страница ${pageNum + 1} из ${totalPages}):`,
         Markup.inlineKeyboard(buttons)
     );
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 async function showReportDetails(ctx, reportId) {
@@ -616,7 +617,7 @@ ${report.materials}
         mediaGroup.forEach(msg => ctx.state.userStates[userId].messageIds.push(msg.message_id));
     }
     const message = await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 async function editReport(ctx, reportId) {
@@ -637,7 +638,7 @@ async function editReport(ctx, reportId) {
         messageIds: []
     };
     const message = await ctx.reply('💡 Введите новую информацию о выполненных работах:');
-    ctx.state.userStates[userId].messageIds.push(message.message_id);
+    addMessageId(ctx, message.message_id);
 }
 
 async function deleteAllPhotos(ctx, reportId) {
@@ -796,7 +797,7 @@ module.exports = (bot) => {
             messageIds: []
         };
         const message = await ctx.reply('💡 Введите информацию о выполненных работах:');
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+        addMessageId(ctx, message.message_id);
     });
 
     bot.action('view_reports', showReportObjects);
