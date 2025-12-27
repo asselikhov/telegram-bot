@@ -3615,13 +3615,8 @@ ${objectsList}
             const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
             const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
             
-            // Используем сохраненный список дат из state, если он есть, иначе используем текущий
-            let datesList = uniqueDates;
-            if (state && state.adminNeedsDatesList) {
-                datesList = state.adminNeedsDatesList;
-            }
-            
-            const selectedDate = datesList[dateIndex];
+            // Используем текущий список дат для данного объекта
+            const selectedDate = uniqueDates[dateIndex];
             if (!selectedDate) {
                 return ctx.reply('Ошибка: дата не найдена.');
             }
@@ -3734,7 +3729,8 @@ ${objectsList}
                 state.adminNeedsDatesList = uniqueDates;
             }
 
-            const dateButtons = currentDates.map((date, index) => {
+            const dateButtons = currentDates.map((date) => {
+                // Используем индекс из полного списка uniqueDates для данного объекта
                 const dateIndexInFullList = uniqueDates.indexOf(date);
                 return [Markup.button.callback(date, `admin_needs_object_${objectIndex}_date_${dateIndexInFullList}`)];
             }).reverse();
