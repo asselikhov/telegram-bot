@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { initializeData, isDataInitialized } = require('./database/migrations/initializeData');
+const { migrateUserStatuses } = require('./database/migrations/migrateUserStatuses');
 const bot = require('./bot/bot');
 require('./server/server');
 
@@ -12,6 +13,13 @@ async function startApp() {
         if (!dataInitialized) {
             console.log('Инициализация данных из config.js...');
             await initializeData();
+        }
+        
+        // Выполняем миграцию статусов пользователей (если нужно)
+        try {
+            await migrateUserStatuses();
+        } catch (migrationError) {
+            console.error('Ошибка при миграции статусов пользователей (может быть уже выполнена):', migrationError.message);
         }
         
         // Запускаем задачу напоминаний после инициализации данных
