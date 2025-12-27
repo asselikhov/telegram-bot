@@ -202,9 +202,10 @@ async function sendStatisticsNotifications() {
         // Получаем объекты организации
         const orgObjects = await getOrganizationObjects(orgName);
         
-        // Фильтруем только объекты со статусом "В работе"
+        // Фильтруем только объекты со статусом "В работе" (исключаем "Заморожен" и другие статусы)
         const objectsInWork = orgObjects.filter(objName => {
           const objInfo = allObjects.find(obj => obj.name === objName);
+          // Включаем только объекты со статусом "В работе", исключаем "Заморожен"
           return objInfo && objInfo.status === 'В работе';
         });
         
