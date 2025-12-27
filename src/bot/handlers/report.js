@@ -593,10 +593,12 @@ async function showReportDetails(ctx, reportId) {
 👷 ${escapeHtml(report.fullName)}
 
 <b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
-<blockquote>${escapeHtml(report.workDone)}</blockquote>
+<blockquote>''
+${escapeHtml(report.workDone)}</blockquote>
 
 <b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
-<blockquote>${escapeHtml(report.materials)}</blockquote>
+<blockquote>''
+${escapeHtml(report.materials)}</blockquote>
 Время: ${time}
     `.trim();
 
@@ -703,10 +705,12 @@ async function finishEditReport(ctx, reportId) {
 👷 ${escapeHtml(users[userId].fullName)}
 
 <b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
-<blockquote>${escapeHtml(newReport.workDone)}</blockquote>
+<blockquote>''
+${escapeHtml(newReport.workDone)}</blockquote>
 
 <b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
-<blockquote>${escapeHtml(newReport.materials)}</blockquote>
+<blockquote>''
+${escapeHtml(newReport.materials)}</blockquote>
     `.trim();
 
     const oldReportId = state.report.originalReportId;
