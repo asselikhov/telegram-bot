@@ -10,25 +10,30 @@ async function getDb() {
     return db;
 }
 
-// Инициализация индекса при первом обращении
-async function ensureIndex() {
-    try {
-        const needsCollection = (await getDb()).collection('needs');
-        const indexes = await needsCollection.indexes();
-        const hasIndex = indexes.some(idx => idx.name === 'needid_1');
-        if (!hasIndex) {
-            await needsCollection.createIndex({ needid: 1 }, { unique: true });
-            console.log('Создан уникальный индекс на needid');
-        }
-    } catch (error) {
-        console.error('Ошибка при создании индекса на needid:', error);
-    }
-}
 
 async function saveNeed(userId, need) {
     try {
-        await ensureIndex();
         const needsCollection = (await getDb()).collection('needs');
+        
+        // Создаем индекс если его еще нет (обрабатываем случай когда коллекция не существует)
+        try {
+            const indexes = await needsCollection.indexes();
+            const hasIndex = indexes.some(idx => idx.name === 'needid_1');
+            if (!hasIndex) {
+                await needsCollection.createIndex({ needid: 1 }, { unique: true });
+                console.log('Создан уникальный индекс на needid');
+            }
+        } catch (indexError) {
+            // Если коллекция не существует, создаем индекс (это создаст и коллекцию)
+            if (indexError.code === 26 || indexError.codeName === 'NamespaceNotFound') {
+                try {
+                    await needsCollection.createIndex({ needid: 1 }, { unique: true });
+                    console.log('Создан уникальный индекс на needid (коллекция создана)');
+                } catch (createError) {
+                    // Игнорируем ошибки - коллекция и индекс создадутся при upsert
+                }
+            }
+        }
         const { needId, userId: needUserId, objectName, date, timestamp, type, name, quantity, urgency, status, fullName } = need;
         
         // Проверяем, что needId не пустой
