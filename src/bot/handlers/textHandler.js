@@ -1004,7 +1004,6 @@ module.exports = (bot) => {
         const reportText = `
 📅 ОТЧЕТ ЗА ${formattedDate}
 🏢 ${report.objectName}
-➖➖➖➖➖➖➖➖➖➖➖
 👷 ${users[userId].fullName}
 
 ВЫПОЛНЕННЫЕ РАБОТЫ:
@@ -1012,7 +1011,6 @@ ${report.workDone}
 
 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
 ${report.materials}
-➖➖➖➖➖➖➖➖➖➖➖
         `.trim();
 
         const objectGroups = await getObjectGroups();
@@ -1170,7 +1168,6 @@ ${report.materials}
         const newReportText = `
 📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)
 🏢 ${newReport.objectName}
-➖➖➖➖➖➖➖➖➖➖➖
 👷 ${users[userId].fullName}
 
 ВЫПОЛНЕННЫЕ РАБОТЫ:
@@ -1178,7 +1175,6 @@ ${newReport.workDone}
 
 ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
 ${newReport.materials}
-➖➖➖➖➖➖➖➖➖➖➖
         `.trim();
 
         const oldReportId = state.report.originalReportId;

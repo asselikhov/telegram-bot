@@ -587,18 +587,16 @@ async function showReportDetails(ctx, reportId) {
     const formattedDate = parseAndFormatDate(report.date);
     const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
     const reportText = `
-📅 ОТЧЕТ ЗА ${formattedDate}  
-🏢 ${report.objectName}  
-➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ${report.fullName}  
+📅 ОТЧЕТ ЗА ${formattedDate}
+🏢 ${report.objectName}
+👷 ${report.fullName}
 
-ВЫПОЛНЕННЫЕ РАБОТЫ:  
-${report.workDone}  
+ВЫПОЛНЕННЫЕ РАБОТЫ:
+${report.workDone}
 
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-${report.materials}  
-➖➖➖➖➖➖➖➖➖➖➖
-Время: ${time}  
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
+${report.materials}
+Время: ${time}
     `.trim();
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
@@ -696,17 +694,15 @@ async function finishEditReport(ctx, reportId) {
         photos: state.report.photos
     };
     const newReportText = `
-📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)  
-🏢 ${newReport.objectName}  
-➖➖➖➖➖➖➖➖➖➖➖ 
-👷 ${users[userId].fullName} 
+📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)
+🏢 ${newReport.objectName}
+👷 ${users[userId].fullName}
 
-ВЫПОЛНЕННЫЕ РАБОТЫ:  
-${newReport.workDone}  
+ВЫПОЛНЕННЫЕ РАБОТЫ:
+${newReport.workDone}
 
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:  
-${newReport.materials}  
-➖➖➖➖➖➖➖➖➖➖➖
+ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
+${newReport.materials}
     `.trim();
 
     const oldReportId = state.report.originalReportId;
