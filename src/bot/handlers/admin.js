@@ -3724,11 +3724,6 @@ ${objectsList}
                 return ctx.reply('Ошибка: нет дат для отображения.');
             }
 
-            // Сохраняем список дат в state для использования при выборе даты
-            if (state) {
-                state.adminNeedsDatesList = uniqueDates;
-            }
-
             const dateButtons = currentDates.map((date) => {
                 // Используем индекс из полного списка uniqueDates для данного объекта
                 const dateIndexInFullList = uniqueDates.indexOf(date);
