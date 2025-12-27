@@ -1009,7 +1009,6 @@ module.exports = (bot) => {
 
 <blockquote><b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
 ${escapeHtml(report.workDone)}</blockquote>
-
 <blockquote><b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
 ${escapeHtml(report.materials)}</blockquote>
         `.trim();
@@ -1178,7 +1177,6 @@ ${escapeHtml(report.materials)}</blockquote>
 
 <blockquote><b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
 ${escapeHtml(newReport.workDone)}</blockquote>
-
 <blockquote><b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
 ${escapeHtml(newReport.materials)}</blockquote>
         `.trim();

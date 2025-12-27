@@ -594,7 +594,6 @@ async function showReportDetails(ctx, reportId) {
 
 <blockquote><b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
 ${escapeHtml(report.workDone)}</blockquote>
-
 <blockquote><b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
 ${escapeHtml(report.materials)}</blockquote>
 Время: ${time}
@@ -704,7 +703,6 @@ async function finishEditReport(ctx, reportId) {
 
 <blockquote><b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
 ${escapeHtml(newReport.workDone)}</blockquote>
-
 <blockquote><b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
 ${escapeHtml(newReport.materials)}</blockquote>
     `.trim();
