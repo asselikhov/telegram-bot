@@ -66,6 +66,8 @@ const {
     getAllNotificationSettings,
     getReportUsers,
     getNeedUsers,
+    getAllReportUsersMap,
+    getAllNeedUsersMap,
     clearConfigCache 
 } = require('../../database/configService');
 const { 
@@ -2203,6 +2205,46 @@ ${objectsList}
             reportsCounts[uid] = (reportsCounts[uid] || 0) + 1;
         });
         
+        // Получаем карты ответственных пользователей для отчетов и потребностей
+        const reportUsersMap = await getAllReportUsersMap();
+        const needUsersMap = await getAllNeedUsersMap();
+        
+        // Функция для определения ответственности пользователя
+        const getUserResponsibilities = (userId, user) => {
+            if (!user.organization || !user.selectedObjects || user.selectedObjects.length === 0) {
+                return '-';
+            }
+            
+            const orgName = user.organization;
+            const userObjects = Array.isArray(user.selectedObjects) ? user.selectedObjects : [];
+            
+            let isReportUser = false;
+            let isNeedUser = false;
+            
+            // Проверяем для каждого объекта пользователя
+            for (const objectName of userObjects) {
+                const reportKey = `${orgName}_${objectName}`;
+                const needKey = `${orgName}_${objectName}`;
+                
+                if (reportUsersMap[reportKey] && reportUsersMap[reportKey].includes(userId)) {
+                    isReportUser = true;
+                }
+                if (needUsersMap[needKey] && needUsersMap[needKey].includes(userId)) {
+                    isNeedUser = true;
+                }
+            }
+            
+            if (isReportUser && isNeedUser) {
+                return 'Отчеты, потребности';
+            } else if (isReportUser) {
+                return 'Отчеты';
+            } else if (isNeedUser) {
+                return 'Потребности';
+            }
+            
+            return '-';
+        };
+        
         await clearPreviousMessages(ctx, userId);
         
         const workbook = new ExcelJS.Workbook();
@@ -2222,15 +2264,14 @@ ${objectsList}
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
         
-        // Заголовки
+        // Заголовки (добавлен столбец "Ответственный" перед "Статус")
         worksheet.columns = [
-            { header: 'ФИО', key: 'fullName', width: 30 },
-            { header: 'Telegram ID', key: 'telegramId', width: 15 },
             { header: 'Должность', key: 'position', width: 25 },
             { header: 'Организация', key: 'organization', width: 30 },
-            { header: 'Телефон', key: 'phone', width: 15 },
+            { header: 'ФИО', key: 'fullName', width: 30 },
+            { header: 'Контактный телефон', key: 'phone', width: 15 },
             { header: 'Дата рождения', key: 'birthdate', width: 15 },
-            { header: 'Объекты', key: 'objects', width: 40 },
+            { header: 'Ответственный', key: 'responsible', width: 25 },
             { header: 'Статус', key: 'status', width: 15 },
             { header: 'Одобрен', key: 'isApproved', width: 12 },
             { header: 'Дата регистрации', key: 'createdAt', width: 18 },
@@ -2244,15 +2285,25 @@ ${objectsList}
         
         // Заполняем данные
         for (const [uid, user] of filteredUsers) {
+            // Определяем ответственность
+            const responsible = getUserResponsibilities(uid, user);
+            
+            // Преобразуем статус
+            let statusText = user.status || '';
+            if (statusText === 'В работе') {
+                statusText = 'Online';
+            } else if (statusText === 'В отпуске') {
+                statusText = 'Offline';
+            }
+            
             const row = worksheet.addRow({
-                fullName: user.fullName || '',
-                telegramId: uid,
                 position: user.position || '',
                 organization: user.organization || '',
+                fullName: user.fullName || '',
                 phone: user.phone || '',
                 birthdate: user.birthdate || '',
-                objects: Array.isArray(user.selectedObjects) ? user.selectedObjects.join(', ') : '',
-                status: user.status || '',
+                responsible: responsible,
+                status: statusText,
                 isApproved: user.isApproved ? 'Да' : 'Нет',
                 createdAt: user.createdAt ? formatDate(new Date(user.createdAt)) : '',
                 reportsCount: reportsCounts[uid] || 0
