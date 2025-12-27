@@ -1740,8 +1740,8 @@ ${objectsList}
         statsText += `\n`;
         
         statsText += `📊 **По статусам:**\n`;
-        statsText += `🟢 В работе: ${statusStats['В работе']}\n`;
-        statsText += `🔴 В отпуске: ${statusStats['В отпуске']}\n\n`;
+        statsText += `🟢 Online: ${statusStats['Online']}\n`;
+        statsText += `🔴 Offline: ${statusStats['Offline']}\n\n`;
         
         statsText += `📋 **Отчеты:**\n`;
         statsText += `Всего: ${totalReports}\n`;
