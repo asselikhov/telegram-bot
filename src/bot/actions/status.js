@@ -8,8 +8,8 @@ module.exports = (bot) => {
         await clearPreviousMessages(ctx, userId);
         ctx.state.userStates[userId].step = 'selectStatus';
         await ctx.reply('Выберите новый статус:', Markup.inlineKeyboard([
-            [Markup.button.callback('В работе', 'status_work')],
-            [Markup.button.callback('В отпуске', 'status_vacation')],
+            [Markup.button.callback('🟢 Online', 'status_work')],
+            [Markup.button.callback('🔴 Offline', 'status_vacation')],
             [Markup.button.callback('↩️ Назад', 'profile')]
         ]));
     });
@@ -34,7 +34,7 @@ module.exports = (bot) => {
         users[userId].status = 'В отпуске';
         await saveUser(userId, users[userId]);
         ctx.state.userStates[userId].step = null;
-        await ctx.reply('Статус обновлён на "В отпуске".');
+        await ctx.reply('Статус обновлён на "Offline".');
         await require('../handlers/menu').showProfile(ctx);
     });
 

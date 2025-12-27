@@ -1689,8 +1689,8 @@ ${objectsList}
         
         // Статистика по статусам
         const statusStats = {
-            'В работе': Object.values(users).filter(u => u.status === 'В работе').length,
-            'В отпуске': Object.values(users).filter(u => u.status === 'В отпуске').length
+            'Online': Object.values(users).filter(u => u.status === 'В работе').length,
+            'Offline': Object.values(users).filter(u => u.status === 'В отпуске').length
         };
         
         // Статистика по отчетам
@@ -2893,8 +2893,8 @@ ${objectsList}
         
         await clearPreviousMessages(ctx, userId);
         const message = await ctx.reply('Выберите новый статус:', Markup.inlineKeyboard([
-            [Markup.button.callback('🟢 В работе', 'admin_user_set_status_work')],
-            [Markup.button.callback('🔴 В отпуске', 'admin_user_set_status_vacation')],
+            [Markup.button.callback('🟢 Online', 'admin_user_set_status_work')],
+            [Markup.button.callback('🔴 Offline', 'admin_user_set_status_vacation')],
             [Markup.button.callback('↩️ Отмена', 'admin_user_back')]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
@@ -2946,7 +2946,7 @@ ${objectsList}
             const { logUserChange } = require('../../database/auditLogModel');
             await logUserChange(targetUserId, userId, 'update', 'status', oldValue, 'В отпуске');
             
-            await ctx.reply('Статус изменен на "В отпуске".');
+            await ctx.reply('Статус изменен на "Offline".');
             const returnPage = ctx.state.userStates[userId].adminUsersReturnPage || 0;
             await showUserDetails(ctx, targetUserId, returnPage);
         }

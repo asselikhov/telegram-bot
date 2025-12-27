@@ -69,6 +69,13 @@ async function showProfile(ctx) {
     
     await clearPreviousMessages(ctx, userId);
 
+    // Преобразуем статус для отображения
+    let displayStatus = user.status || 'Не указан';
+    if (displayStatus === 'В работе') {
+        displayStatus = 'Online';
+    } else if (displayStatus === 'В отпуске') {
+        displayStatus = 'Offline';
+    }
     const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
 
     // Формируем название организации со ссылкой
@@ -150,7 +157,7 @@ ${user.fullName || 'Не указано'}
 
 ${objectsList}  
 
-${statusEmoji} ${user.status || 'Не указан'}
+${statusEmoji} ${displayStatus}
 `.trim();
 
     // Основные кнопки меню
