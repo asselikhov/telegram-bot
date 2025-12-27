@@ -102,7 +102,7 @@ async function sendReportReminders() {
     // Проверяем каждого пользователя
     for (const [userId, user] of Object.entries(users)) {
       // Пропускаем пользователей, которые не одобрены или находятся в отпуске
-      if (!user.isApproved || user.status !== 'В работе') {
+      if (!user.isApproved || user.status !== 'Online') {
         continue;
       }
 

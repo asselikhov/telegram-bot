@@ -53,7 +53,7 @@ module.exports = (bot) => {
                     position: '',
                     organization: '',
                     selectedObjects: [],
-                    status: 'В работе',
+                    status: 'Online',
                     isApproved: 0,
                     nextReportId: 1,
                     reports: {}

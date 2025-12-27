@@ -19,10 +19,10 @@ module.exports = (bot) => {
         const users = await loadUsers();
 
         await clearPreviousMessages(ctx, userId);
-        users[userId].status = 'В работе';
+        users[userId].status = 'Online';
         await saveUser(userId, users[userId]);
         ctx.state.userStates[userId].step = null;
-        await ctx.reply('Статус обновлён на "В работе".');
+        await ctx.reply('Статус обновлён на "Online".');
         await require('../handlers/menu').showProfile(ctx);
     });
 
@@ -31,7 +31,7 @@ module.exports = (bot) => {
         const users = await loadUsers();
 
         await clearPreviousMessages(ctx, userId);
-        users[userId].status = 'В отпуске';
+        users[userId].status = 'Offline';
         await saveUser(userId, users[userId]);
         ctx.state.userStates[userId].step = null;
         await ctx.reply('Статус обновлён на "Offline".');

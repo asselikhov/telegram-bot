@@ -1189,7 +1189,7 @@ module.exports = (bot) => {
                         position: state.adminNewUser.position,
                         organization: state.adminNewUser.organization,
                         selectedObjects: state.adminNewUser.selectedObjects || [],
-                        status: 'В работе',
+                        status: 'Online',
                         isApproved: 1, // Автоматически одобряем пользователя, добавленного админом
                         nextReportId: 1,
                         reports: {},

@@ -2288,14 +2288,6 @@ ${objectsList}
             // Определяем ответственность
             const responsible = getUserResponsibilities(uid, user);
             
-            // Преобразуем статус
-            let statusText = user.status || '';
-            if (statusText === 'В работе') {
-                statusText = 'Online';
-            } else if (statusText === 'В отпуске') {
-                statusText = 'Offline';
-            }
-            
             const row = worksheet.addRow({
                 position: user.position || '',
                 organization: user.organization || '',
@@ -2303,7 +2295,7 @@ ${objectsList}
                 phone: user.phone || '',
                 birthdate: user.birthdate || '',
                 responsible: responsible,
-                status: statusText,
+                status: user.status || '',
                 isApproved: user.isApproved ? 'Да' : 'Нет',
                 createdAt: user.createdAt ? formatDate(new Date(user.createdAt)) : '',
                 reportsCount: reportsCounts[uid] || 0
@@ -2410,8 +2402,9 @@ ${objectsList}
             ? user.selectedObjects.map(obj => `· ${obj}`).join('\n')
             : 'Не выбраны';
         
-        const statusEmoji = user.status === 'В работе' ? '🟢' : user.status === 'В отпуске' ? '🔴' : '⏳';
+        const statusEmoji = user.status === 'Online' ? '🟢' : user.status === 'Offline' ? '🔴' : '⏳';
         const approvedStatus = user.isApproved ? '✅ Одобрен' : '⏳ Не одобрен';
+        const displayStatus = user.status || 'Не указан';
         
         // Breadcrumbs
         ctx.state.userStates[userId].adminBreadcrumbs = ['Админ-панель', 'Пользователи', user.fullName || 'Без имени'];
@@ -2427,7 +2420,7 @@ ${breadcrumbsText}👤 **${user.fullName || 'Без имени'}**
 🏢 Организация: ${user.organization || 'Не указана'}
 📞 Телефон: ${user.phone || 'Не указан'}
 ${birthdateText}
-${statusEmoji} Статус: ${user.status || 'Не указан'}
+${statusEmoji} Статус: ${displayStatus}
 ${approvedStatus}
 
 📅 Дата регистрации: ${extendedInfo.registrationDate}
@@ -2913,14 +2906,14 @@ ${objectsList}
         const users = await loadUsers();
         if (users[targetUserId]) {
             const oldValue = users[targetUserId].status;
-            users[targetUserId].status = 'В работе';
+            users[targetUserId].status = 'Online';
             await saveUser(targetUserId, users[targetUserId]);
             
             // Логируем изменение
             const { logUserChange } = require('../../database/auditLogModel');
-            await logUserChange(targetUserId, userId, 'update', 'status', oldValue, 'В работе');
+            await logUserChange(targetUserId, userId, 'update', 'status', oldValue, 'Online');
             
-            await ctx.reply('Статус изменен на "В работе".');
+            await ctx.reply('Статус изменен на "Online".');
             const returnPage = ctx.state.userStates[userId].adminUsersReturnPage || 0;
             await showUserDetails(ctx, targetUserId, returnPage);
         }
@@ -2944,7 +2937,7 @@ ${objectsList}
             
             // Логируем изменение
             const { logUserChange } = require('../../database/auditLogModel');
-            await logUserChange(targetUserId, userId, 'update', 'status', oldValue, 'В отпуске');
+            await logUserChange(targetUserId, userId, 'update', 'status', oldValue, 'Offline');
             
             await ctx.reply('Статус изменен на "Offline".');
             const returnPage = ctx.state.userStates[userId].adminUsersReturnPage || 0;
