@@ -21,35 +21,51 @@ function normalizeMessageLink(messageLink) {
 }
 
 async function saveReport(userId, report) {
-    const reportsCollection = (await getDb()).collection('reports');
-    const { reportId, userId: reportUserId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
-    const normalizedMessageLink = normalizeMessageLink(messageLink);
-    // Нормализуем название объекта (убираем пробелы в начале и конце)
-    const normalizedObjectName = objectName ? objectName.trim() : objectName;
-    await reportsCollection.updateOne(
-        { reportid: reportId },
-        {
-            $set: {
-                reportid: reportId,
-                userid: reportUserId || userId,
-                objectname: normalizedObjectName,
-                date,
-                timestamp,
-                workdone: workDone,
-                materials,
-                groupmessageids: JSON.stringify(groupMessageIds || {}),
-                messagelink: normalizedMessageLink || null,
-                fullname: fullName,
-                photos: JSON.stringify(photos || [])
-            }
-        },
-        { upsert: true }
-    );
+    try {
+        const reportsCollection = (await getDb()).collection('reports');
+        const { reportId, userId: reportUserId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
+        const normalizedMessageLink = normalizeMessageLink(messageLink);
+        // Нормализуем название объекта (убираем пробелы в начале и конце)
+        const normalizedObjectName = objectName ? objectName.trim() : objectName;
+        // Нормализуем userid до строки для консистентности
+        const normalizedUserId = String(reportUserId || userId);
+        const result = await reportsCollection.updateOne(
+            { reportid: reportId },
+            {
+                $set: {
+                    reportid: reportId,
+                    userid: normalizedUserId,
+                    objectname: normalizedObjectName,
+                    date,
+                    timestamp,
+                    workdone: workDone,
+                    materials,
+                    groupmessageids: JSON.stringify(groupMessageIds || {}),
+                    messagelink: normalizedMessageLink || null,
+                    fullname: fullName,
+                    photos: JSON.stringify(photos || [])
+                }
+            },
+            { upsert: true }
+        );
+        console.log(`Отчет сохранен: reportId=${reportId}, userId=${normalizedUserId}, objectName=${normalizedObjectName}, date=${date}, inserted=${result.upsertedCount > 0}, modified=${result.modifiedCount}`);
+    } catch (error) {
+        console.error(`Ошибка сохранения отчета: reportId=${report?.reportId}, userId=${userId}`, error);
+        throw error;
+    }
 }
 
 async function loadUserReports(userId) {
     const reportsCollection = (await getDb()).collection('reports');
-    const reports = await reportsCollection.find({ userid: userId }).toArray();
+    // Нормализуем userid до строки для консистентности поиска
+    const normalizedUserId = String(userId);
+    // Ищем отчеты как по строке, так и по числу (на случай если в базе есть разные типы)
+    const reports = await reportsCollection.find({ 
+        $or: [
+            { userid: normalizedUserId },
+            { userid: Number(userId) }
+        ]
+    }).toArray();
     const reportsMap = {};
     reports.forEach(row => {
         let groupMessageIds = row.groupmessageids;

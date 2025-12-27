@@ -176,8 +176,13 @@ async function sendStatisticsNotifications() {
     
     // Получаем отчеты за сегодня
     const todayReports = allReportsArray.filter(report => report.date === formattedDate);
-    const reportedObjects = new Set(todayReports.map(report => report.objectName));
-
+    // Нормализуем названия объектов из отчетов (убираем пробелы в начале и конце)
+    const reportedObjects = new Set(
+      todayReports
+        .map(report => report.objectName ? report.objectName.trim() : null)
+        .filter(objName => objName !== null)
+    );
+    
     // Обрабатываем каждую организацию
     for (const [orgName, orgChatInfo] of Object.entries(generalGroupChatIds)) {
       if (!orgChatInfo || !orgChatInfo.chatId) {
@@ -194,8 +199,11 @@ async function sendStatisticsNotifications() {
           return objInfo && objInfo.status === 'В работе';
         });
         
-        // Объекты без отчетов за сегодня
-        const objectsWithoutReports = objectsInWork.filter(objName => !reportedObjects.has(objName));
+        // Объекты без отчетов за сегодня (используем нормализованное сравнение)
+        const objectsWithoutReports = objectsInWork.filter(objName => {
+          const normalizedObjName = objName ? objName.trim() : objName;
+          return !reportedObjects.has(normalizedObjName);
+        });
         
         // Функция для обрезки длинных названий объектов
         function truncateObjectName(name, maxLength = 30) {
