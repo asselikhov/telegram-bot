@@ -22,7 +22,7 @@ async function showDownloadMenu(ctx) {
         Markup.inlineKeyboard([
             [Markup.button.callback('📋 Отчеты', 'download_type_reports')],
             [Markup.button.callback('👥 Люди', 'download_type_users')],
-            [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
+            [Markup.button.callback('↩️ Назад', 'main_menu')]
         ])
     );
     addMessageId(ctx, message.message_id);
@@ -72,7 +72,7 @@ async function showDownloadReport(ctx, page = 0) {
         if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `download_report_page_${pageNum + 1}`));
     }
     if (paginationButtons.length > 0) buttons.push(paginationButtons);
-    buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'main_menu')]);
 
     const message = await ctx.reply(
         `Выберите объект для выгрузки отчета (Страница ${pageNum + 1} из ${totalPages}):`,
@@ -292,7 +292,7 @@ async function showDownloadUsers(ctx, page = 0) {
         if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `download_users_page_${pageNum + 1}`));
     }
     if (paginationButtons.length > 0) buttons.push(paginationButtons);
-    buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'main_menu')]);
 
     const message = await ctx.reply(
         `Выберите объект для выгрузки людей (Страница ${pageNum + 1} из ${totalPages}):`,
@@ -443,7 +443,7 @@ async function createReport(ctx) {
     }
 
     const buttons = userObjects.map((obj, index) => [Markup.button.callback(obj, `select_object_${index}`)]);
-    buttons.push([Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'main_menu')]);
 
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
     addMessageId(ctx, message.message_id);

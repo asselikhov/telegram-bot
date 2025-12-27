@@ -156,7 +156,7 @@ ${statusEmoji} ${user.status || 'Не указан'}
         [Markup.button.callback('✏️ Изменить данные', 'edit_data')],
         [Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')],
         [Markup.button.callback('🔑 Пригласительный код', userId === ADMIN_ID ? 'admin_invite_code_menu' : 'generate_invite_code')],
-        [Markup.button.callback('↩️ Вернуться в главное меню', 'main_menu')]
+        [Markup.button.callback('↩️ Назад', 'main_menu')]
     ];
 
     const message = await ctx.reply(profileText, {
