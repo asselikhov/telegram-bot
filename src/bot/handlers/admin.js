@@ -285,8 +285,11 @@ ${objectsList}
             return;
         }
         
-        // Сохраняем список организаций в state для использования в обработчике
-        ctx.state.userStates[userId].adminOrganizationsList = organizations.map(org => org.name);
+            // Сохраняем список организаций в state для использования в обработчике
+            const state = ensureUserState(ctx);
+            if (state) {
+                state.adminOrganizationsList = organizations.map(org => org.name);
+            }
         
         // Создаем кнопки для организаций
         const buttons = [];
@@ -299,8 +302,12 @@ ${objectsList}
         buttons.push([Markup.button.callback('➕ Добавить организацию', 'admin_org_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
         
-        const message = await ctx.reply('🏢 Управление организациями\nВыберите организацию:', Markup.inlineKeyboard(buttons));
-        ctx.state.userStates[userId].messageIds.push(message.message_id);
+            const message = await ctx.reply('🏢 Управление организациями\nВыберите организацию:', Markup.inlineKeyboard(buttons));
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showOrganizationsList:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
     }
 
     bot.action('admin_organizations', showOrganizationsList);
