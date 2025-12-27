@@ -3560,8 +3560,9 @@ ${objectsList}
                 }
             }
             const objectName = uniqueObjects[objectIndex];
-
-            await clearPreviousMessages(ctx, userId);
+            if (!objectName) {
+                return ctx.reply('Ошибка: объект не найден.');
+            }
 
             const normalizedObjectName = objectName && objectName.trim();
             const objectNeeds = Object.entries(allNeeds).filter(([_, n]) =>
@@ -3572,7 +3573,7 @@ ${objectsList}
             
             // Используем сохраненный список дат из state, если он есть, иначе используем текущий
             let datesList = uniqueDates;
-            if (state && state.adminNeedsDatesList && state.adminNeedsDatesList.length === uniqueDates.length) {
+            if (state && state.adminNeedsDatesList) {
                 datesList = state.adminNeedsDatesList;
             }
             
@@ -3580,6 +3581,8 @@ ${objectsList}
             if (!selectedDate) {
                 return ctx.reply('Ошибка: дата не найдена.');
             }
+
+            await clearPreviousMessages(ctx, userId);
 
             const dateNeeds = sortedNeeds.filter(([_, n]) => parseAndFormatDate(n.date) === selectedDate);
 
