@@ -1054,8 +1054,18 @@ ${report.materials}
             }
         }
 
-        await saveReport(userId, report);
-        await saveUser(userId, users[userId]);
+        try {
+            await saveReport(userId, report);
+            await saveUser(userId, users[userId]);
+        } catch (error) {
+            console.error(`Ошибка сохранения отчета для пользователя ${userId}:`, error);
+            await ctx.reply('❌ Ошибка при сохранении отчета. Пожалуйста, попробуйте создать отчет заново.');
+            // Откатываем инкремент nextReportId, так как отчет не был сохранен
+            if (users[userId] && users[userId].nextReportId > 1) {
+                users[userId].nextReportId--;
+            }
+            return;
+        }
 
         const finalMessage = await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`);
         userMessageIds.push(finalMessage.message_id);
@@ -1209,8 +1219,19 @@ ${newReport.materials}
             }
         }
 
-        await saveReport(userId, newReport);
-        await saveUser(userId, users[userId]);
+        try {
+            await saveReport(userId, newReport);
+            await saveUser(userId, users[userId]);
+        } catch (error) {
+            console.error(`Ошибка сохранения отредактированного отчета для пользователя ${userId}:`, error);
+            await ctx.reply('❌ Ошибка при сохранении отчета. Пожалуйста, попробуйте отредактировать отчет заново.');
+            // Откатываем инкремент nextReportId, так как отчет не был сохранен
+            if (users[userId] && users[userId].nextReportId > 1) {
+                users[userId].nextReportId--;
+            }
+            return;
+        }
+        
         await ctx.reply(`✅ Ваш отчёт обновлён:\n\n${newReportText}${newReport.photos.length > 0 ? '\n(С изображениями)' : ''}`, Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
         ]));
