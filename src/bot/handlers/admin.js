@@ -3737,6 +3737,11 @@ ${objectsList}
                 return parseDate(b).getTime() - parseDate(a).getTime();
             });
 
+            // Сохраняем список дат в state для использования при выборе даты
+            if (state) {
+                state.adminNeedsDatesList = uniqueDates;
+            }
+
             const itemsPerPage = 10;
             const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
             const pageNum = typeof page === 'number' ? page : 0;
