@@ -592,12 +592,10 @@ async function showReportDetails(ctx, reportId) {
 🏢 ${escapeHtml(report.objectName)}
 👷 ${escapeHtml(report.fullName)}
 
-<b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
-<blockquote>''
+<blockquote><b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
 ${escapeHtml(report.workDone)}</blockquote>
 
-<b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
-<blockquote>''
+<blockquote><b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
 ${escapeHtml(report.materials)}</blockquote>
 Время: ${time}
     `.trim();
@@ -704,12 +702,10 @@ async function finishEditReport(ctx, reportId) {
 🏢 ${escapeHtml(newReport.objectName)}
 👷 ${escapeHtml(users[userId].fullName)}
 
-<b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
-<blockquote>''
+<blockquote><b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
 ${escapeHtml(newReport.workDone)}</blockquote>
 
-<b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
-<blockquote>''
+<blockquote><b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
 ${escapeHtml(newReport.materials)}</blockquote>
     `.trim();
 

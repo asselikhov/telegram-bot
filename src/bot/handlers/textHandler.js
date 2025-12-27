@@ -1007,12 +1007,10 @@ module.exports = (bot) => {
 🏢 ${escapeHtml(report.objectName)}
 👷 ${escapeHtml(users[userId].fullName)}
 
-<b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
-<blockquote>''
+<blockquote><b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
 ${escapeHtml(report.workDone)}</blockquote>
 
-<b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
-<blockquote>''
+<blockquote><b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
 ${escapeHtml(report.materials)}</blockquote>
         `.trim();
 
@@ -1178,12 +1176,10 @@ ${escapeHtml(report.materials)}</blockquote>
 🏢 ${escapeHtml(newReport.objectName)}
 👷 ${escapeHtml(users[userId].fullName)}
 
-<b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
-<blockquote>''
+<blockquote><b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
 ${escapeHtml(newReport.workDone)}</blockquote>
 
-<b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
-<blockquote>''
+<blockquote><b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
 ${escapeHtml(newReport.materials)}</blockquote>
         `.trim();
 
