@@ -25,6 +25,7 @@ const {
 const {
     validateTimeFormat
 } = require('../utils/notificationHelper');
+const { escapeHtml } = require('../utils/htmlHelper');
 
 const mediaGroups = new Map();
 
@@ -1003,14 +1004,14 @@ module.exports = (bot) => {
         };
         const reportText = `
 📅 ОТЧЕТ ЗА ${formattedDate}
-🏢 ${report.objectName}
-👷 ${users[userId].fullName}
+🏢 ${escapeHtml(report.objectName)}
+👷 ${escapeHtml(users[userId].fullName)}
 
-ВЫПОЛНЕННЫЕ РАБОТЫ:
-${report.workDone}
+<b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
+<blockquote>${escapeHtml(report.workDone)}</blockquote>
 
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
-${report.materials}
+<b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
+<blockquote>${escapeHtml(report.materials)}</blockquote>
         `.trim();
 
         const objectGroups = await getObjectGroups();
@@ -1032,7 +1033,8 @@ ${report.materials}
             const mediaGroup = report.photos.map((photoId, index) => ({
                 type: 'photo',
                 media: photoId,
-                caption: index === 0 ? reportText.slice(0, 1024) : undefined
+                caption: index === 0 ? reportText.slice(0, 1024) : undefined,
+                parse_mode: 'HTML'
             }));
             const userMediaGroup = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
             userMediaGroupIds = userMediaGroup.map(msg => msg.message_id);
@@ -1051,7 +1053,9 @@ ${report.materials}
         } else {
             for (const chatId of allChatIds) {
                 try {
-                    const message = await ctx.telegram.sendMessage(chatId, reportText);
+                    const message = await ctx.telegram.sendMessage(chatId, reportText, {
+                        parse_mode: 'HTML'
+                    });
                     report.groupMessageIds[chatId] = message.message_id;
                     if (chatId === groupChatId) {
                         report.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id}`;
@@ -1073,7 +1077,9 @@ ${report.materials}
             return;
         }
 
-        const finalMessage = await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`);
+        const finalMessage = await ctx.reply(`✅ Ваш отчет опубликован:\n\n${reportText}${report.photos.length > 0 ? '\n(С изображениями)' : ''}`, {
+            parse_mode: 'HTML'
+        });
         userMessageIds.push(finalMessage.message_id);
 
         const allUserMessageIds = [...userMessageIds, ...userMediaGroupIds];
@@ -1167,14 +1173,14 @@ ${report.materials}
         };
         const newReportText = `
 📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)
-🏢 ${newReport.objectName}
-👷 ${users[userId].fullName}
+🏢 ${escapeHtml(newReport.objectName)}
+👷 ${escapeHtml(users[userId].fullName)}
 
-ВЫПОЛНЕННЫЕ РАБОТЫ:
-${newReport.workDone}
+<b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
+<blockquote>${escapeHtml(newReport.workDone)}</blockquote>
 
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
-${newReport.materials}
+<b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
+<blockquote>${escapeHtml(newReport.materials)}</blockquote>
         `.trim();
 
         const oldReportId = state.report.originalReportId;
@@ -1206,7 +1212,8 @@ ${newReport.materials}
             const mediaGroup = newReport.photos.map((photoId, index) => ({
                 type: 'photo',
                 media: photoId,
-                caption: index === 0 ? newReportText.slice(0, 1024) : undefined
+                caption: index === 0 ? newReportText.slice(0, 1024) : undefined,
+                parse_mode: 'HTML'
             }));
             for (const chatId of allChatIds) {
                 try {
@@ -1222,7 +1229,9 @@ ${newReport.materials}
         } else {
             for (const chatId of allChatIds) {
                 try {
-                    const message = await ctx.telegram.sendMessage(chatId, newReportText);
+                    const message = await ctx.telegram.sendMessage(chatId, newReportText, {
+                        parse_mode: 'HTML'
+                    });
                     newReport.groupMessageIds[chatId] = message.message_id;
                     if (chatId === newGroupChatId) {
                         newReport.messageLink = `https://t.me/c/${chatId.toString().replace('-', '')}/${message.message_id}`;
@@ -1244,9 +1253,12 @@ ${newReport.materials}
             return;
         }
         
-        await ctx.reply(`✅ Ваш отчёт обновлён:\n\n${newReportText}${newReport.photos.length > 0 ? '\n(С изображениями)' : ''}`, Markup.inlineKeyboard([
-            [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
-        ]));
+        await ctx.reply(`✅ Ваш отчёт обновлён:\n\n${newReportText}${newReport.photos.length > 0 ? '\n(С изображениями)' : ''}`, {
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
+            ])
+        });
         state.step = null;
         state.report = {};
     });

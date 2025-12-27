@@ -5,6 +5,7 @@ const { loadUserReports, loadAllReports, saveReport } = require('../../database/
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 const { getOrganizationObjects, getObjects, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap, getReportUsers } = require('../../database/configService');
 const { addMessageId } = require('../utils/stateHelper');
+const { escapeHtml } = require('../utils/htmlHelper');
 
 async function showDownloadMenu(ctx) {
     const userId = ctx.from.id.toString();
@@ -588,14 +589,14 @@ async function showReportDetails(ctx, reportId) {
     const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
     const reportText = `
 📅 ОТЧЕТ ЗА ${formattedDate}
-🏢 ${report.objectName}
-👷 ${report.fullName}
+🏢 ${escapeHtml(report.objectName)}
+👷 ${escapeHtml(report.fullName)}
 
-ВЫПОЛНЕННЫЕ РАБОТЫ:
-${report.workDone}
+<b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
+<blockquote>${escapeHtml(report.workDone)}</blockquote>
 
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
-${report.materials}
+<b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
+<blockquote>${escapeHtml(report.materials)}</blockquote>
 Время: ${time}
     `.trim();
 
@@ -695,14 +696,14 @@ async function finishEditReport(ctx, reportId) {
     };
     const newReportText = `
 📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)
-🏢 ${newReport.objectName}
-👷 ${users[userId].fullName}
+🏢 ${escapeHtml(newReport.objectName)}
+👷 ${escapeHtml(users[userId].fullName)}
 
-ВЫПОЛНЕННЫЕ РАБОТЫ:
-${newReport.workDone}
+<b>ВЫПОЛНЕННЫЕ РАБОТЫ:</b>
+<blockquote>${escapeHtml(newReport.workDone)}</blockquote>
 
-ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:
-${newReport.materials}
+<b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
+<blockquote>${escapeHtml(newReport.materials)}</blockquote>
     `.trim();
 
     const oldReportId = state.report.originalReportId;
