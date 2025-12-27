@@ -1,10 +1,12 @@
 const { Markup } = require('telegraf');
 const { loadUsers } = require('../../database/userModel');
-const { loadUserNeeds, saveNeed, deleteNeed } = require('../../database/needModel');
+const { loadUserNeeds, saveNeed, deleteNeed, loadAllNeeds } = require('../../database/needModel');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 const { addMessageId, ensureUserState } = require('../utils/stateHelper');
 const { escapeHtml } = require('../utils/htmlHelper');
 const { incrementNextReportId } = require('../../database/userModel');
+const { getNeedUsers } = require('../../database/configService');
+const { ADMIN_ID } = require('../../config/config');
 
 // Маппинг типов потребностей
 const TYPE_NAMES = {
@@ -43,6 +45,20 @@ async function showNeedsMenu(ctx) {
         return;
     }
 
+    // Проверяем, является ли пользователь ответственным за потребности
+    let isNeedManager = false;
+    if (userId === ADMIN_ID) {
+        isNeedManager = true;
+    } else if (user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+        for (const objectName of user.selectedObjects) {
+            const needUsers = await getNeedUsers(user.organization, objectName);
+            if (needUsers && needUsers.includes(userId)) {
+                isNeedManager = true;
+                break;
+            }
+        }
+    }
+
     await clearPreviousMessages(ctx, userId);
     const state = ensureUserState(ctx);
     if (state) {
@@ -57,9 +73,14 @@ async function showNeedsMenu(ctx) {
 
     const buttons = [
         [Markup.button.callback('➕ Создать заявку', 'create_need')],
-        [Markup.button.callback('📋 Мои заявки', 'view_my_needs')],
-        [Markup.button.callback('↩️ Назад', 'main_menu')]
+        [Markup.button.callback('📋 Мои заявки', 'view_my_needs')]
     ];
+
+    if (isNeedManager) {
+        buttons.push([Markup.button.callback('⚙️ Управление заявками', 'manage_all_needs')]);
+    }
+
+    buttons.push([Markup.button.callback('↩️ Назад', 'main_menu')]);
 
     const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
     addMessageId(ctx, message.message_id);
@@ -366,6 +387,465 @@ async function confirmDeleteNeed(ctx, needId) {
     }
 }
 
+async function manageAllNeeds(ctx) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) {
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply('У вас нет прав для управления заявками.');
+        addMessageId(ctx, message.message_id);
+        return;
+    }
+
+    // Проверяем, является ли пользователь ответственным или администратором
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+        for (const objectName of user.selectedObjects) {
+            const needUsers = await getNeedUsers(user.organization, objectName);
+            if (needUsers && needUsers.includes(userId)) {
+                isNeedManager = true;
+                managedObjects.push(objectName);
+            }
+        }
+    }
+
+    if (!isNeedManager) {
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply('У вас нет прав для управления заявками.');
+        addMessageId(ctx, message.message_id);
+        return;
+    }
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        
+        // Если не администратор, фильтруем по объектам пользователя
+        let filteredNeeds = allNeeds;
+        if (userId !== ADMIN_ID) {
+            const needsMap = {};
+            Object.values(allNeeds).forEach(need => {
+                if (managedObjects.includes(need.objectName)) {
+                    needsMap[need.needId] = need;
+                }
+            });
+            filteredNeeds = needsMap;
+        }
+
+        const uniqueObjects = [...new Set(Object.values(filteredNeeds).map(n => n.objectName))];
+
+        if (uniqueObjects.length === 0) {
+            await clearPreviousMessages(ctx, userId);
+            const message = await ctx.reply('Заявок на потребности пока нет.', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', 'needs')]
+            ]));
+            addMessageId(ctx, message.message_id);
+            return;
+        }
+
+        await clearPreviousMessages(ctx, userId);
+
+        const buttons = uniqueObjects.map((obj, index) => {
+            const objectNeeds = Object.values(filteredNeeds).filter(n =>
+                n.objectName && n.objectName.trim() === obj.trim()
+            );
+            return [Markup.button.callback(`${obj} (${objectNeeds.length})`, `manage_needs_object_${index}`)];
+        });
+
+        buttons.push([Markup.button.callback('↩️ Назад', 'needs')]);
+
+        const message = await ctx.reply(
+            '⚙️ Управление заявками\n\nВыберите объект:',
+            Markup.inlineKeyboard(buttons)
+        );
+        addMessageId(ctx, message.message_id);
+        
+        const state = ensureUserState(ctx);
+        if (state) {
+            state.managedNeedsObjectsList = uniqueObjects;
+        }
+    } catch (error) {
+        console.error('Ошибка в manageAllNeeds:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) return;
+
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+        for (const objectName of user.selectedObjects) {
+            const needUsers = await getNeedUsers(user.organization, objectName);
+            if (needUsers && needUsers.includes(userId)) {
+                isNeedManager = true;
+                managedObjects.push(objectName);
+            }
+        }
+    }
+
+    if (!isNeedManager) return;
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        
+        let filteredNeeds = allNeeds;
+        if (userId !== ADMIN_ID) {
+            const needsMap = {};
+            Object.values(allNeeds).forEach(need => {
+                if (managedObjects.includes(need.objectName)) {
+                    needsMap[need.needId] = need;
+                }
+            });
+            filteredNeeds = needsMap;
+        }
+
+        const state = ensureUserState(ctx);
+        let uniqueObjects;
+        if (state && state.managedNeedsObjectsList) {
+            uniqueObjects = state.managedNeedsObjectsList;
+        } else {
+            uniqueObjects = [...new Set(Object.values(filteredNeeds).map(n => n.objectName))];
+            if (state) {
+                state.managedNeedsObjectsList = uniqueObjects;
+            }
+        }
+        const objectName = uniqueObjects[objectIndex];
+
+        await clearPreviousMessages(ctx, userId);
+
+        const normalizedObjectName = objectName && objectName.trim();
+        const objectNeeds = Object.entries(filteredNeeds).filter(([_, n]) =>
+            n.objectName && n.objectName.trim() === normalizedObjectName
+        );
+        const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
+        const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+
+        const itemsPerPage = 10;
+        const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
+        const pageNum = typeof page === 'number' ? page : 0;
+        const startIndex = pageNum * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, uniqueDates.length);
+        const currentDates = uniqueDates.slice(startIndex, endIndex);
+
+        if (currentDates.length === 0) {
+            return ctx.reply('Ошибка: нет дат для отображения.');
+        }
+
+        const dateButtons = currentDates.map((date, index) =>
+            [Markup.button.callback(date, `manage_needs_object_${objectIndex}_date_${startIndex + index}`)]
+        ).reverse();
+
+        const buttons = [];
+        const paginationButtons = [];
+        if (totalPages > 1) {
+            if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `manage_needs_object_${objectIndex}_dates_page_${pageNum - 1}`));
+            if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `manage_needs_object_${objectIndex}_dates_page_${pageNum + 1}`));
+        }
+        if (paginationButtons.length > 0) buttons.push(paginationButtons);
+        buttons.push(...dateButtons);
+        buttons.push([Markup.button.callback('↩️ Назад', 'manage_all_needs')]);
+
+        const message = await ctx.reply(
+            `📦 Выберите дату для объекта "${objectName}" (Страница ${pageNum + 1} из ${totalPages}):`,
+            Markup.inlineKeyboard(buttons)
+        );
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в showManagedNeedsDates:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) return;
+
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+        for (const objectName of user.selectedObjects) {
+            const needUsers = await getNeedUsers(user.organization, objectName);
+            if (needUsers && needUsers.includes(userId)) {
+                isNeedManager = true;
+                managedObjects.push(objectName);
+            }
+        }
+    }
+
+    if (!isNeedManager) return;
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        
+        let filteredNeeds = allNeeds;
+        if (userId !== ADMIN_ID) {
+            const needsMap = {};
+            Object.values(allNeeds).forEach(need => {
+                if (managedObjects.includes(need.objectName)) {
+                    needsMap[need.needId] = need;
+                }
+            });
+            filteredNeeds = needsMap;
+        }
+
+        const state = ensureUserState(ctx);
+        let uniqueObjects;
+        if (state && state.managedNeedsObjectsList) {
+            uniqueObjects = state.managedNeedsObjectsList;
+        } else {
+            uniqueObjects = [...new Set(Object.values(filteredNeeds).map(n => n.objectName))];
+            if (state) {
+                state.managedNeedsObjectsList = uniqueObjects;
+            }
+        }
+        const objectName = uniqueObjects[objectIndex];
+        const normalizedObjectName = objectName && objectName.trim();
+        const objectNeeds = Object.entries(filteredNeeds).filter(([_, n]) =>
+            n.objectName && n.objectName.trim() === normalizedObjectName
+        );
+
+        const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
+        const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+        const selectedDate = uniqueDates[dateIndex];
+
+        await clearPreviousMessages(ctx, userId);
+
+        const dateNeeds = sortedNeeds.filter(([_, n]) => parseAndFormatDate(n.date) === selectedDate);
+
+        const itemsPerPage = 10;
+        const totalPages = Math.ceil(dateNeeds.length / itemsPerPage);
+        const pageNum = typeof page === 'number' ? page : 0;
+        const startIndex = pageNum * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, dateNeeds.length);
+        const currentNeeds = dateNeeds.slice(startIndex, endIndex);
+
+        if (currentNeeds.length === 0) {
+            return ctx.reply('Ошибка: нет заявок для отображения.');
+        }
+
+        const itemButtons = currentNeeds.map(([needId, need]) => {
+            const urgencyInfo = URGENCY_NAMES[need.urgency] || { name: need.urgency, emoji: '' };
+            const typeName = TYPE_NAMES[need.type] || need.type;
+            const statusName = STATUS_NAMES[need.status] || need.status;
+            const label = `${urgencyInfo.emoji} ${typeName}: ${need.name} (${statusName})`;
+            return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `manage_select_need_${needId}`)];
+        }).reverse();
+
+        const buttons = [];
+        const paginationButtons = [];
+        if (totalPages > 1) {
+            if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `manage_needs_object_${objectIndex}_date_${dateIndex}_page_${pageNum - 1}`));
+            if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `manage_needs_object_${objectIndex}_date_${dateIndex}_page_${pageNum + 1}`));
+        }
+        if (paginationButtons.length > 0) buttons.push(paginationButtons);
+        buttons.push(...itemButtons);
+        buttons.push([Markup.button.callback('↩️ Назад', `manage_needs_object_${objectIndex}`)]);
+
+        const message = await ctx.reply(
+            `📦 Заявки для объекта "${objectName}" за ${selectedDate} (Страница ${pageNum + 1} из ${totalPages}):`,
+            Markup.inlineKeyboard(buttons)
+        );
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в showManagedNeedsItems:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showManagedNeedDetails(ctx, needId) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) return;
+
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+        for (const objectName of user.selectedObjects) {
+            const needUsers = await getNeedUsers(user.organization, objectName);
+            if (needUsers && needUsers.includes(userId)) {
+                isNeedManager = true;
+                managedObjects.push(objectName);
+            }
+        }
+    }
+
+    if (!isNeedManager) return;
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        const need = allNeeds[needId];
+
+        if (!need) {
+            await clearPreviousMessages(ctx, userId);
+            return ctx.reply('Ошибка: заявка не найдена.');
+        }
+
+        // Проверяем права доступа для ответственных (только для своих объектов)
+        if (userId !== ADMIN_ID && !managedObjects.includes(need.objectName)) {
+            await clearPreviousMessages(ctx, userId);
+            return ctx.reply('У вас нет прав для просмотра этой заявки.');
+        }
+
+        await clearPreviousMessages(ctx, userId);
+
+        const formattedDate = parseAndFormatDate(need.date);
+        const time = new Date(need.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
+        const typeName = TYPE_NAMES[need.type] || need.type;
+        const urgencyInfo = URGENCY_NAMES[need.urgency] || { name: need.urgency, emoji: '' };
+        const statusName = STATUS_NAMES[need.status] || need.status;
+
+        let needText = `
+<b>ЗАЯВКА НА ПОТРЕБНОСТИ</b>
+📅 Дата: ${formattedDate}
+🏢 Объект: ${escapeHtml(need.objectName)}
+👷 Автор: ${escapeHtml(need.fullName)}
+📦 Тип: ${typeName}
+📝 Наименование: ${escapeHtml(need.name)}
+`;
+        if (need.quantity !== null && need.quantity !== undefined) {
+            needText += `🔢 Количество: ${need.quantity}\n`;
+        }
+        needText += `${urgencyInfo.emoji} Срочность: ${urgencyInfo.name}\n`;
+        needText += `📊 Статус: ${statusName}\n`;
+        needText += `⏰ Время: ${time}`;
+
+        const buttons = [
+            [Markup.button.callback('✏️ Редактировать', `manage_edit_need_${needId}`)],
+            [Markup.button.callback('📊 Изменить статус', `manage_change_need_status_${needId}`)],
+            [Markup.button.callback('↩️ Назад', 'manage_all_needs')]
+        ];
+
+        const message = await ctx.reply(needText.trim(), {
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard(buttons)
+        });
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в showManagedNeedDetails:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showManagedEditNeedMenu(ctx, needId) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) return;
+
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+        for (const objectName of user.selectedObjects) {
+            const needUsers = await getNeedUsers(user.organization, objectName);
+            if (needUsers && needUsers.includes(userId)) {
+                isNeedManager = true;
+                managedObjects.push(objectName);
+            }
+        }
+    }
+
+    if (!isNeedManager) return;
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        const need = allNeeds[needId];
+
+        if (!need) {
+            return ctx.reply('Ошибка: заявка не найдена.');
+        }
+
+        if (userId !== ADMIN_ID && !managedObjects.includes(need.objectName)) {
+            return ctx.reply('У вас нет прав для редактирования этой заявки.');
+        }
+
+        await clearPreviousMessages(ctx, userId);
+
+        const buttons = [
+            [Markup.button.callback('📝 Наименование', `manage_edit_need_name_${needId}`)],
+            [Markup.button.callback('🔢 Количество', `manage_edit_need_quantity_${needId}`)],
+            [Markup.button.callback('⏰ Срочность', `manage_edit_need_urgency_${needId}`)],
+            [Markup.button.callback('↩️ Назад', `manage_select_need_${needId}`)]
+        ];
+
+        const message = await ctx.reply('Что вы хотите изменить?', Markup.inlineKeyboard(buttons));
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в showManagedEditNeedMenu:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showManagedChangeStatusMenu(ctx, needId) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) return;
+
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+        for (const objectName of user.selectedObjects) {
+            const needUsers = await getNeedUsers(user.organization, objectName);
+            if (needUsers && needUsers.includes(userId)) {
+                isNeedManager = true;
+                managedObjects.push(objectName);
+            }
+        }
+    }
+
+    if (!isNeedManager) return;
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        const need = allNeeds[needId];
+
+        if (!need) {
+            return ctx.reply('Ошибка: заявка не найдена.');
+        }
+
+        if (userId !== ADMIN_ID && !managedObjects.includes(need.objectName)) {
+            return ctx.reply('У вас нет прав для изменения статуса этой заявки.');
+        }
+
+        await clearPreviousMessages(ctx, userId);
+
+        const buttons = [
+            [Markup.button.callback('🆕 Новая', `manage_set_need_status_${needId}_new`)],
+            [Markup.button.callback('⏳ В обработке', `manage_set_need_status_${needId}_in_progress`)],
+            [Markup.button.callback('✅ Выполнена', `manage_set_need_status_${needId}_completed`)],
+            [Markup.button.callback('❌ Отклонена', `manage_set_need_status_${needId}_rejected`)],
+            [Markup.button.callback('↩️ Назад', `manage_select_need_${needId}`)]
+        ];
+
+        const message = await ctx.reply('Выберите новый статус:', Markup.inlineKeyboard(buttons));
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в showManagedChangeStatusMenu:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
 module.exports = (bot) => {
     bot.action('needs', showNeedsMenu);
     bot.action('create_need', createNeed);
@@ -497,6 +977,160 @@ module.exports = (bot) => {
     // Удаление
     bot.action(/delete_need_(.+)/, (ctx) => deleteNeedConfirmation(ctx, ctx.match[1]));
     bot.action(/confirm_delete_need_(.+)/, (ctx) => confirmDeleteNeed(ctx, ctx.match[1]));
+
+    // Управление заявками для ответственных
+    bot.action(/manage_needs_object_(\d+)/, (ctx) => {
+        const state = ensureUserState(ctx);
+        showManagedNeedsDates(ctx, parseInt(ctx.match[1], 10), 0);
+    });
+    bot.action(/manage_needs_object_(\d+)_dates_page_(\d+)/, (ctx) => {
+        showManagedNeedsDates(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10));
+    });
+    bot.action(/manage_needs_object_(\d+)_date_(\d+)/, (ctx) => {
+        showManagedNeedsItems(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), 0);
+    });
+    bot.action(/manage_needs_object_(\d+)_date_(\d+)_page_(\d+)/, (ctx) => {
+        showManagedNeedsItems(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), parseInt(ctx.match[3], 10));
+    });
+    bot.action(/manage_select_need_(.+)/, (ctx) => showManagedNeedDetails(ctx, ctx.match[1]));
+    bot.action(/manage_edit_need_(.+)/, (ctx) => showManagedEditNeedMenu(ctx, ctx.match[1]));
+    bot.action(/manage_change_need_status_(.+)/, (ctx) => showManagedChangeStatusMenu(ctx, ctx.match[1]));
+
+    bot.action(/manage_edit_need_name_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        const userId = ctx.from.id.toString();
+        await clearPreviousMessages(ctx, userId);
+        const state = ensureUserState(ctx);
+        if (state) {
+            state.step = 'manage_edit_need_name';
+            state.managedEditingNeedId = needId;
+        }
+        const message = await ctx.reply('📝 Введите новое наименование:');
+        addMessageId(ctx, message.message_id);
+    });
+
+    bot.action(/manage_edit_need_quantity_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        const userId = ctx.from.id.toString();
+        await clearPreviousMessages(ctx, userId);
+        const state = ensureUserState(ctx);
+        if (state) {
+            state.step = 'manage_edit_need_quantity';
+            state.managedEditingNeedId = needId;
+        }
+        const message = await ctx.reply('🔢 Введите новое количество (или "0" чтобы убрать количество):');
+        addMessageId(ctx, message.message_id);
+    });
+
+    bot.action(/manage_edit_need_urgency_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        const userId = ctx.from.id.toString();
+        await clearPreviousMessages(ctx, userId);
+        const buttons = [
+            [Markup.button.callback('🔥 Срочно', `manage_set_need_urgency_${needId}_urgent`)],
+            [Markup.button.callback('⏳ В ближайшее время', `manage_set_need_urgency_${needId}_soon`)],
+            [Markup.button.callback('📅 Планово', `manage_set_need_urgency_${needId}_planned`)],
+            [Markup.button.callback('↩️ Назад', `manage_select_need_${needId}`)]
+        ];
+        const message = await ctx.reply('⏰ Выберите срочность:', Markup.inlineKeyboard(buttons));
+        addMessageId(ctx, message.message_id);
+    });
+
+    bot.action(/manage_set_need_status_(.+)_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        const status = ctx.match[2];
+        const userId = ctx.from.id.toString();
+        const users = await loadUsers();
+        const user = users[userId];
+
+        if (!user || !user.isApproved) return;
+
+        let isNeedManager = userId === ADMIN_ID;
+        const managedObjects = [];
+        
+        if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+            for (const objectName of user.selectedObjects) {
+                const needUsers = await getNeedUsers(user.organization, objectName);
+                if (needUsers && needUsers.includes(userId)) {
+                    isNeedManager = true;
+                    managedObjects.push(objectName);
+                }
+            }
+        }
+
+        if (!isNeedManager) return;
+
+        try {
+            const allNeeds = await loadAllNeeds();
+            const need = allNeeds[needId];
+            if (!need) {
+                return ctx.reply('Ошибка: заявка не найдена.');
+            }
+
+            if (userId !== ADMIN_ID && !managedObjects.includes(need.objectName)) {
+                return ctx.reply('У вас нет прав для изменения статуса этой заявки.');
+            }
+
+            need.status = status;
+            await saveNeed(need.userId, need);
+            await clearPreviousMessages(ctx, userId);
+            const message = await ctx.reply('✅ Статус обновлен.', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', `manage_select_need_${needId}`)]
+            ]));
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка обновления статуса:', error);
+            await ctx.reply('Ошибка при обновлении статуса. Попробуйте позже.');
+        }
+    });
+
+    bot.action(/manage_set_need_urgency_(.+)_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        const urgency = ctx.match[2];
+        const userId = ctx.from.id.toString();
+        const users = await loadUsers();
+        const user = users[userId];
+
+        if (!user || !user.isApproved) return;
+
+        let isNeedManager = userId === ADMIN_ID;
+        const managedObjects = [];
+        
+        if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+            for (const objectName of user.selectedObjects) {
+                const needUsers = await getNeedUsers(user.organization, objectName);
+                if (needUsers && needUsers.includes(userId)) {
+                    isNeedManager = true;
+                    managedObjects.push(objectName);
+                }
+            }
+        }
+
+        if (!isNeedManager) return;
+
+        try {
+            const allNeeds = await loadAllNeeds();
+            const need = allNeeds[needId];
+            if (!need) {
+                return ctx.reply('Ошибка: заявка не найдена.');
+            }
+
+            if (userId !== ADMIN_ID && !managedObjects.includes(need.objectName)) {
+                return ctx.reply('У вас нет прав для изменения срочности этой заявки.');
+            }
+
+            need.urgency = urgency;
+            await saveNeed(need.userId, need);
+            await clearPreviousMessages(ctx, userId);
+            const message = await ctx.reply('✅ Срочность обновлена.', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', `manage_select_need_${needId}`)]
+            ]));
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка обновления срочности:', error);
+            await ctx.reply('Ошибка при обновлении срочности. Попробуйте позже.');
+        }
+    });
 };
 
 module.exports.showNeedsMenu = showNeedsMenu;

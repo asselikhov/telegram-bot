@@ -393,6 +393,216 @@ module.exports = (bot) => {
                 }
                 break;
 
+            // Обработка редактирования заявок в админ-панели
+            case 'admin_edit_need_name':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const editingNeedId = state.adminEditingNeedId;
+                    if (!editingNeedId) {
+                        await ctx.reply('Ошибка: ID заявки не найден.');
+                        state.step = null;
+                        return;
+                    }
+                    const newName = ctx.message.text.trim();
+                    if (!newName) {
+                        const msg = await ctx.reply('Наименование не может быть пустым. Введите снова:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    const { loadAllNeeds } = require('../../database/needModel');
+                    const allNeeds = await loadAllNeeds();
+                    const need = allNeeds[editingNeedId];
+                    if (!need) {
+                        await ctx.reply('Ошибка: заявка не найдена.');
+                        state.step = null;
+                        return;
+                    }
+                    need.name = newName;
+                    await saveNeed(need.userId, need);
+                    await clearPreviousMessages(ctx, userId);
+                    const message = await ctx.reply('✅ Наименование обновлено.', Markup.inlineKeyboard([
+                        [Markup.button.callback('↩️ Назад', `admin_select_need_${editingNeedId}`)]
+                    ]));
+                    addMessageId(ctx, message.message_id);
+                    state.step = null;
+                    delete state.adminEditingNeedId;
+                } catch (error) {
+                    console.error('Ошибка обновления наименования (admin):', error);
+                    await ctx.reply('Ошибка при обновлении наименования. Попробуйте позже.');
+                    state.step = null;
+                }
+                break;
+
+            case 'admin_edit_need_quantity':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const editingNeedId = state.adminEditingNeedId;
+                    if (!editingNeedId) {
+                        await ctx.reply('Ошибка: ID заявки не найден.');
+                        state.step = null;
+                        return;
+                    }
+                    const quantityInput = ctx.message.text.trim();
+                    let newQuantity = null;
+                    if (quantityInput !== '0') {
+                        const parsedQuantity = parseFloat(quantityInput);
+                        if (isNaN(parsedQuantity) || parsedQuantity < 0) {
+                            const msg = await ctx.reply('Введите корректное число (или "0" чтобы убрать количество):');
+                            state.messageIds.push(msg.message_id);
+                            return;
+                        }
+                        newQuantity = parsedQuantity;
+                    }
+                    const { loadAllNeeds } = require('../../database/needModel');
+                    const allNeeds = await loadAllNeeds();
+                    const need = allNeeds[editingNeedId];
+                    if (!need) {
+                        await ctx.reply('Ошибка: заявка не найдена.');
+                        state.step = null;
+                        return;
+                    }
+                    need.quantity = newQuantity;
+                    await saveNeed(need.userId, need);
+                    await clearPreviousMessages(ctx, userId);
+                    const message = await ctx.reply('✅ Количество обновлено.', Markup.inlineKeyboard([
+                        [Markup.button.callback('↩️ Назад', `admin_select_need_${editingNeedId}`)]
+                    ]));
+                    addMessageId(ctx, message.message_id);
+                    state.step = null;
+                    delete state.adminEditingNeedId;
+                } catch (error) {
+                    console.error('Ошибка обновления количества (admin):', error);
+                    await ctx.reply('Ошибка при обновлении количества. Попробуйте позже.');
+                    state.step = null;
+                }
+                break;
+
+            // Обработка редактирования заявок ответственными
+            case 'manage_edit_need_name':
+                try {
+                    const editingNeedId = state.managedEditingNeedId;
+                    if (!editingNeedId) {
+                        await ctx.reply('Ошибка: ID заявки не найден.');
+                        state.step = null;
+                        return;
+                    }
+                    const newName = ctx.message.text.trim();
+                    if (!newName) {
+                        const msg = await ctx.reply('Наименование не может быть пустым. Введите снова:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    const { loadAllNeeds } = require('../../database/needModel');
+                    const { getNeedUsers } = require('../../database/configService');
+                    const allNeeds = await loadAllNeeds();
+                    const need = allNeeds[editingNeedId];
+                    if (!need) {
+                        await ctx.reply('Ошибка: заявка не найдена.');
+                        state.step = null;
+                        return;
+                    }
+
+                    // Проверка прав
+                    const users = await loadUsers();
+                    const user = users[userId];
+                    let isNeedManager = userId === ADMIN_ID;
+                    const managedObjects = [];
+                    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+                        for (const objectName of user.selectedObjects) {
+                            const needUsers = await getNeedUsers(user.organization, objectName);
+                            if (needUsers && needUsers.includes(userId)) {
+                                isNeedManager = true;
+                                managedObjects.push(objectName);
+                            }
+                        }
+                    }
+                    if (!isNeedManager || (userId !== ADMIN_ID && !managedObjects.includes(need.objectName))) {
+                        await ctx.reply('У вас нет прав для редактирования этой заявки.');
+                        state.step = null;
+                        return;
+                    }
+
+                    need.name = newName;
+                    await saveNeed(need.userId, need);
+                    await clearPreviousMessages(ctx, userId);
+                    const message = await ctx.reply('✅ Наименование обновлено.', Markup.inlineKeyboard([
+                        [Markup.button.callback('↩️ Назад', `manage_select_need_${editingNeedId}`)]
+                    ]));
+                    addMessageId(ctx, message.message_id);
+                    state.step = null;
+                    delete state.managedEditingNeedId;
+                } catch (error) {
+                    console.error('Ошибка обновления наименования (manager):', error);
+                    await ctx.reply('Ошибка при обновлении наименования. Попробуйте позже.');
+                    state.step = null;
+                }
+                break;
+
+            case 'manage_edit_need_quantity':
+                try {
+                    const editingNeedId = state.managedEditingNeedId;
+                    if (!editingNeedId) {
+                        await ctx.reply('Ошибка: ID заявки не найден.');
+                        state.step = null;
+                        return;
+                    }
+                    const quantityInput = ctx.message.text.trim();
+                    let newQuantity = null;
+                    if (quantityInput !== '0') {
+                        const parsedQuantity = parseFloat(quantityInput);
+                        if (isNaN(parsedQuantity) || parsedQuantity < 0) {
+                            const msg = await ctx.reply('Введите корректное число (или "0" чтобы убрать количество):');
+                            state.messageIds.push(msg.message_id);
+                            return;
+                        }
+                        newQuantity = parsedQuantity;
+                    }
+                    const { loadAllNeeds } = require('../../database/needModel');
+                    const { getNeedUsers } = require('../../database/configService');
+                    const allNeeds = await loadAllNeeds();
+                    const need = allNeeds[editingNeedId];
+                    if (!need) {
+                        await ctx.reply('Ошибка: заявка не найдена.');
+                        state.step = null;
+                        return;
+                    }
+
+                    // Проверка прав
+                    const users = await loadUsers();
+                    const user = users[userId];
+                    let isNeedManager = userId === ADMIN_ID;
+                    const managedObjects = [];
+                    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+                        for (const objectName of user.selectedObjects) {
+                            const needUsers = await getNeedUsers(user.organization, objectName);
+                            if (needUsers && needUsers.includes(userId)) {
+                                isNeedManager = true;
+                                managedObjects.push(objectName);
+                            }
+                        }
+                    }
+                    if (!isNeedManager || (userId !== ADMIN_ID && !managedObjects.includes(need.objectName))) {
+                        await ctx.reply('У вас нет прав для редактирования этой заявки.');
+                        state.step = null;
+                        return;
+                    }
+
+                    need.quantity = newQuantity;
+                    await saveNeed(need.userId, need);
+                    await clearPreviousMessages(ctx, userId);
+                    const message = await ctx.reply('✅ Количество обновлено.', Markup.inlineKeyboard([
+                        [Markup.button.callback('↩️ Назад', `manage_select_need_${editingNeedId}`)]
+                    ]));
+                    addMessageId(ctx, message.message_id);
+                    state.step = null;
+                    delete state.managedEditingNeedId;
+                } catch (error) {
+                    console.error('Ошибка обновления количества (manager):', error);
+                    await ctx.reply('Ошибка при обновлении количества. Попробуйте позже.');
+                    state.step = null;
+                }
+                break;
+
             // Обработка админских шагов
             case 'admin_org_add_name':
                 if (userId !== ADMIN_ID) break;

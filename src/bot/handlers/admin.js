@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser, deleteUser } = require('../../database/userModel');
-const { clearPreviousMessages } = require('../utils');
+const { clearPreviousMessages, parseAndFormatDate } = require('../utils');
 const { showMainMenu } = require('./menu');
 const { ADMIN_ID } = require('../../config/config');
 const { loadInviteCode } = require('../../database/inviteCodeModel');
@@ -43,11 +43,21 @@ const {
     loadUserReports
 } = require('../../database/reportModel');
 const {
+    loadAllNeeds,
+    saveNeed
+} = require('../../database/needModel');
+const {
     setReportUsers,
     removeReportUsers,
     removeAllForOrganization,
     removeAllForObject
 } = require('../../database/objectReportUsersModel');
+const {
+    setNeedUsers,
+    removeNeedUsers,
+    removeAllForOrganization: removeAllNeedUsersForOrganization,
+    removeAllForObject: removeAllNeedUsersForObject
+} = require('../../database/objectNeedUsersModel');
 const { 
     getOrganizations: getOrgFromService,
     getPositions: getPosFromService,
@@ -55,6 +65,7 @@ const {
     getNotificationSettings,
     getAllNotificationSettings,
     getReportUsers,
+    getNeedUsers,
     clearConfigCache 
 } = require('../../database/configService');
 const { 
@@ -77,6 +88,7 @@ async function showAdminPanel(ctx) {
                 [Markup.button.callback('📈 Статистика', 'admin_statistics')],
                 [Markup.button.callback('🏢 Управление организациями', 'admin_organizations')],
                 [Markup.button.callback('🏗 Управление объектами', 'admin_objects')],
+                [Markup.button.callback('📦 Управление потребностями', 'admin_needs')],
                 [Markup.button.callback('🔔 Настройки уведомлений', 'admin_notifications')],
                 [Markup.button.callback('↩️ Назад', 'main_menu')]
             ])
@@ -665,7 +677,8 @@ ${objectsList}
         // Удаляем связи организации с объектами
         await removeAllObjectsFromOrganization(context.orgName);
         // Удаляем настройки пользователей для отчетов
-        await removeAllForOrganization(context.orgName);
+        await removeAllForOrganization(context.orgName); // report users
+        await removeAllNeedUsersForOrganization(context.orgName); // need users
         // Удаляем организацию
         await deleteOrganization(context.orgName);
         clearConfigCache();
@@ -844,6 +857,7 @@ ${objectsList}
         const buttons = [
             [Markup.button.callback('✏️ Редактировать', 'admin_obj_edit')],
             [Markup.button.callback('📋 Настройка отчетов', `admin_obj_report_users_${objIndex}`)],
+            [Markup.button.callback('📦 Настройка потребностей', `admin_obj_need_users_${objIndex}`)],
             [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
             [Markup.button.callback('↩️ Назад', 'admin_objects')]
         ];
@@ -1070,6 +1084,7 @@ ${objectsList}
             const buttons = [
                 [Markup.button.callback('✏️ Редактировать', 'admin_obj_edit')],
                 [Markup.button.callback('📋 Настройка отчетов', `admin_obj_report_users_${objIndexBack}`)],
+                [Markup.button.callback('📦 Настройка потребностей', `admin_obj_need_users_${objIndexBack}`)],
                 [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
                 [Markup.button.callback('↩️ Назад', 'admin_objects')]
             ];
@@ -1325,7 +1340,8 @@ ${objectsList}
         
         // Если нет пользователей и отчетов, удаляем объект
         await removeOrganizationFromObject(objName);
-        await removeAllForObject(objName);
+        await removeAllForObject(objName); // report users
+        await removeAllNeedUsersForObject(objName); // need users
         await deleteObject(objName);
         clearConfigCache();
         await ctx.reply(`✅ Объект "${objName}" удален.`);
@@ -3447,6 +3463,907 @@ ${objectsList}
         await showUsersList(ctx, filters, 0);
     });
     
+    // ========== УПРАВЛЕНИЕ ПОТРЕБНОСТЯМИ ==========
+    
+    async function showNeedsManagementMenu(ctx) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            await clearPreviousMessages(ctx, userId);
+            const message = await ctx.reply(
+                '📦 Управление потребностями\nВыберите действие:',
+                Markup.inlineKeyboard([
+                    [Markup.button.callback('📋 Все заявки', 'admin_needs_all')],
+                    [Markup.button.callback('👥 Назначение ответственных', 'admin_needs_assign')],
+                    [Markup.button.callback('↩️ Назад', 'admin_panel')]
+                ])
+            );
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showNeedsManagementMenu:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    }
+
+    async function showAllNeedsByObjects(ctx, page = 0) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            await clearPreviousMessages(ctx, userId);
+            const allNeeds = await loadAllNeeds();
+            const uniqueObjects = [...new Set(Object.values(allNeeds).map(n => n.objectName))];
+
+            if (uniqueObjects.length === 0) {
+                const message = await ctx.reply('Заявок на потребности пока нет.', Markup.inlineKeyboard([
+                    [Markup.button.callback('↩️ Назад', 'admin_needs')]
+                ]));
+                addMessageId(ctx, message.message_id);
+                return;
+            }
+
+            const itemsPerPage = 10;
+            const totalPages = Math.ceil(uniqueObjects.length / itemsPerPage);
+            const pageNum = typeof page === 'number' ? page : 0;
+            const startIndex = pageNum * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, uniqueObjects.length);
+            const currentObjects = uniqueObjects.slice(startIndex, endIndex);
+
+            const buttons = currentObjects.map((obj, index) => {
+                const objectNeeds = Object.values(allNeeds).filter(n => 
+                    n.objectName && n.objectName.trim() === obj.trim()
+                );
+                return [Markup.button.callback(`${obj} (${objectNeeds.length})`, `admin_needs_object_${uniqueObjects.indexOf(obj)}`)];
+            });
+
+            const paginationButtons = [];
+            if (totalPages > 1) {
+                if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `admin_needs_all_page_${pageNum - 1}`));
+                if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `admin_needs_all_page_${pageNum + 1}`));
+            }
+            if (paginationButtons.length > 0) buttons.push(paginationButtons);
+            buttons.push([Markup.button.callback('↩️ Назад', 'admin_needs')]);
+
+            const message = await ctx.reply(
+                `📦 Все заявки на потребности\n\nВыберите объект (Страница ${pageNum + 1} из ${totalPages}):`,
+                Markup.inlineKeyboard(buttons)
+            );
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showAllNeedsByObjects:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    }
+
+    async function showNeedsForObject(ctx, objectIndex, dateIndex = 0, page = 0) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            const allNeeds = await loadAllNeeds();
+            const uniqueObjects = [...new Set(Object.values(allNeeds).map(n => n.objectName))];
+            const objectName = uniqueObjects[objectIndex];
+
+            await clearPreviousMessages(ctx, userId);
+
+            const normalizedObjectName = objectName && objectName.trim();
+            const objectNeeds = Object.entries(allNeeds).filter(([_, n]) =>
+                n.objectName && n.objectName.trim() === normalizedObjectName
+            );
+            const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
+            const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+            const selectedDate = uniqueDates[dateIndex];
+
+            const dateNeeds = sortedNeeds.filter(([_, n]) => parseAndFormatDate(n.date) === selectedDate);
+
+            const itemsPerPage = 10;
+            const totalPages = Math.ceil(dateNeeds.length / itemsPerPage);
+            const pageNum = typeof page === 'number' ? page : 0;
+            const startIndex = pageNum * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, dateNeeds.length);
+            const currentNeeds = dateNeeds.slice(startIndex, endIndex);
+
+            if (currentNeeds.length === 0) {
+                return ctx.reply('Ошибка: нет заявок для отображения.');
+            }
+
+            const { escapeHtml } = require('../utils/htmlHelper');
+            const TYPE_NAMES = {
+                'materials': 'Материалы',
+                'equipment': 'Оборудование',
+                'special_equipment': 'Спецтехника',
+                'office_supplies': 'Канцтовары',
+                'accommodation': 'Проживание',
+                'services': 'Услуги'
+            };
+            const URGENCY_NAMES = {
+                'urgent': { name: 'Срочно', emoji: '🔥' },
+                'soon': { name: 'В ближайшее время', emoji: '⏳' },
+                'planned': { name: 'Планово', emoji: '📅' }
+            };
+            const STATUS_NAMES = {
+                'new': 'Новая',
+                'in_progress': 'В обработке',
+                'completed': 'Выполнена',
+                'rejected': 'Отклонена'
+            };
+
+            const itemButtons = currentNeeds.map(([needId, need]) => {
+                const urgencyInfo = URGENCY_NAMES[need.urgency] || { name: need.urgency, emoji: '' };
+                const typeName = TYPE_NAMES[need.type] || need.type;
+                const statusName = STATUS_NAMES[need.status] || need.status;
+                const label = `${urgencyInfo.emoji} ${typeName}: ${need.name} (${statusName})`;
+                return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `admin_select_need_${needId}`)];
+            }).reverse();
+
+            const buttons = [];
+            const paginationButtons = [];
+            if (totalPages > 1) {
+                if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `admin_needs_object_${objectIndex}_date_${dateIndex}_page_${pageNum - 1}`));
+                if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `admin_needs_object_${objectIndex}_date_${dateIndex}_page_${pageNum + 1}`));
+            }
+            if (paginationButtons.length > 0) buttons.push(paginationButtons);
+            buttons.push(...itemButtons);
+            buttons.push([Markup.button.callback('↩️ Назад', `admin_needs_all`)]);
+
+            const message = await ctx.reply(
+                `📦 Заявки для объекта "${objectName}" за ${selectedDate} (Страница ${pageNum + 1} из ${totalPages}):`,
+                Markup.inlineKeyboard(buttons)
+            );
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showNeedsForObject:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    }
+
+    async function showNeedsDatesForObject(ctx, objectIndex, page = 0) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            const allNeeds = await loadAllNeeds();
+            const uniqueObjects = [...new Set(Object.values(allNeeds).map(n => n.objectName))];
+            const objectName = uniqueObjects[objectIndex];
+
+            await clearPreviousMessages(ctx, userId);
+
+            const normalizedObjectName = objectName && objectName.trim();
+            const objectNeeds = Object.values(allNeeds).filter(n =>
+                n.objectName && n.objectName.trim() === normalizedObjectName
+            );
+            const sortedNeeds = objectNeeds.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+            const uniqueDates = [...new Set(sortedNeeds.map(n => parseAndFormatDate(n.date)))];
+
+            const itemsPerPage = 10;
+            const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
+            const pageNum = typeof page === 'number' ? page : 0;
+            const startIndex = pageNum * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, uniqueDates.length);
+            const currentDates = uniqueDates.slice(startIndex, endIndex);
+
+            if (currentDates.length === 0) {
+                return ctx.reply('Ошибка: нет дат для отображения.');
+            }
+
+            const dateButtons = currentDates.map((date, index) =>
+                [Markup.button.callback(date, `admin_needs_object_${objectIndex}_date_${startIndex + index}`)]
+            ).reverse();
+
+            const buttons = [];
+            const paginationButtons = [];
+            if (totalPages > 1) {
+                if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `admin_needs_object_${objectIndex}_dates_page_${pageNum - 1}`));
+                if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `admin_needs_object_${objectIndex}_dates_page_${pageNum + 1}`));
+            }
+            if (paginationButtons.length > 0) buttons.push(paginationButtons);
+            buttons.push(...dateButtons);
+            buttons.push([Markup.button.callback('↩️ Назад', 'admin_needs_all')]);
+
+            const message = await ctx.reply(
+                `📦 Выберите дату для объекта "${objectName}" (Страница ${pageNum + 1} из ${totalPages}):`,
+                Markup.inlineKeyboard(buttons)
+            );
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showNeedsDatesForObject:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    }
+
+    async function showAdminNeedDetails(ctx, needId) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            const allNeeds = await loadAllNeeds();
+            const need = allNeeds[needId];
+
+            if (!need) {
+                await clearPreviousMessages(ctx, userId);
+                return ctx.reply('Ошибка: заявка не найдена.');
+            }
+
+            await clearPreviousMessages(ctx, userId);
+
+            const { escapeHtml } = require('../utils/htmlHelper');
+            const TYPE_NAMES = {
+                'materials': 'Материалы',
+                'equipment': 'Оборудование',
+                'special_equipment': 'Спецтехника',
+                'office_supplies': 'Канцтовары',
+                'accommodation': 'Проживание',
+                'services': 'Услуги'
+            };
+            const URGENCY_NAMES = {
+                'urgent': { name: 'Срочно', emoji: '🔥' },
+                'soon': { name: 'В ближайшее время', emoji: '⏳' },
+                'planned': { name: 'Планово', emoji: '📅' }
+            };
+            const STATUS_NAMES = {
+                'new': 'Новая',
+                'in_progress': 'В обработке',
+                'completed': 'Выполнена',
+                'rejected': 'Отклонена'
+            };
+
+            const formattedDate = parseAndFormatDate(need.date);
+            const time = new Date(need.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
+            const typeName = TYPE_NAMES[need.type] || need.type;
+            const urgencyInfo = URGENCY_NAMES[need.urgency] || { name: need.urgency, emoji: '' };
+            const statusName = STATUS_NAMES[need.status] || need.status;
+
+            let needText = `
+<b>ЗАЯВКА НА ПОТРЕБНОСТИ</b>
+📅 Дата: ${formattedDate}
+🏢 Объект: ${escapeHtml(need.objectName)}
+👷 Автор: ${escapeHtml(need.fullName)}
+📦 Тип: ${typeName}
+📝 Наименование: ${escapeHtml(need.name)}
+`;
+            if (need.quantity !== null && need.quantity !== undefined) {
+                needText += `🔢 Количество: ${need.quantity}\n`;
+            }
+            needText += `${urgencyInfo.emoji} Срочность: ${urgencyInfo.name}\n`;
+            needText += `📊 Статус: ${statusName}\n`;
+            needText += `⏰ Время: ${time}`;
+
+            const buttons = [
+                [Markup.button.callback('✏️ Редактировать', `admin_edit_need_${needId}`)],
+                [Markup.button.callback('📊 Изменить статус', `admin_change_need_status_${needId}`)],
+                [Markup.button.callback('↩️ Назад', 'admin_needs_all')]
+            ];
+
+            const message = await ctx.reply(needText.trim(), {
+                parse_mode: 'HTML',
+                ...Markup.inlineKeyboard(buttons)
+            });
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showAdminNeedDetails:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    }
+
+    async function showEditNeedMenu(ctx, needId) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            const allNeeds = await loadAllNeeds();
+            const need = allNeeds[needId];
+
+            if (!need) {
+                return ctx.reply('Ошибка: заявка не найдена.');
+            }
+
+            await clearPreviousMessages(ctx, userId);
+
+            const buttons = [
+                [Markup.button.callback('📝 Наименование', `admin_edit_need_name_${needId}`)],
+                [Markup.button.callback('🔢 Количество', `admin_edit_need_quantity_${needId}`)],
+                [Markup.button.callback('⏰ Срочность', `admin_edit_need_urgency_${needId}`)],
+                [Markup.button.callback('↩️ Назад', `admin_select_need_${needId}`)]
+            ];
+
+            const message = await ctx.reply('Что вы хотите изменить?', Markup.inlineKeyboard(buttons));
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showEditNeedMenu:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    }
+
+    async function showChangeStatusMenu(ctx, needId) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            await clearPreviousMessages(ctx, userId);
+
+            const buttons = [
+                [Markup.button.callback('🆕 Новая', `admin_set_need_status_${needId}_new`)],
+                [Markup.button.callback('⏳ В обработке', `admin_set_need_status_${needId}_in_progress`)],
+                [Markup.button.callback('✅ Выполнена', `admin_set_need_status_${needId}_completed`)],
+                [Markup.button.callback('❌ Отклонена', `admin_set_need_status_${needId}_rejected`)],
+                [Markup.button.callback('↩️ Назад', `admin_select_need_${needId}`)]
+            ];
+
+            const message = await ctx.reply('Выберите новый статус:', Markup.inlineKeyboard(buttons));
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showChangeStatusMenu:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    }
+
+    bot.action('admin_needs', showNeedsManagementMenu);
+    bot.action('admin_needs_all', (ctx) => showAllNeedsByObjects(ctx, 0));
+    bot.action(/admin_needs_all_page_(\d+)/, (ctx) => showAllNeedsByObjects(ctx, parseInt(ctx.match[1], 10)));
+    bot.action(/admin_needs_object_(\d+)/, (ctx) => showNeedsDatesForObject(ctx, parseInt(ctx.match[1], 10), 0));
+    bot.action(/admin_needs_object_(\d+)_dates_page_(\d+)/, (ctx) => showNeedsDatesForObject(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
+    bot.action(/admin_needs_object_(\d+)_date_(\d+)/, (ctx) => showNeedsForObject(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), 0));
+    bot.action(/admin_needs_object_(\d+)_date_(\d+)_page_(\d+)/, (ctx) => showNeedsForObject(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), parseInt(ctx.match[3], 10)));
+    bot.action(/admin_select_need_(.+)/, (ctx) => showAdminNeedDetails(ctx, ctx.match[1]));
+    bot.action(/admin_edit_need_(.+)/, (ctx) => showEditNeedMenu(ctx, ctx.match[1]));
+    bot.action(/admin_change_need_status_(.+)/, (ctx) => showChangeStatusMenu(ctx, ctx.match[1]));
+
+    bot.action(/admin_edit_need_name_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        await clearPreviousMessages(ctx, userId);
+        const state = ensureUserState(ctx);
+        if (state) {
+            state.step = 'admin_edit_need_name';
+            state.adminEditingNeedId = needId;
+        }
+        const message = await ctx.reply('📝 Введите новое наименование:');
+        addMessageId(ctx, message.message_id);
+    });
+
+    bot.action(/admin_edit_need_quantity_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        await clearPreviousMessages(ctx, userId);
+        const state = ensureUserState(ctx);
+        if (state) {
+            state.step = 'admin_edit_need_quantity';
+            state.adminEditingNeedId = needId;
+        }
+        const message = await ctx.reply('🔢 Введите новое количество (или "0" чтобы убрать количество):');
+        addMessageId(ctx, message.message_id);
+    });
+
+    bot.action(/admin_edit_need_urgency_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        await clearPreviousMessages(ctx, userId);
+        const buttons = [
+            [Markup.button.callback('🔥 Срочно', `admin_set_need_urgency_${needId}_urgent`)],
+            [Markup.button.callback('⏳ В ближайшее время', `admin_set_need_urgency_${needId}_soon`)],
+            [Markup.button.callback('📅 Планово', `admin_set_need_urgency_${needId}_planned`)],
+            [Markup.button.callback('↩️ Назад', `admin_select_need_${needId}`)]
+        ];
+        const message = await ctx.reply('⏰ Выберите срочность:', Markup.inlineKeyboard(buttons));
+        addMessageId(ctx, message.message_id);
+    });
+
+    bot.action(/admin_set_need_status_(.+)_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        const status = ctx.match[2];
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            const allNeeds = await loadAllNeeds();
+            const need = allNeeds[needId];
+            if (!need) {
+                return ctx.reply('Ошибка: заявка не найдена.');
+            }
+
+            need.status = status;
+            await saveNeed(need.userId, need);
+            clearConfigCache();
+            await clearPreviousMessages(ctx, userId);
+            const message = await ctx.reply('✅ Статус обновлен.', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', `admin_select_need_${needId}`)]
+            ]));
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка обновления статуса:', error);
+            await ctx.reply('Ошибка при обновлении статуса. Попробуйте позже.');
+        }
+    });
+
+    bot.action(/admin_set_need_urgency_(.+)_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        const urgency = ctx.match[2];
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            const allNeeds = await loadAllNeeds();
+            const need = allNeeds[needId];
+            if (!need) {
+                return ctx.reply('Ошибка: заявка не найдена.');
+            }
+
+            need.urgency = urgency;
+            await saveNeed(need.userId, need);
+            clearConfigCache();
+            await clearPreviousMessages(ctx, userId);
+            const message = await ctx.reply('✅ Срочность обновлена.', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', `admin_select_need_${needId}`)]
+            ]));
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка обновления срочности:', error);
+            await ctx.reply('Ошибка при обновлении срочности. Попробуйте позже.');
+        }
+    });
+
+    // Назначение ответственных для потребностей
+    async function showNeedsAssignMenu(ctx) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            await clearPreviousMessages(ctx, userId);
+            const allObjects = await getAllObjects();
+            if (allObjects.length === 0) {
+                const message = await ctx.reply('Объектов нет.', Markup.inlineKeyboard([
+                    [Markup.button.callback('↩️ Назад', 'admin_needs')]
+                ]));
+                addMessageId(ctx, message.message_id);
+                return;
+            }
+
+            const state = ensureUserState(ctx);
+            if (state) {
+                state.adminNeedsObjectsList = allObjects.map(obj => obj.name);
+            }
+
+            const buttons = allObjects.map((obj, index) => [
+                Markup.button.callback(obj.name, `admin_needs_assign_object_${index}`)
+            ]);
+            buttons.push([Markup.button.callback('↩️ Назад', 'admin_needs')]);
+
+            const message = await ctx.reply(
+                '👥 Назначение ответственных за потребности\n\nВыберите объект:',
+                Markup.inlineKeyboard(buttons)
+            );
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showNeedsAssignMenu:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    }
+
+    async function showNeedsAssignOrganizations(ctx, objectIndex) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            const objNames = ctx.state.userStates[userId].adminNeedsObjectsList;
+            if (!objNames || !objNames[objectIndex]) {
+                await ctx.reply('Объект не найден.');
+                return;
+            }
+            const objName = objNames[objectIndex];
+            ctx.state.userStates[userId].adminSelectedNeedObjName = objName;
+            ctx.state.userStates[userId].adminSelectedNeedObjIndex = objectIndex;
+
+            const organizations = await getOrganizationsByObject(objName);
+            if (organizations.length === 0) {
+                await ctx.reply(`Для объекта "${objName}" не найдено организаций.`);
+                await showNeedsAssignMenu(ctx);
+                return;
+            }
+
+            await clearPreviousMessages(ctx, userId);
+            ctx.state.userStates[userId].adminNeedsOrgList = organizations;
+
+            const buttons = organizations.map((orgName, orgIndex) => [
+                Markup.button.callback(`✏️ ${orgName}`, `admin_needs_assign_org_${objectIndex}_${orgIndex}`)
+            ]);
+            buttons.push([Markup.button.callback('↩️ Назад', 'admin_needs_assign')]);
+
+            const message = await ctx.reply(
+                `👥 Назначение ответственных за потребности\n\nОбъект: **${objName}**\n\nВыберите организацию:`,
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+                }
+            );
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showNeedsAssignOrganizations:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    }
+
+    async function showNeedsOrganizationUsers(ctx, objectIndex, orgIndex) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        try {
+            const objNames = ctx.state.userStates[userId].adminNeedsObjectsList;
+            const orgNames = ctx.state.userStates[userId].adminNeedsOrgList;
+
+            if (!objNames || !objNames[objectIndex] || !orgNames || !orgNames[orgIndex]) {
+                await ctx.reply('Ошибка: объект или организация не найдены.');
+                return;
+            }
+
+            const objName = objNames[objectIndex];
+            const orgName = orgNames[orgIndex];
+
+            const allUsers = await loadUsers();
+            const orgUsers = Object.entries(allUsers).filter(([_, user]) =>
+                user.organization === orgName &&
+                Array.isArray(user.selectedObjects) &&
+                user.selectedObjects.includes(objName)
+            );
+
+            if (orgUsers.length === 0) {
+                await ctx.reply(`Для организации "${orgName}" и объекта "${objName}" не найдено пользователей с этим объектом в личном кабинете.`);
+                await showNeedsAssignOrganizations(ctx, objectIndex);
+                return;
+            }
+
+            const currentNeedUsers = await getNeedUsers(orgName, objName);
+
+            const stateKey = `objNeedSelectedUsers_${objectIndex}_${orgIndex}`;
+            if (!ctx.state.userStates[userId][stateKey]) {
+                ctx.state.userStates[userId][stateKey] = {};
+                orgUsers.forEach(([uid, _], userIndex) => {
+                    if (currentNeedUsers.includes(uid)) {
+                        ctx.state.userStates[userId][stateKey][userIndex] = uid;
+                    }
+                });
+            }
+
+            await clearPreviousMessages(ctx, userId);
+
+            const selectedUsers = ctx.state.userStates[userId][stateKey];
+            const buttons = orgUsers.map(([uid, user], userIndex) => {
+                const isSelected = selectedUsers[userIndex] === uid;
+                const marker = isSelected ? '✅' : '☐';
+                return [Markup.button.callback(
+                    `${marker} ${user.fullName || uid}`,
+                    `admin_needs_assign_user_toggle_${objectIndex}_${orgIndex}_${userIndex}`
+                )];
+            });
+            buttons.push([Markup.button.callback('✅ Сохранить', `admin_needs_assign_users_save_${objectIndex}_${orgIndex}`)]);
+            buttons.push([Markup.button.callback('↩️ Назад', `admin_needs_assign_object_${objectIndex}`)]);
+
+            const selectedCount = Object.keys(selectedUsers).length;
+            const message = await ctx.reply(
+                `👥 Настройка ответственных за потребности\n\nОбъект: **${objName}**\nОрганизация: **${orgName}**\n\nВыберите пользователей (выбрано: ${selectedCount}):`,
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+                }
+            );
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в showNeedsOrganizationUsers:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    }
+
+    // Настройка ответственных для потребностей через объекты (аналогично отчетам)
+    bot.action(/admin_obj_need_users_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objIndex = parseInt(ctx.match[1], 10);
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        if (!objNames || !objNames[objIndex]) {
+            await ctx.reply('Объект не найден.');
+            return;
+        }
+        const objName = objNames[objIndex];
+        ctx.state.userStates[userId].adminSelectedObjName = objName;
+        ctx.state.userStates[userId].adminSelectedObjIndex = objIndex;
+        
+        await showObjectNeedOrganizationsList(ctx, objIndex);
+    });
+    
+    async function showObjectNeedOrganizationsList(ctx, objIndex) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        if (!objNames || !objNames[objIndex]) {
+            await ctx.reply('Объект не найден.');
+            return;
+        }
+        const objName = objNames[objIndex];
+        
+        const organizations = await getOrganizationsByObject(objName);
+        if (organizations.length === 0) {
+            await ctx.reply(`Для объекта "${objName}" не найдено организаций.`);
+            const objIndexBack = ctx.state.userStates[userId].adminSelectedObjIndex ?? 0;
+            const obj = await getObject(objName);
+            const usersWithObj = await getUsersByObject(objName);
+            const reportsWithObj = await getReportsByObject(objName);
+            await clearPreviousMessages(ctx, userId);
+            const statusEmoji = obj.status === 'В работе' ? '🟢' : '❄️';
+            const objText = `🏗 **${obj.name}**\n\n📱 ID группы: ${obj.telegramGroupId || 'Не указан'}\n📊 Статус: ${statusEmoji} ${obj.status || 'В работе'}\n👥 Используется пользователями: ${usersWithObj.length}\n📄 Отчетов: ${reportsWithObj.length}`;
+            const buttons = [
+                [Markup.button.callback('✏️ Редактировать', 'admin_obj_edit')],
+                [Markup.button.callback('📋 Настройка отчетов', `admin_obj_report_users_${objIndexBack}`)],
+                [Markup.button.callback('📦 Настройка потребностей', `admin_obj_need_users_${objIndexBack}`)],
+                [Markup.button.callback('🗑 Удалить', 'admin_obj_delete')],
+                [Markup.button.callback('↩️ Назад', 'admin_objects')]
+            ];
+            const message = await ctx.reply(objText, {
+                parse_mode: 'Markdown',
+                reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+            });
+            ctx.state.userStates[userId].messageIds.push(message.message_id);
+            return;
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        ctx.state.userStates[userId].adminNeedOrgList = organizations;
+        
+        const buttons = organizations.map((orgName, orgIndex) => [
+            Markup.button.callback(`✏️ ${orgName}`, `admin_obj_org_need_users_${objIndex}_${orgIndex}`)
+        ]);
+        buttons.push([Markup.button.callback('↩️ Назад', `obj_${objIndex}`)]);
+        
+        const message = await ctx.reply(
+            `📦 Настройка потребностей по объекту "${objName}"\n\nВыберите организацию:`,
+            Markup.inlineKeyboard(buttons)
+        );
+        addMessageId(ctx, message.message_id);
+    }
+    
+    bot.action(/admin_obj_org_need_users_(\d+)_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objIndex = parseInt(ctx.match[1], 10);
+        const orgIndex = parseInt(ctx.match[2], 10);
+        
+        await showOrganizationUsersForObjectNeed(ctx, objIndex, orgIndex);
+    });
+    
+    async function showOrganizationUsersForObjectNeed(ctx, objIndex, orgIndex) {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        const orgNames = ctx.state.userStates[userId].adminNeedOrgList;
+        
+        if (!objNames || !objNames[objIndex] || !orgNames || !orgNames[orgIndex]) {
+            await ctx.reply('Ошибка: объект или организация не найдены.');
+            return;
+        }
+        
+        const objName = objNames[objIndex];
+        const orgName = orgNames[orgIndex];
+        
+        const allUsers = await loadUsers();
+        const orgUsers = Object.entries(allUsers).filter(([_, user]) => 
+            user.organization === orgName && 
+            Array.isArray(user.selectedObjects) && 
+            user.selectedObjects.includes(objName)
+        );
+        
+        if (orgUsers.length === 0) {
+            await ctx.reply(`Для организации "${orgName}" и объекта "${objName}" не найдено пользователей с этим объектом в личном кабинете.`);
+            await showObjectNeedOrganizationsList(ctx, objIndex);
+            return;
+        }
+        
+        const currentNeedUsers = await getNeedUsers(orgName, objName);
+        
+        const stateKey = `objNeedSelectedUsers_${objIndex}_${orgIndex}`;
+        if (!ctx.state.userStates[userId][stateKey]) {
+            ctx.state.userStates[userId][stateKey] = {};
+            orgUsers.forEach(([uid, _], userIndex) => {
+                if (currentNeedUsers.includes(uid)) {
+                    ctx.state.userStates[userId][stateKey][userIndex] = uid;
+                }
+            });
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        
+        const selectedUsers = ctx.state.userStates[userId][stateKey];
+        const buttons = orgUsers.map(([uid, user], userIndex) => {
+            const isSelected = selectedUsers[userIndex] === uid;
+            const marker = isSelected ? '✅' : '☐';
+            return [Markup.button.callback(
+                `${marker} ${user.fullName || uid}`,
+                `admin_obj_org_need_user_toggle_${objIndex}_${orgIndex}_${userIndex}`
+            )];
+        });
+        buttons.push([Markup.button.callback('✅ Сохранить', `admin_obj_org_need_users_save_${objIndex}_${orgIndex}`)]);
+        buttons.push([Markup.button.callback('↩️ Назад', `admin_obj_need_users_${objIndex}`)]);
+        
+        const selectedCount = Object.keys(selectedUsers).length;
+        const message = await ctx.reply(
+            `📦 Настройка пользователей для потребностей\n\nОбъект: **${objName}**\nОрганизация: **${orgName}**\n\nВыберите пользователей (выбрано: ${selectedCount}):`,
+            {
+                parse_mode: 'Markdown',
+                reply_markup: Markup.inlineKeyboard(buttons).reply_markup
+            }
+        );
+        addMessageId(ctx, message.message_id);
+    }
+    
+    bot.action(/admin_obj_org_need_user_toggle_(\d+)_(\d+)_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objIndex = parseInt(ctx.match[1], 10);
+        const orgIndex = parseInt(ctx.match[2], 10);
+        const userIndex = parseInt(ctx.match[3], 10);
+        
+        const stateKey = `objNeedSelectedUsers_${objIndex}_${orgIndex}`;
+        if (!ctx.state.userStates[userId][stateKey]) {
+            ctx.state.userStates[userId][stateKey] = {};
+        }
+        
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        const orgNames = ctx.state.userStates[userId].adminNeedOrgList;
+        
+        if (!objNames || !objNames[objIndex] || !orgNames || !orgNames[orgIndex]) {
+            await ctx.reply('Ошибка: объект или организация не найдены.');
+            return;
+        }
+        
+        const objName = objNames[objIndex];
+        const orgName = orgNames[orgIndex];
+        
+        const allUsers = await loadUsers();
+        const orgUsers = Object.entries(allUsers).filter(([_, user]) => 
+            user.organization === orgName && 
+            Array.isArray(user.selectedObjects) && 
+            user.selectedObjects.includes(objName)
+        );
+        
+        if (!orgUsers[userIndex]) {
+            await ctx.reply('Пользователь не найден.');
+            return;
+        }
+        
+        const [uid, _] = orgUsers[userIndex];
+        
+        if (ctx.state.userStates[userId][stateKey][userIndex] === uid) {
+            delete ctx.state.userStates[userId][stateKey][userIndex];
+        } else {
+            ctx.state.userStates[userId][stateKey][userIndex] = uid;
+        }
+        
+        await showOrganizationUsersForObjectNeed(ctx, objIndex, orgIndex);
+    });
+    
+    bot.action(/admin_obj_org_need_users_save_(\d+)_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objIndex = parseInt(ctx.match[1], 10);
+        const orgIndex = parseInt(ctx.match[2], 10);
+        
+        const stateKey = `objNeedSelectedUsers_${objIndex}_${orgIndex}`;
+        const selectedUsers = ctx.state.userStates[userId][stateKey] || {};
+        
+        const objNames = ctx.state.userStates[userId].adminObjectsList;
+        const orgNames = ctx.state.userStates[userId].adminNeedOrgList;
+        
+        if (!objNames || !objNames[objIndex] || !orgNames || !orgNames[orgIndex]) {
+            await ctx.reply('Ошибка: объект или организация не найдены.');
+            return;
+        }
+        
+        const objName = objNames[objIndex];
+        const orgName = orgNames[orgIndex];
+        
+        const userIds = Object.values(selectedUsers).filter(uid => uid);
+        
+        await setNeedUsers(orgName, objName, userIds);
+        clearConfigCache();
+        
+        delete ctx.state.userStates[userId][stateKey];
+        
+        await ctx.reply(`✅ Настройки сохранены для организации "${orgName}" и объекта "${objName}". Выбрано пользователей: ${userIds.length}`);
+        
+        await showObjectNeedOrganizationsList(ctx, objIndex);
+    });
+
+    bot.action('admin_needs_assign', showNeedsAssignMenu);
+    bot.action(/admin_needs_assign_object_(\d+)/, (ctx) => showNeedsAssignOrganizations(ctx, parseInt(ctx.match[1], 10)));
+    bot.action(/admin_needs_assign_org_(\d+)_(\d+)/, (ctx) => showNeedsOrganizationUsers(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
+
+    bot.action(/admin_needs_assign_user_toggle_(\d+)_(\d+)_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        const objectIndex = parseInt(ctx.match[1], 10);
+        const orgIndex = parseInt(ctx.match[2], 10);
+        const userIndex = parseInt(ctx.match[3], 10);
+
+        const stateKey = `objNeedSelectedUsers_${objectIndex}_${orgIndex}`;
+        if (!ctx.state.userStates[userId][stateKey]) {
+            ctx.state.userStates[userId][stateKey] = {};
+        }
+
+        const objNames = ctx.state.userStates[userId].adminNeedsObjectsList;
+        const orgNames = ctx.state.userStates[userId].adminNeedsOrgList;
+
+        if (!objNames || !objNames[objectIndex] || !orgNames || !orgNames[orgIndex]) {
+            await ctx.reply('Ошибка: объект или организация не найдены.');
+            return;
+        }
+
+        const objName = objNames[objectIndex];
+        const orgName = orgNames[orgIndex];
+
+        const allUsers = await loadUsers();
+        const orgUsers = Object.entries(allUsers).filter(([_, user]) =>
+            user.organization === orgName &&
+            Array.isArray(user.selectedObjects) &&
+            user.selectedObjects.includes(objName)
+        );
+
+        if (!orgUsers[userIndex]) {
+            await ctx.reply('Пользователь не найден.');
+            return;
+        }
+
+        const [uid, _] = orgUsers[userIndex];
+
+        if (ctx.state.userStates[userId][stateKey][userIndex] === uid) {
+            delete ctx.state.userStates[userId][stateKey][userIndex];
+        } else {
+            ctx.state.userStates[userId][stateKey][userIndex] = uid;
+        }
+
+        await showNeedsOrganizationUsers(ctx, objectIndex, orgIndex);
+    });
+
+    bot.action(/admin_needs_assign_users_save_(\d+)_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+
+        const objectIndex = parseInt(ctx.match[1], 10);
+        const orgIndex = parseInt(ctx.match[2], 10);
+
+        const stateKey = `objNeedSelectedUsers_${objectIndex}_${orgIndex}`;
+        const selectedUsers = ctx.state.userStates[userId][stateKey] || {};
+
+        const objNames = ctx.state.userStates[userId].adminNeedsObjectsList;
+        const orgNames = ctx.state.userStates[userId].adminNeedsOrgList;
+
+        if (!objNames || !objNames[objectIndex] || !orgNames || !orgNames[orgIndex]) {
+            await ctx.reply('Ошибка: объект или организация не найдены.');
+            return;
+        }
+
+        const objName = objNames[objectIndex];
+        const orgName = orgNames[orgIndex];
+
+        const userIds = Object.values(selectedUsers).filter(uid => uid);
+
+        await setNeedUsers(orgName, objName, userIds);
+        clearConfigCache();
+
+        delete ctx.state.userStates[userId][stateKey];
+
+        await ctx.reply(`✅ Настройки сохранены для организации "${orgName}" и объекта "${objName}". Выбрано пользователей: ${userIds.length}`);
+
+        await showNeedsAssignOrganizations(ctx, objectIndex);
+    });
+
     // Экспортируем функции для использования в других модулях
     exportedFunctions.showOrganizationsList = showOrganizationsList;
     exportedFunctions.showObjectsList = showObjectsList;

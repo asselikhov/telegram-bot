@@ -5,6 +5,7 @@ const { getAllObjects } = require('./objectModel');
 const { getOrganizationObjects: getOrgObjects, getAllOrganizationObjects } = require('./organizationObjectModel');
 const { getNotificationSettings: getNotifSettings, getAllNotificationSettings: getAllNotifSettings } = require('./notificationSettingsModel');
 const { getReportUsers: getReportUsersModel, getAllReportUsers: getAllReportUsersModel } = require('./objectReportUsersModel');
+const { getNeedUsers: getNeedUsersModel, getAllNeedUsers: getAllNeedUsersModel } = require('./objectNeedUsersModel');
 
 // Создаем кэш с TTL 5 минут (300 секунд)
 const configCache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
@@ -17,7 +18,8 @@ const CACHE_KEYS = {
     OBJECT_GROUPS: 'object_groups',
     GENERAL_GROUP_CHAT_IDS: 'general_group_chat_ids',
     NOTIFICATION_SETTINGS: 'notification_settings',
-    REPORT_USERS: 'report_users'
+    REPORT_USERS: 'report_users',
+    NEED_USERS: 'need_users'
 };
 
 /**
@@ -220,6 +222,46 @@ async function getAllReportUsersMap() {
     return map;
 }
 
+/**
+ * Получить список пользователей, которые отвечают за потребности для пары организация+объект
+ * @param {string} organizationName - Название организации
+ * @param {string} objectName - Название объекта
+ * @returns {Promise<string[]>} - Массив telegramId пользователей
+ */
+async function getNeedUsers(organizationName, objectName) {
+    const cacheKey = `${CACHE_KEYS.NEED_USERS}_${organizationName}_${objectName}`;
+    const cached = configCache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+    
+    const userIds = await getNeedUsersModel(organizationName, objectName);
+    configCache.set(cacheKey, userIds);
+    return userIds;
+}
+
+/**
+ * Получить все настройки пользователей для потребностей в виде map
+ * @returns {Promise<Object>} - Объект вида { "organizationName_objectName": [userIds] }
+ */
+async function getAllNeedUsersMap() {
+    const cacheKey = `${CACHE_KEYS.NEED_USERS}_all`;
+    const cached = configCache.get(cacheKey);
+    if (cached) {
+        return cached;
+    }
+    
+    const allSettings = await getAllNeedUsersModel();
+    const map = {};
+    allSettings.forEach(setting => {
+        const key = `${setting.organizationName}_${setting.objectName}`;
+        map[key] = setting.userIds || [];
+    });
+    
+    configCache.set(cacheKey, map);
+    return map;
+}
+
 module.exports = {
     getOrganizations,
     getPositions,
@@ -232,6 +274,8 @@ module.exports = {
     getAllNotificationSettings,
     getReportUsers,
     getAllReportUsersMap,
+    getNeedUsers,
+    getAllNeedUsersMap,
     clearConfigCache
 };
 

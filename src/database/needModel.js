@@ -100,6 +100,28 @@ async function loadUserNeeds(userId) {
     return needsMap;
 }
 
+async function loadAllNeeds() {
+    const needsCollection = (await getDb()).collection('needs');
+    const needs = await needsCollection.find({}).sort({ timestamp: -1 }).toArray();
+    const needsMap = {};
+    needs.forEach(row => {
+        needsMap[row.needid] = {
+            needId: row.needid,
+            userId: row.userid,
+            objectName: row.objectname ? row.objectname.trim() : row.objectname,
+            date: row.date,
+            timestamp: row.timestamp,
+            type: row.type,
+            name: row.name,
+            quantity: row.quantity || null,
+            urgency: row.urgency,
+            status: row.status || 'new',
+            fullName: row.fullname || ''
+        };
+    });
+    return needsMap;
+}
+
 async function deleteNeed(userId, needId) {
     if (!needId) {
         throw new Error('needId is required');
@@ -124,4 +146,4 @@ async function deleteNeed(userId, needId) {
     return true;
 }
 
-module.exports = { saveNeed, loadUserNeeds, deleteNeed };
+module.exports = { saveNeed, loadUserNeeds, loadAllNeeds, deleteNeed };
