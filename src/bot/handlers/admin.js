@@ -3633,7 +3633,15 @@ ${objectsList}
 
             await clearPreviousMessages(ctx, userId);
 
-            const dateNeeds = sortedNeeds.filter(([_, n]) => parseAndFormatDate(n.date) === selectedDate);
+            // Фильтруем заявки по выбранной дате
+            const dateNeeds = sortedNeeds.filter(([_, n]) => {
+                const needDate = parseAndFormatDate(n.date);
+                return needDate === selectedDate;
+            });
+
+            if (dateNeeds.length === 0) {
+                return ctx.reply(`Нет заявок для объекта "${objectName}" за ${selectedDate}.`);
+            }
 
             const itemsPerPage = 10;
             const totalPages = Math.ceil(dateNeeds.length / itemsPerPage);
@@ -3641,10 +3649,6 @@ ${objectsList}
             const startIndex = pageNum * itemsPerPage;
             const endIndex = Math.min(startIndex + itemsPerPage, dateNeeds.length);
             const currentNeeds = dateNeeds.slice(startIndex, endIndex);
-
-            if (currentNeeds.length === 0) {
-                return ctx.reply('Ошибка: нет заявок для отображения.');
-            }
 
             const { escapeHtml } = require('../utils/htmlHelper');
             const TYPE_NAMES = {
