@@ -24,13 +24,15 @@ async function saveReport(userId, report) {
     const reportsCollection = (await getDb()).collection('reports');
     const { reportId, userId: reportUserId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
     const normalizedMessageLink = normalizeMessageLink(messageLink);
+    // Нормализуем название объекта (убираем пробелы в начале и конце)
+    const normalizedObjectName = objectName ? objectName.trim() : objectName;
     await reportsCollection.updateOne(
         { reportid: reportId },
         {
             $set: {
                 reportid: reportId,
                 userid: reportUserId || userId,
-                objectname: objectName,
+                objectname: normalizedObjectName,
                 date,
                 timestamp,
                 workdone: workDone,
@@ -68,7 +70,7 @@ async function loadUserReports(userId) {
         reportsMap[row.reportid] = {
             reportId: row.reportid,
             userId: row.userid,
-            objectName: row.objectname,
+            objectName: row.objectname ? row.objectname.trim() : row.objectname,
             date: row.date,
             timestamp: row.timestamp,
             workDone: row.workdone,
@@ -121,7 +123,7 @@ async function loadAllReports() {
         reportsMap[row.reportid] = {
             reportId: row.reportid,
             userId: row.userid,
-            objectName: row.objectname,
+            objectName: row.objectname ? row.objectname.trim() : row.objectname,
             date: row.date,
             timestamp: row.timestamp,
             workDone: row.workdone,

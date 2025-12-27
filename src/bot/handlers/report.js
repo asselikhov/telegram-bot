@@ -92,7 +92,11 @@ async function downloadReportFile(ctx, objectIndex) {
     }
 
     const allReports = await loadAllReports();
-    const objectReports = Object.values(allReports).filter(report => report.objectName === objectName);
+    // Нормализуем названия объектов для сравнения (убираем пробелы в начале и конце)
+    const normalizedObjectName = objectName.trim();
+    const objectReports = Object.values(allReports).filter(report => 
+        report.objectName && report.objectName.trim() === normalizedObjectName
+    );
 
     if (objectReports.length === 0) {
         return ctx.reply(`Отчеты для объекта "${objectName}" не найдены.`);
@@ -451,7 +455,11 @@ async function showReportDates(ctx, objectIndex, page = 0) {
 
     await clearPreviousMessages(ctx, userId);
 
-    const objectReports = Object.values(reports).filter(r => r.objectName === objectName);
+    // Нормализуем названия объектов для сравнения (убираем пробелы в начале и конце)
+    const normalizedObjectName = objectName && objectName.trim();
+    const objectReports = Object.values(reports).filter(r => 
+        r.objectName && r.objectName.trim() === normalizedObjectName
+    );
     const sortedReports = objectReports.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     const uniqueDates = [...new Set(sortedReports.map(r => parseAndFormatDate(r.date)))];
 
@@ -493,7 +501,11 @@ async function showReportTimestamps(ctx, objectIndex, dateIndex, page = 0) {
     const reports = await loadUserReports(userId);
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const objectName = uniqueObjects[objectIndex];
-    const objectReports = Object.entries(reports).filter(([_, r]) => r.objectName === objectName);
+    // Нормализуем названия объектов для сравнения (убираем пробелы в начале и конце)
+    const normalizedObjectName = objectName && objectName.trim();
+    const objectReports = Object.entries(reports).filter(([_, r]) => 
+        r.objectName && r.objectName.trim() === normalizedObjectName
+    );
 
     const sortedReports = objectReports.sort((a, b) => a[1].timestamp.localeCompare(b[1].timestamp));
     const uniqueDates = [...new Set(sortedReports.map(([, r]) => parseAndFormatDate(r.date)))];
@@ -566,7 +578,11 @@ ${report.materials}
     `.trim();
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
-    const uniqueDates = [...new Set(Object.values(reports).filter(r => r.objectName === report.objectName).map(r => parseAndFormatDate(r.date)))];
+    // Нормализуем названия объектов для сравнения
+    const normalizedReportObjectName = report.objectName && report.objectName.trim();
+    const uniqueDates = [...new Set(Object.values(reports).filter(r => 
+        r.objectName && r.objectName.trim() === normalizedReportObjectName
+    ).map(r => parseAndFormatDate(r.date)))];
     const buttons = [
         [Markup.button.callback('✏️ Редактировать', `edit_report_${reportId}`)],
         [Markup.button.callback('↩️ Назад', `select_report_date_${uniqueObjects.indexOf(report.objectName)}_${uniqueDates.indexOf(formattedDate)}`)]

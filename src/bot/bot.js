@@ -106,7 +106,11 @@ async function sendReportReminders() {
         
         // Проверяем, должен ли этот пользователь подавать отчет по этому объекту
         if (reportUsers && reportUsers.includes(userId)) {
-          const hasReport = todayReports.some(report => report.objectName === objectName);
+          // Нормализуем названия объектов для сравнения (убираем пробелы в начале и конце)
+          const normalizedObjectName = objectName && objectName.trim();
+          const hasReport = todayReports.some(report => 
+              report.objectName && report.objectName.trim() === normalizedObjectName
+          );
           if (!hasReport) {
             const groupChatId = objectGroups[objectName];
             if (groupChatId) {

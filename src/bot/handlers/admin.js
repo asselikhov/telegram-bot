@@ -130,7 +130,11 @@ async function getUsersByObject(objectName) {
 
 async function getReportsByObject(objectName) {
     const allReports = await loadAllReports();
-    return Object.values(allReports).filter(report => report.objectName === objectName);
+    // Нормализуем названия объектов для сравнения (убираем пробелы в начале и конце)
+    const normalizedObjectName = objectName && objectName.trim();
+    return Object.values(allReports).filter(report => 
+        report.objectName && report.objectName.trim() === normalizedObjectName
+    );
 }
 
 // Экспортируем функции для использования в других модулях
