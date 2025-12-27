@@ -34,9 +34,10 @@ async function showDownloadReport(ctx, page = 0) {
         return ctx.reply('У вас нет прав для выгрузки отчетов.');
     }
 
+    // Показываем только объекты организации пользователя
     const userOrganization = users[userId].organization;
     const availableObjects = await getOrganizationObjects(userOrganization);
-
+    
     if (!availableObjects.length) {
         return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
     }
@@ -83,6 +84,8 @@ function parseDateFromDDMMYYYY(dateString) {
 async function downloadReportFile(ctx, objectIndex) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
+    
+    // Получаем объект из списка объектов организации пользователя
     const userOrganization = users[userId].organization;
     const availableObjects = await getOrganizationObjects(userOrganization);
     const objectName = availableObjects[objectIndex];
@@ -91,22 +94,9 @@ async function downloadReportFile(ctx, objectIndex) {
         return ctx.reply('Ошибка: объект не найден.');
     }
 
+    // Фильтруем отчеты только по названию объекта (независимо от организации)
     const allReports = await loadAllReports();
-    // Нормализуем названия объектов для сравнения (убираем пробелы в начале и конце)
-    const normalizedObjectName = objectName ? objectName.trim() : objectName;
-    
-    // Диагностика: выводим информацию о поиске
-    const allObjectNames = [...new Set(Object.values(allReports).map(r => r.objectName).filter(Boolean))];
-    const normalizedAllObjectNames = allObjectNames.map(n => n.trim());
-    
-    console.log(`=== ДИАГНОСТИКА ПОИСКА ОТЧЕТОВ ===`);
-    console.log(`Искомое название объекта: "${objectName}" (нормализованное: "${normalizedObjectName}")`);
-    console.log(`Всего отчетов в базе: ${Object.values(allReports).length}`);
-    console.log(`Уникальные названия объектов в отчетах:`, allObjectNames);
-    console.log(`Нормализованные названия:`, normalizedAllObjectNames);
-    console.log(`Совпадение найдено:`, normalizedAllObjectNames.includes(normalizedObjectName));
-    console.log(`================================`);
-    
+    const normalizedObjectName = objectName.trim();
     const objectReports = Object.values(allReports).filter(report => {
         if (!report.objectName) return false;
         const normalizedReportObjectName = report.objectName.trim();
@@ -258,9 +248,10 @@ async function showDownloadUsers(ctx, page = 0) {
         return ctx.reply('У вас нет прав для выгрузки данных.');
     }
 
+    // Показываем только объекты организации пользователя
     const userOrganization = users[userId].organization;
     const availableObjects = await getOrganizationObjects(userOrganization);
-
+    
     if (!availableObjects.length) {
         return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
     }
@@ -302,6 +293,8 @@ async function showDownloadUsers(ctx, page = 0) {
 async function downloadUsersFile(ctx, objectIndex) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
+
+    // Получаем объект из списка объектов организации пользователя
     const userOrganization = users[userId].organization;
     const availableObjects = await getOrganizationObjects(userOrganization);
     const objectName = availableObjects[objectIndex];
@@ -311,10 +304,13 @@ async function downloadUsersFile(ctx, objectIndex) {
     }
 
     // Получаем всех пользователей, у которых выбранный объект есть в selectedObjects (независимо от организации)
+    // Используем нормализованное сравнение названий объектов
+    const normalizedObjectName = objectName.trim();
     const allUsers = await loadUsers();
-    const objectUsers = Object.entries(allUsers).filter(([_, user]) => 
-        Array.isArray(user.selectedObjects) && user.selectedObjects.includes(objectName)
-    );
+    const objectUsers = Object.entries(allUsers).filter(([_, user]) => {
+        if (!Array.isArray(user.selectedObjects)) return false;
+        return user.selectedObjects.some(obj => obj && obj.trim() === normalizedObjectName);
+    });
 
     if (objectUsers.length === 0) {
         return ctx.reply(`Пользователи для объекта "${objectName}" не найдены.`);
