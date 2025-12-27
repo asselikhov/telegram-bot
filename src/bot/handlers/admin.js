@@ -3613,7 +3613,17 @@ ${objectsList}
                 n.objectName && n.objectName.trim() === normalizedObjectName
             );
             const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
-            const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+            // Получаем уникальные даты и сортируем их в обратном порядке (новые первыми)
+            const uniqueDatesArray = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+            // Сортируем даты в обратном порядке для единообразия
+            const uniqueDates = uniqueDatesArray.sort((a, b) => {
+                // Парсим даты в формате ДД.ММ.ГГГГ для сравнения
+                const parseDate = (dateStr) => {
+                    const [day, month, year] = dateStr.split('.').map(Number);
+                    return new Date(year, month - 1, day);
+                };
+                return parseDate(b).getTime() - parseDate(a).getTime();
+            });
             
             // Используем текущий список дат для данного объекта
             const selectedDate = uniqueDates[dateIndex];
@@ -3711,7 +3721,17 @@ ${objectsList}
                 n.objectName && n.objectName.trim() === normalizedObjectName
             );
             const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
-            const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+            // Получаем уникальные даты и сортируем их в обратном порядке (новые первыми)
+            const uniqueDatesArray = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+            // Сортируем даты в обратном порядке для единообразия
+            const uniqueDates = uniqueDatesArray.sort((a, b) => {
+                // Парсим даты в формате ДД.ММ.ГГГГ для сравнения
+                const parseDate = (dateStr) => {
+                    const [day, month, year] = dateStr.split('.').map(Number);
+                    return new Date(year, month - 1, day);
+                };
+                return parseDate(b).getTime() - parseDate(a).getTime();
+            });
 
             const itemsPerPage = 10;
             const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
