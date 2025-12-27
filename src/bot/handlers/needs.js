@@ -541,9 +541,16 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
             return ctx.reply('Ошибка: нет дат для отображения.');
         }
 
-        const dateButtons = currentDates.map((date, index) =>
-            [Markup.button.callback(date, `manage_needs_object_${objectIndex}_date_${startIndex + index}`)]
-        ).reverse();
+            // Сохраняем список дат в state для использования при выборе даты
+            const state = ensureUserState(ctx);
+            if (state) {
+                state.managedNeedsDatesList = uniqueDates;
+            }
+
+            const dateButtons = currentDates.map((date, index) => {
+                const dateIndexInFullList = uniqueDates.indexOf(date);
+                return [Markup.button.callback(date, `manage_needs_object_${objectIndex}_date_${dateIndexInFullList}`)];
+            }).reverse();
 
         const buttons = [];
         const paginationButtons = [];
@@ -620,7 +627,18 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
 
         const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
         const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
-        const selectedDate = uniqueDates[dateIndex];
+        
+        // Используем сохраненный список дат из state, если он есть, иначе используем текущий
+        const state = ensureUserState(ctx);
+        let datesList = uniqueDates;
+        if (state && state.managedNeedsDatesList && state.managedNeedsDatesList.length === uniqueDates.length) {
+            datesList = state.managedNeedsDatesList;
+        }
+        
+        const selectedDate = datesList[dateIndex];
+        if (!selectedDate) {
+            return ctx.reply('Ошибка: дата не найдена.');
+        }
 
         await clearPreviousMessages(ctx, userId);
 

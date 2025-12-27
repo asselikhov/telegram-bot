@@ -3553,7 +3553,18 @@ ${objectsList}
             );
             const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
             const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
-            const selectedDate = uniqueDates[dateIndex];
+            
+            // Используем сохраненный список дат из state, если он есть, иначе используем текущий
+            const state = ensureUserState(ctx);
+            let datesList = uniqueDates;
+            if (state && state.adminNeedsDatesList && state.adminNeedsDatesList.length === uniqueDates.length) {
+                datesList = state.adminNeedsDatesList;
+            }
+            
+            const selectedDate = datesList[dateIndex];
+            if (!selectedDate) {
+                return ctx.reply('Ошибка: дата не найдена.');
+            }
 
             const dateNeeds = sortedNeeds.filter(([_, n]) => parseAndFormatDate(n.date) === selectedDate);
 
@@ -3647,9 +3658,16 @@ ${objectsList}
                 return ctx.reply('Ошибка: нет дат для отображения.');
             }
 
-            const dateButtons = currentDates.map((date, index) =>
-                [Markup.button.callback(date, `admin_needs_object_${objectIndex}_date_${startIndex + index}`)]
-            ).reverse();
+            // Сохраняем список дат в state для использования при выборе даты
+            const state = ensureUserState(ctx);
+            if (state) {
+                state.adminNeedsDatesList = uniqueDates;
+            }
+
+            const dateButtons = currentDates.map((date, index) => {
+                const dateIndexInFullList = uniqueDates.indexOf(date);
+                return [Markup.button.callback(date, `admin_needs_object_${objectIndex}_date_${dateIndexInFullList}`)];
+            }).reverse();
 
             const buttons = [];
             const paginationButtons = [];
