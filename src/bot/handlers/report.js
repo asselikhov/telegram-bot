@@ -93,10 +93,25 @@ async function downloadReportFile(ctx, objectIndex) {
 
     const allReports = await loadAllReports();
     // Нормализуем названия объектов для сравнения (убираем пробелы в начале и конце)
-    const normalizedObjectName = objectName.trim();
-    const objectReports = Object.values(allReports).filter(report => 
-        report.objectName && report.objectName.trim() === normalizedObjectName
-    );
+    const normalizedObjectName = objectName ? objectName.trim() : objectName;
+    
+    // Диагностика: выводим информацию о поиске
+    const allObjectNames = [...new Set(Object.values(allReports).map(r => r.objectName).filter(Boolean))];
+    const normalizedAllObjectNames = allObjectNames.map(n => n.trim());
+    
+    console.log(`=== ДИАГНОСТИКА ПОИСКА ОТЧЕТОВ ===`);
+    console.log(`Искомое название объекта: "${objectName}" (нормализованное: "${normalizedObjectName}")`);
+    console.log(`Всего отчетов в базе: ${Object.values(allReports).length}`);
+    console.log(`Уникальные названия объектов в отчетах:`, allObjectNames);
+    console.log(`Нормализованные названия:`, normalizedAllObjectNames);
+    console.log(`Совпадение найдено:`, normalizedAllObjectNames.includes(normalizedObjectName));
+    console.log(`================================`);
+    
+    const objectReports = Object.values(allReports).filter(report => {
+        if (!report.objectName) return false;
+        const normalizedReportObjectName = report.objectName.trim();
+        return normalizedReportObjectName === normalizedObjectName;
+    });
 
     if (objectReports.length === 0) {
         return ctx.reply(`Отчеты для объекта "${objectName}" не найдены.`);
