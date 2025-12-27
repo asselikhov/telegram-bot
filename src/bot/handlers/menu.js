@@ -45,6 +45,8 @@ async function showMainMenu(ctx) {
     if (user.isApproved) {
         buttons.splice(1, 0, [Markup.button.callback('📤 Выгрузить', 'download_report')]);
     }
+    buttons.push([Markup.button.callback('🚨 Проблемы', 'problems')]);
+    buttons.push([Markup.button.callback('📦 Потребности', 'needs')]);
     if (userId === ADMIN_ID) {
         buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);
     }
@@ -209,6 +211,36 @@ module.exports = (bot) => {
         }
         const message = await ctx.reply('Введите новый контактный телефон:');
         addMessageId(ctx, message.message_id);
+    });
+
+    bot.action('problems', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        await clearPreviousMessages(ctx, userId);
+        
+        try {
+            const message = await ctx.reply('🚨 Проблемы\n\nЭта функция находится в разработке.', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', 'main_menu')]
+            ]));
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в обработчике problems:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
+    });
+
+    bot.action('needs', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        await clearPreviousMessages(ctx, userId);
+        
+        try {
+            const message = await ctx.reply('📦 Потребности\n\nЭта функция находится в разработке.', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', 'main_menu')]
+            ]));
+            addMessageId(ctx, message.message_id);
+        } catch (error) {
+            console.error('Ошибка в обработчике needs:', error);
+            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+        }
     });
 };
 
