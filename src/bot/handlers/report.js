@@ -3,7 +3,7 @@ const ExcelJS = require('exceljs');
 const { loadUsers, saveUser } = require('../../database/userModel');
 const { loadUserReports, loadAllReports, saveReport } = require('../../database/reportModel');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
-const { getOrganizationObjects, getObjects, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap, getReportUsers } = require('../../database/configService');
+const { getOrganizationObjects, getObjects, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap, getReportUsers, getAllReportUsersMap, getAllNeedUsersMap } = require('../../database/configService');
 const { addMessageId } = require('../utils/stateHelper');
 const { escapeHtml } = require('../utils/htmlHelper');
 
@@ -356,22 +356,63 @@ async function downloadUsersFile(ctx, objectIndex) {
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 
+    // Получаем карты ответственных пользователей для отчетов и потребностей
+    const reportUsersMap = await getAllReportUsersMap();
+    const needUsersMap = await getAllNeedUsersMap();
+    
+    // Функция для определения ответственности пользователя
+    const getUserResponsibilities = (userId, user) => {
+        if (!user.organization || !user.selectedObjects || user.selectedObjects.length === 0) {
+            return '-';
+        }
+        
+        const orgName = user.organization;
+        const userObjects = Array.isArray(user.selectedObjects) ? user.selectedObjects : [];
+        
+        let isReportUser = false;
+        let isNeedUser = false;
+        
+        // Проверяем для каждого объекта пользователя
+        for (const objName of userObjects) {
+            const reportKey = `${orgName}_${objName}`;
+            const needKey = `${orgName}_${objName}`;
+            
+            if (reportUsersMap[reportKey] && reportUsersMap[reportKey].includes(userId)) {
+                isReportUser = true;
+            }
+            if (needUsersMap[needKey] && needUsersMap[needKey].includes(userId)) {
+                isNeedUser = true;
+            }
+        }
+        
+        if (isReportUser && isNeedUser) {
+            return 'Отчеты, потребности';
+        } else if (isReportUser) {
+            return 'Отчеты';
+        } else if (isNeedUser) {
+            return 'Потребности';
+        }
+        
+        return '-';
+    };
+
     // Заголовок
-    worksheet.mergeCells('A1:F1');
+    worksheet.mergeCells('A1:G1');
     const titleCell = worksheet.getCell('A1');
     titleCell.value = objectName;
     titleCell.style = titleStyle;
 
     // Заголовки колонок
     const headerRow = worksheet.getRow(2);
-    headerRow.values = ['Должность', 'Организация', 'ФИО', 'Контактный телефон', 'Дата рождения', 'Статус'];
+    headerRow.values = ['Должность', 'Организация', 'ФИО', 'Контактный телефон', 'Дата рождения', 'Ответственный', 'Статус'];
     headerRow.eachCell((cell, colNumber) => {
         cell.style = headerStyle;
     });
 
     // Данные
     let currentRow = 3;
-    for (const [userId, user] of objectUsers) {
+    for (const [uid, user] of objectUsers) {
+        const responsible = getUserResponsibilities(uid, user);
         const row = worksheet.getRow(currentRow);
         row.values = [
             user.position || 'Не указано',
@@ -379,6 +420,7 @@ async function downloadUsersFile(ctx, objectIndex) {
             user.fullName || 'Не указано',
             user.phone || 'Не указано',
             user.birthdate || 'Не указано',
+            responsible,
             user.status || 'Не указан'
         ];
         
@@ -388,7 +430,8 @@ async function downloadUsersFile(ctx, objectIndex) {
         row.getCell(3).style = paddedCellStyle; // ФИО
         row.getCell(4).style = paddedCellStyle; // Контактный телефон
         row.getCell(5).style = centeredCellStyle; // Дата рождения
-        row.getCell(6).style = centeredCellStyle; // Статус
+        row.getCell(6).style = centeredCellStyle; // Ответственный
+        row.getCell(7).style = centeredCellStyle; // Статус
         
         currentRow++;
     }
@@ -400,6 +443,7 @@ async function downloadUsersFile(ctx, objectIndex) {
         { key: 'fullName', width: 30 },
         { key: 'phone', width: 20 },
         { key: 'birthdate', width: 15 },
+        { key: 'responsible', width: 25 },
         { key: 'status', width: 15 }
     ];
 
