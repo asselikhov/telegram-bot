@@ -108,26 +108,45 @@ async function incrementNextReportId(telegramId) {
     }
     const usersCollection = (await getDb()).collection('users');
     try {
-        // Используем findOneAndUpdate с $inc для атомарного инкремента
+        // Сначала проверяем, существует ли пользователь
+        const existingUser = await usersCollection.findOne({ telegramId });
+        
+        if (!existingUser) {
+            // Если пользователя нет, создаем его с nextReportId = 1, затем инкрементируем до 2
+            // Первый отчет будет с ID _1, что правильно
+            await usersCollection.updateOne(
+                { telegramId },
+                { 
+                    $set: { 
+                        telegramId,
+                        nextReportId: 1,
+                        fullName: '',
+                        position: '',
+                        organization: '',
+                        selectedObjects: [],
+                        status: 'В работе',
+                        isApproved: 0,
+                        reports: {},
+                        phone: '',
+                        birthdate: null,
+                        createdAt: new Date()
+                    }
+                },
+                { upsert: true }
+            );
+        }
+        
+        // Теперь безопасно инкрементируем nextReportId
         const result = await usersCollection.findOneAndUpdate(
             { telegramId },
-            { 
-                $inc: { nextReportId: 1 },
-                $setOnInsert: { nextReportId: 1 } // Если пользователь не существует, создаем с nextReportId = 1
-            },
-            { 
-                upsert: true,
-                returnDocument: 'after'
-            }
+            { $inc: { nextReportId: 1 } },
+            { returnDocument: 'after' }
         );
         
         if (!result.value) {
             throw new Error(`Failed to increment nextReportId for user ${telegramId}`);
         }
         
-        // Возвращаем инкрементированное значение
-        // Если пользователь был создан только что, nextReportId будет 1 (setOnInsert)
-        // После инкремента будет 2, но это правильно, так как первый отчет будет с ID _1
         const newValue = result.value.nextReportId || 1;
         return newValue;
     } catch (error) {
