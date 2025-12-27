@@ -3504,6 +3504,12 @@ ${objectsList}
                 return;
             }
 
+            // Сохраняем список объектов в state для использования при выборе объекта
+            const state = ensureUserState(ctx);
+            if (state) {
+                state.adminNeedsObjectsList = uniqueObjects;
+            }
+
             const itemsPerPage = 10;
             const totalPages = Math.ceil(uniqueObjects.length / itemsPerPage);
             const pageNum = typeof page === 'number' ? page : 0;
@@ -3543,7 +3549,16 @@ ${objectsList}
 
         try {
             const allNeeds = await loadAllNeeds();
-            const uniqueObjects = [...new Set(Object.values(allNeeds).map(n => n.objectName))];
+            const state = ensureUserState(ctx);
+            let uniqueObjects;
+            if (state && state.adminNeedsObjectsList) {
+                uniqueObjects = state.adminNeedsObjectsList;
+            } else {
+                uniqueObjects = [...new Set(Object.values(allNeeds).map(n => n.objectName))];
+                if (state) {
+                    state.adminNeedsObjectsList = uniqueObjects;
+                }
+            }
             const objectName = uniqueObjects[objectIndex];
 
             await clearPreviousMessages(ctx, userId);
@@ -3556,7 +3571,6 @@ ${objectsList}
             const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
             
             // Используем сохраненный список дат из state, если он есть, иначе используем текущий
-            const state = ensureUserState(ctx);
             let datesList = uniqueDates;
             if (state && state.adminNeedsDatesList && state.adminNeedsDatesList.length === uniqueDates.length) {
                 datesList = state.adminNeedsDatesList;
@@ -3636,17 +3650,26 @@ ${objectsList}
 
         try {
             const allNeeds = await loadAllNeeds();
-            const uniqueObjects = [...new Set(Object.values(allNeeds).map(n => n.objectName))];
+            const state = ensureUserState(ctx);
+            let uniqueObjects;
+            if (state && state.adminNeedsObjectsList) {
+                uniqueObjects = state.adminNeedsObjectsList;
+            } else {
+                uniqueObjects = [...new Set(Object.values(allNeeds).map(n => n.objectName))];
+                if (state) {
+                    state.adminNeedsObjectsList = uniqueObjects;
+                }
+            }
             const objectName = uniqueObjects[objectIndex];
 
             await clearPreviousMessages(ctx, userId);
 
             const normalizedObjectName = objectName && objectName.trim();
-            const objectNeeds = Object.values(allNeeds).filter(n =>
+            const objectNeeds = Object.entries(allNeeds).filter(([_, n]) =>
                 n.objectName && n.objectName.trim() === normalizedObjectName
             );
-            const sortedNeeds = objectNeeds.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-            const uniqueDates = [...new Set(sortedNeeds.map(n => parseAndFormatDate(n.date)))];
+            const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
+            const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
 
             const itemsPerPage = 10;
             const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
@@ -3660,7 +3683,6 @@ ${objectsList}
             }
 
             // Сохраняем список дат в state для использования при выборе даты
-            const state = ensureUserState(ctx);
             if (state) {
                 state.adminNeedsDatesList = uniqueDates;
             }
