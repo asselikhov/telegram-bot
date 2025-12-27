@@ -7,6 +7,7 @@ const { showObjectSelection } = require('../actions/objects');
 const { showProfile, showMainMenu } = require('./menu');
 const { saveReport, loadUserReports } = require('../../database/reportModel');
 const { saveNeed, loadUserNeeds } = require('../../database/needModel');
+const { notifyResponsibleUsersNewNeed } = require('./needs');
 const { ADMIN_ID } = require('../../config/config');
 const {
     createOrganization, updateOrganization, organizationExists
@@ -1490,6 +1491,13 @@ ${escapeHtml(report.materials)}</blockquote>
 
         try {
             await saveNeed(userId, need);
+            
+            // Уведомляем ответственных пользователей о новой заявке
+            const user = users[userId];
+            if (user && user.organization) {
+                await notifyResponsibleUsersNewNeed(ctx.telegram, need, user.organization);
+            }
+            
             const { showNeedsMenu } = require('./needs');
             await ctx.reply('✅ Заявка успешно создана!');
             delete ctx.state.userStates[userId];

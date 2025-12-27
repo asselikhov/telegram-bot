@@ -73,6 +73,7 @@ const {
     validateTimeFormat 
 } = require('../utils/notificationHelper');
 const { ensureUserState, addMessageId } = require('../utils/stateHelper');
+const { notifyNeedAuthorStatusChange } = require('./needs');
 
 async function showAdminPanel(ctx) {
     const userId = ctx.from.id.toString();
@@ -3883,9 +3884,16 @@ ${objectsList}
                 return ctx.reply('Ошибка: заявка не найдена.');
             }
 
+            const oldStatus = need.status;
             need.status = status;
             await saveNeed(need.userId, need);
             clearConfigCache();
+            
+            // Уведомляем автора заявки об изменении статуса
+            if (oldStatus !== status) {
+                await notifyNeedAuthorStatusChange(ctx.telegram, need, oldStatus, status);
+            }
+            
             await clearPreviousMessages(ctx, userId);
             const message = await ctx.reply('✅ Статус обновлен.', Markup.inlineKeyboard([
                 [Markup.button.callback('↩️ Назад', `admin_select_need_${needId}`)]

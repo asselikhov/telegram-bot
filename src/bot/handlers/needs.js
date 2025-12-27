@@ -33,6 +33,68 @@ const STATUS_NAMES = {
     'rejected': 'Отклонена'
 };
 
+async function notifyNeedAuthorStatusChange(telegram, need, oldStatus, newStatus) {
+    try {
+        const oldStatusName = STATUS_NAMES[oldStatus] || oldStatus;
+        const newStatusName = STATUS_NAMES[newStatus] || newStatus;
+        const typeName = TYPE_NAMES[need.type] || need.type;
+        
+        const notificationText = `📦 Изменен статус вашей заявки на потребности\n\n` +
+            `Объект: ${need.objectName}\n` +
+            `Тип: ${typeName}\n` +
+            `Наименование: ${need.name}\n` +
+            `Статус изменен: ${oldStatusName} → ${newStatusName}`;
+        
+        await telegram.sendMessage(need.userId, notificationText).catch(err => {
+            console.error(`Ошибка отправки уведомления пользователю ${need.userId}:`, err);
+        });
+    } catch (error) {
+        console.error('Ошибка в notifyNeedAuthorStatusChange:', error);
+    }
+}
+
+async function notifyResponsibleUsersNewNeed(telegram, need, userOrganization) {
+    try {
+        const typeName = TYPE_NAMES[need.type] || need.type;
+        const urgencyInfo = URGENCY_NAMES[need.urgency] || { name: need.urgency, emoji: '' };
+        const { loadUsers } = require('../../database/userModel');
+        const users = await loadUsers();
+        const author = users[need.userId] || {};
+        const authorName = author.fullName || need.userId;
+        
+        let notificationText = `📦 Новая заявка на потребности\n\n` +
+            `Объект: ${need.objectName}\n` +
+            `Автор: ${authorName}\n` +
+            `Тип: ${typeName}\n` +
+            `Наименование: ${need.name}\n`;
+        
+        if (need.quantity !== null && need.quantity !== undefined) {
+            notificationText += `Количество: ${need.quantity}\n`;
+        }
+        notificationText += `Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}\n`;
+        notificationText += `Дата: ${need.date}`;
+        
+        // Get responsible users for this organization-object pair
+        const { getNeedUsers } = require('../../database/configService');
+        const responsibleUserIds = await getNeedUsers(userOrganization, need.objectName);
+        
+        if (!responsibleUserIds || responsibleUserIds.length === 0) {
+            return; // No responsible users to notify
+        }
+        
+        // Send notification to each responsible user
+        const notificationPromises = responsibleUserIds.map(respUserId => {
+            return telegram.sendMessage(respUserId, notificationText).catch(err => {
+                console.error(`Ошибка отправки уведомления ответственному пользователю ${respUserId}:`, err);
+            });
+        });
+        
+        await Promise.all(notificationPromises);
+    } catch (error) {
+        console.error('Ошибка в notifyResponsibleUsersNewNeed:', error);
+    }
+}
+
 async function showNeedsMenu(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
@@ -1089,8 +1151,15 @@ module.exports = (bot) => {
                 return ctx.reply('У вас нет прав для изменения статуса этой заявки.');
             }
 
+            const oldStatus = need.status;
             need.status = status;
             await saveNeed(need.userId, need);
+            
+            // Уведомляем автора заявки об изменении статуса
+            if (oldStatus !== status) {
+                await notifyNeedAuthorStatusChange(ctx.telegram, need, oldStatus, status);
+            }
+            
             await clearPreviousMessages(ctx, userId);
             const message = await ctx.reply('✅ Статус обновлен.', Markup.inlineKeyboard([
                 [Markup.button.callback('↩️ Назад', `manage_select_need_${needId}`)]
@@ -1152,3 +1221,5 @@ module.exports = (bot) => {
 };
 
 module.exports.showNeedsMenu = showNeedsMenu;
+module.exports.notifyNeedAuthorStatusChange = notifyNeedAuthorStatusChange;
+module.exports.notifyResponsibleUsersNewNeed = notifyResponsibleUsersNewNeed;
