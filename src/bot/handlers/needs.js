@@ -603,11 +603,10 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
             return ctx.reply('Ошибка: нет дат для отображения.');
         }
 
-            // Сохраняем список дат в state для использования при выборе даты
-            const state = ensureUserState(ctx);
-            if (state) {
-                state.managedNeedsDatesList = uniqueDates;
-            }
+        // Сохраняем список дат в state для использования при выборе даты
+        if (state) {
+            state.managedNeedsDatesList = uniqueDates;
+        }
 
             const dateButtons = currentDates.map((date, index) => {
                 const dateIndexInFullList = uniqueDates.indexOf(date);
@@ -691,7 +690,6 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
         const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
         
         // Используем сохраненный список дат из state, если он есть, иначе используем текущий
-        const state = ensureUserState(ctx);
         let datesList = uniqueDates;
         if (state && state.managedNeedsDatesList && state.managedNeedsDatesList.length === uniqueDates.length) {
             datesList = state.managedNeedsDatesList;
