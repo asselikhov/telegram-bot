@@ -6,6 +6,7 @@ const { loadInviteCode, markInviteCodeAsUsed, validateInviteCode } = require('..
 const { showObjectSelection } = require('../actions/objects');
 const { showProfile, showMainMenu } = require('./menu');
 const { saveReport, loadUserReports } = require('../../database/reportModel');
+const { saveNeed, loadUserNeeds } = require('../../database/needModel');
 const { ADMIN_ID } = require('../../config/config');
 const {
     createOrganization, updateOrganization, organizationExists
@@ -26,6 +27,7 @@ const {
     validateTimeFormat
 } = require('../utils/notificationHelper');
 const { escapeHtml } = require('../utils/htmlHelper');
+const { addMessageId } = require('../utils/stateHelper');
 
 const mediaGroups = new Map();
 
@@ -271,6 +273,124 @@ module.exports = (bot) => {
                     ])
                 );
                 state.messageIds = [editMessage.message_id];
+                break;
+
+            // Обработка создания заявки на потребности
+            case 'needName':
+                const name = ctx.message.text.trim();
+                if (!name) {
+                    const msg = await ctx.reply('Наименование не может быть пустым. Введите снова:');
+                    state.messageIds.push(msg.message_id);
+                    return;
+                }
+                state.need.name = name;
+                state.step = 'needQuantity';
+                const quantityMessage = await ctx.reply(
+                    '🔢 Введите количество (или нажмите "Пропустить"):',
+                    Markup.inlineKeyboard([[Markup.button.callback('⏭️ Пропустить', 'skip_need_quantity')]])
+                );
+                state.messageIds = [quantityMessage.message_id];
+                break;
+
+            case 'needQuantity':
+                const quantityText = ctx.message.text.trim();
+                const quantity = parseFloat(quantityText);
+                if (isNaN(quantity) || quantity < 0) {
+                    const msg = await ctx.reply('Введите корректное число (или нажмите "Пропустить"):');
+                    state.messageIds.push(msg.message_id);
+                    return;
+                }
+                state.need.quantity = quantity;
+                state.step = 'needUrgency';
+                const urgencyMessage = await ctx.reply(
+                    '⏰ Выберите срочность:',
+                    Markup.inlineKeyboard([
+                        [Markup.button.callback('🔥 Срочно', 'set_need_urgency_urgent')],
+                        [Markup.button.callback('⏳ В ближайшее время', 'set_need_urgency_soon')],
+                        [Markup.button.callback('📅 Планово', 'set_need_urgency_planned')]
+                    ])
+                );
+                state.messageIds = [urgencyMessage.message_id];
+                break;
+
+            // Обработка редактирования заявки на потребности
+            case 'editNeedName':
+                const newName = ctx.message.text.trim();
+                if (!newName) {
+                    const msg = await ctx.reply('Наименование не может быть пустым. Введите снова:');
+                    state.messageIds.push(msg.message_id);
+                    return;
+                }
+                try {
+                    const editingNeedId = state.editingNeedId;
+                    if (!editingNeedId) {
+                        await ctx.reply('Ошибка: ID заявки не найден.');
+                        state.step = null;
+                        return;
+                    }
+                    const needs = await loadUserNeeds(userId);
+                    const need = needs[editingNeedId];
+                    if (!need) {
+                        await ctx.reply('Ошибка: заявка не найдена.');
+                        state.step = null;
+                        return;
+                    }
+                    need.name = newName;
+                    await saveNeed(userId, need);
+                    await clearPreviousMessages(ctx, userId);
+                    const message = await ctx.reply('✅ Наименование обновлено.', Markup.inlineKeyboard([
+                        [Markup.button.callback('↩️ Назад', `select_need_item_${editingNeedId}`)]
+                    ]));
+                    addMessageId(ctx, message.message_id);
+                    state.step = null;
+                    delete state.editingNeedId;
+                } catch (error) {
+                    console.error('Ошибка обновления наименования:', error);
+                    await ctx.reply('Ошибка при обновлении наименования. Попробуйте позже.');
+                    state.step = null;
+                }
+                break;
+
+            case 'editNeedQuantity':
+                const quantityInput = ctx.message.text.trim();
+                let newQuantity = null;
+                if (quantityInput !== '0') {
+                    const parsedQuantity = parseFloat(quantityInput);
+                    if (isNaN(parsedQuantity) || parsedQuantity < 0) {
+                        const msg = await ctx.reply('Введите корректное число (или "0" чтобы убрать количество):');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    newQuantity = parsedQuantity;
+                }
+                try {
+                    const editingNeedId = state.editingNeedId;
+                    if (!editingNeedId) {
+                        await ctx.reply('Ошибка: ID заявки не найден.');
+                        state.step = null;
+                        return;
+                    }
+                    const needs = await loadUserNeeds(userId);
+                    const need = needs[editingNeedId];
+                    if (!need) {
+                        await ctx.reply('Ошибка: заявка не найдена.');
+                        state.step = null;
+                        return;
+                    }
+                    need.quantity = newQuantity;
+                    await saveNeed(userId, need);
+                    await clearPreviousMessages(ctx, userId);
+                    const message = await ctx.reply('✅ Количество обновлено.', Markup.inlineKeyboard([
+                        [Markup.button.callback('↩️ Назад', `select_need_item_${editingNeedId}`)]
+                    ]));
+                    addMessageId(ctx, message.message_id);
+                    state.step = null;
+                    delete state.editingNeedId;
+                } catch (error) {
+                    console.error('Ошибка обновления количества:', error);
+                    await ctx.reply('Ошибка при обновлении количества. Попробуйте позже.');
+                    state.step = null;
+                }
                 break;
 
             // Обработка админских шагов
@@ -1090,6 +1210,86 @@ ${escapeHtml(report.materials)}</blockquote>
 
         delete ctx.state.userStates[userId];
         await showMainMenu(ctx);
+    });
+
+    // Обработчики для создания заявки на потребности
+    bot.action('skip_need_quantity', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'needQuantity') return;
+
+        state.need.quantity = null;
+        state.step = 'needUrgency';
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply(
+            '⏰ Выберите срочность:',
+            Markup.inlineKeyboard([
+                [Markup.button.callback('🔥 Срочно', 'set_need_urgency_urgent')],
+                [Markup.button.callback('⏳ В ближайшее время', 'set_need_urgency_soon')],
+                [Markup.button.callback('📅 Планово', 'set_need_urgency_planned')]
+            ])
+        );
+        addMessageId(ctx, message.message_id);
+    });
+
+    bot.action(/set_need_urgency_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'needUrgency' || !state.need) return;
+
+        const urgency = ctx.match[1];
+        state.need.urgency = urgency;
+
+        await clearPreviousMessages(ctx, userId);
+        state.messageIds = [];
+
+        const users = await loadUsers();
+        if (!users[userId]) {
+            await ctx.reply('Ошибка: пользователь не найден в базе данных.');
+            return;
+        }
+
+        // Атомарно инкрементируем nextReportId для генерации ID заявки
+        let nextReportId;
+        try {
+            nextReportId = await incrementNextReportId(userId);
+        } catch (error) {
+            console.error(`Ошибка получения nextReportId для пользователя ${userId}:`, error);
+            await ctx.reply('❌ Ошибка при создании заявки. Пожалуйста, попробуйте позже.');
+            return;
+        }
+
+        const date = new Date();
+        const formattedDate = formatDate(date);
+        const timestamp = date.toISOString();
+        const needId = `need_${formattedDate.replace(/\./g, '_')}_${nextReportId}`;
+
+        const need = {
+            needId,
+            userId,
+            objectName: state.need.objectName,
+            date: formattedDate,
+            timestamp,
+            type: state.need.type,
+            name: state.need.name,
+            quantity: state.need.quantity,
+            urgency: state.need.urgency,
+            status: 'new',
+            fullName: users[userId].fullName || ''
+        };
+
+        try {
+            await saveNeed(userId, need);
+            const { showNeedsMenu } = require('./needs');
+            await ctx.reply('✅ Заявка успешно создана!');
+            delete ctx.state.userStates[userId];
+            await showNeedsMenu(ctx);
+        } catch (error) {
+            console.error(`Ошибка сохранения заявки для пользователя ${userId}:`, error);
+            await ctx.reply('❌ Ошибка при сохранении заявки. Пожалуйста, попробуйте создать заявку заново.');
+            state.step = null;
+            state.need = {};
+        }
     });
 
     bot.action('delete_all_photos', async (ctx) => {

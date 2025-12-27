@@ -229,18 +229,8 @@ module.exports = (bot) => {
     });
 
     bot.action('needs', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        await clearPreviousMessages(ctx, userId);
-        
-        try {
-            const message = await ctx.reply('📦 Потребности\n\nЭта функция находится в разработке.', Markup.inlineKeyboard([
-                [Markup.button.callback('↩️ Назад', 'main_menu')]
-            ]));
-            addMessageId(ctx, message.message_id);
-        } catch (error) {
-            console.error('Ошибка в обработчике needs:', error);
-            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
-        }
+        const { showNeedsMenu } = require('./needs');
+        await showNeedsMenu(ctx);
     });
 };
 
