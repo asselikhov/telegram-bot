@@ -3616,7 +3616,7 @@ ${objectsList}
             // Получаем уникальные даты и сортируем их в обратном порядке (новые первыми)
             const uniqueDatesArray = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
             // Сортируем даты в обратном порядке для единообразия
-            const uniqueDates = uniqueDatesArray.sort((a, b) => {
+            const uniqueDatesSorted = uniqueDatesArray.sort((a, b) => {
                 // Парсим даты в формате ДД.ММ.ГГГГ для сравнения
                 const parseDate = (dateStr) => {
                     const [day, month, year] = dateStr.split('.').map(Number);
@@ -3625,8 +3625,16 @@ ${objectsList}
                 return parseDate(b).getTime() - parseDate(a).getTime();
             });
             
-            // Используем текущий список дат для данного объекта
-            const selectedDate = uniqueDates[dateIndex];
+            // Используем сохраненный список дат из state, если он есть и длина совпадает, иначе используем текущий
+            let datesList = uniqueDatesSorted;
+            if (state && state.adminNeedsDatesList && state.adminNeedsDatesList.length === uniqueDatesSorted.length) {
+                datesList = state.adminNeedsDatesList;
+            } else if (state) {
+                state.adminNeedsDatesList = uniqueDatesSorted;
+                datesList = uniqueDatesSorted;
+            }
+            
+            const selectedDate = datesList[dateIndex];
             if (!selectedDate) {
                 return ctx.reply('Ошибка: дата не найдена.');
             }
