@@ -108,47 +108,63 @@ async function incrementNextReportId(telegramId) {
     }
     const usersCollection = (await getDb()).collection('users');
     try {
-        // Сначала проверяем, существует ли пользователь
-        const existingUser = await usersCollection.findOne({ telegramId });
-        
-        if (!existingUser) {
-            // Если пользователя нет, создаем его с nextReportId = 1, затем инкрементируем до 2
-            // Первый отчет будет с ID _1, что правильно
-            await usersCollection.updateOne(
-                { telegramId },
-                { 
-                    $set: { 
-                        telegramId,
-                        nextReportId: 1,
-                        fullName: '',
-                        position: '',
-                        organization: '',
-                        selectedObjects: [],
-                        status: 'В работе',
-                        isApproved: 0,
-                        reports: {},
-                        phone: '',
-                        birthdate: null,
-                        createdAt: new Date()
-                    }
-                },
-                { upsert: true }
-            );
-        }
-        
-        // Теперь безопасно инкрементируем nextReportId
-        const result = await usersCollection.findOneAndUpdate(
+        // Сначала пытаемся инкрементировать (если пользователь существует)
+        const incResult = await usersCollection.findOneAndUpdate(
             { telegramId },
             { $inc: { nextReportId: 1 } },
             { returnDocument: 'after' }
         );
         
-        if (!result.value) {
+        // Если пользователь существует и инкремент успешен
+        if (incResult && incResult.value && incResult.value.nextReportId) {
+            return incResult.value.nextReportId;
+        }
+        
+        // Если пользователь не существует или nextReportId отсутствует, создаем/обновляем
+        // Используем updateOne с upsert, затем получаем значение
+        await usersCollection.updateOne(
+            { telegramId },
+            {
+                $setOnInsert: {
+                    telegramId,
+                    nextReportId: 1,
+                    fullName: '',
+                    position: '',
+                    organization: '',
+                    selectedObjects: [],
+                    status: 'В работе',
+                    isApproved: 0,
+                    reports: {},
+                    phone: '',
+                    birthdate: null,
+                    createdAt: new Date()
+                }
+            },
+            { upsert: true }
+        );
+        
+        // Теперь инкрементируем (пользователь точно существует)
+        const finalResult = await usersCollection.findOneAndUpdate(
+            { telegramId },
+            { $inc: { nextReportId: 1 } },
+            { returnDocument: 'after' }
+        );
+        
+        if (!finalResult || !finalResult.value) {
+            // Если всё ещё не получилось, получаем значение напрямую
+            const user = await usersCollection.findOne({ telegramId });
+            if (user && user.nextReportId) {
+                // Инкрементируем вручную
+                await usersCollection.updateOne(
+                    { telegramId },
+                    { $inc: { nextReportId: 1 } }
+                );
+                return user.nextReportId + 1;
+            }
             throw new Error(`Failed to increment nextReportId for user ${telegramId}`);
         }
         
-        const newValue = result.value.nextReportId || 1;
-        return newValue;
+        return finalResult.value.nextReportId || 1;
     } catch (error) {
         console.error(`Error incrementing nextReportId for user ${telegramId}:`, error);
         throw error;
