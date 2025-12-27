@@ -615,7 +615,10 @@ async function showReportDetails(ctx, reportId) {
         const mediaGroup = await ctx.telegram.sendMediaGroup(ctx.chat.id, report.photos.map(photoId => ({ type: 'photo', media: photoId })));
         mediaGroup.forEach(msg => ctx.state.userStates[userId].messageIds.push(msg.message_id));
     }
-    const message = await ctx.reply(reportText, Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(reportText, {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard(buttons)
+    });
     addMessageId(ctx, message.message_id);
 }
 
