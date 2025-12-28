@@ -3715,7 +3715,7 @@ ${objectsList}
                 const statusName = STATUS_NAMES[need.status] || need.status;
                 const label = `${urgencyInfo.emoji} ${typeName}: ${need.name} (${statusName})`;
                 return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `admin_select_need_${needId}`)];
-            }).reverse();
+            });
 
             const buttons = [];
             const paginationButtons = [];

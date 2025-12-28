@@ -310,7 +310,7 @@ async function showNeedItems(ctx, objectIndex, dateIndex, page = 0) {
         const typeName = TYPE_NAMES[need.type] || need.type;
         const label = `${urgencyInfo.emoji} ${typeName}: ${need.name}`;
         return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `select_need_item_${needId}`)];
-    }).reverse();
+    });
 
     const buttons = [];
     const paginationButtons = [];
