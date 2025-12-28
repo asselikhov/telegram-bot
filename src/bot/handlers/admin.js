@@ -3538,7 +3538,20 @@ ${objectsList}
         try {
             await clearPreviousMessages(ctx, userId);
             const allNeeds = await loadAllNeeds();
-            const uniqueObjects = [...new Set(Object.values(allNeeds).map(n => n.objectName))];
+            console.log(`[ADMIN_NEEDS] showAllNeedsByObjects: Всего заявок загружено: ${Object.keys(allNeeds).length}`);
+            
+            // Фильтруем только заявки с валидным objectName
+            const needsArray = Object.values(allNeeds).filter(n => n && n.objectName);
+            console.log(`[ADMIN_NEEDS] Заявок с валидным objectName: ${needsArray.length}`);
+            
+            // Получаем уникальные объекты, убираем null/undefined
+            const uniqueObjects = [...new Set(needsArray.map(n => n.objectName.trim()).filter(obj => obj))];
+            console.log(`[ADMIN_NEEDS] Уникальных объектов: ${uniqueObjects.length}`);
+            console.log(`[ADMIN_NEEDS] Список объектов:`, JSON.stringify(uniqueObjects));
+            
+            // Логируем примеры заявок для проверки
+            const sampleNeeds = needsArray.slice(0, 10).map(n => ({ needId: n.needId, objectName: n.objectName, userId: n.userId }));
+            console.log(`[ADMIN_NEEDS] Примеры заявок:`, JSON.stringify(sampleNeeds));
 
             if (uniqueObjects.length === 0) {
                 const message = await ctx.reply('Заявок на потребности пока нет.', Markup.inlineKeyboard([
