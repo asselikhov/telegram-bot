@@ -4472,7 +4472,8 @@ ${objectsList}
                 'protective_clothing': 'Спецодежда',
                 'office_supplies': 'Канцтовары',
                 'accommodation': 'Проживание',
-                'services': 'Услуги'
+                'services': 'Услуги',
+                'accountable': 'Подотчетные'
             };
             const URGENCY_NAMES = {
                 'urgent': { name: 'Срочно', emoji: '🔥' },
@@ -4641,7 +4642,8 @@ ${objectsList}
                 'protective_clothing': 'Спецодежда',
                 'office_supplies': 'Канцтовары',
                 'accommodation': 'Проживание',
-                'services': 'Услуги'
+                'services': 'Услуги',
+                'accountable': 'Подотчетные'
             };
             const URGENCY_NAMES = {
                 'urgent': { name: 'Срочно', emoji: '🔥' },

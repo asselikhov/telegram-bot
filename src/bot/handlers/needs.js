@@ -18,7 +18,8 @@ const TYPE_NAMES = {
     'office_supplies': 'Канцтовары',
     'accommodation': 'Проживание',
     'services': 'Услуги',
-    'protective_clothing': 'Спецодежда'
+    'protective_clothing': 'Спецодежда',
+    'accountable': 'Подотчетные'
 };
 
 // Маппинг срочности
@@ -209,6 +210,7 @@ async function createNeed(ctx) {
         [Markup.button.callback('📎 Канцтовары', 'select_need_type_office_supplies')],
         [Markup.button.callback('🏠 Проживание', 'select_need_type_accommodation')],
         [Markup.button.callback('🔧 Услуги', 'select_need_type_services')],
+        [Markup.button.callback('💳 Подотчетные', 'select_need_type_accountable')],
         [Markup.button.callback('↩️ Назад', 'needs')]
     ];
 
@@ -1952,17 +1954,24 @@ module.exports = (bot) => {
         }
     });
 
-    // Удаление
+    // Удаление (более специфичные обработчики должны быть раньше)
+    bot.action(/confirm_delete_need_(.+)/, async (ctx) => {
+        try {
+            const needId = ctx.match[1];
+            console.log('[NEED DEBUG] ====== confirm_delete_need handler CALLED ======');
+            console.log('[NEED DEBUG] confirm_delete_need handler - received needId:', needId);
+            console.log('[NEED DEBUG] confirm_delete_need handler - callback data:', ctx.callbackQuery?.data);
+            await ctx.answerCallbackQuery().catch(err => console.error('[NEED DEBUG] Error answering callback query:', err));
+            await confirmDeleteNeed(ctx, needId);
+        } catch (error) {
+            console.error('[NEED DEBUG] Error in confirm_delete_need handler:', error);
+            await ctx.answerCallbackQuery('Ошибка при удалении заявки').catch(() => {});
+        }
+    });
     bot.action(/delete_need_(.+)/, (ctx) => {
         const needId = ctx.match[1];
         console.log('[NEED DEBUG] delete_need handler - received needId:', needId);
         deleteNeedConfirmation(ctx, needId);
-    });
-    bot.action(/confirm_delete_need_(.+)/, async (ctx) => {
-        const needId = ctx.match[1];
-        console.log('[NEED DEBUG] confirm_delete_need handler - received needId:', needId);
-        await ctx.answerCallbackQuery().catch(() => {});
-        await confirmDeleteNeed(ctx, needId);
     });
     bot.action(/manage_delete_need_(.+)/, (ctx) => manageDeleteNeedConfirmation(ctx, ctx.match[1]));
     bot.action(/manage_confirm_delete_need_(.+)/, (ctx) => manageConfirmDeleteNeed(ctx, ctx.match[1]));
