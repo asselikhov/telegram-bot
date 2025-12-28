@@ -47,6 +47,7 @@ async function saveNeed(userId, need) {
         const normalizedUserId = String(needUserId || userId);
         
         // Используем replaceOne для полной замены документа
+        console.log(`[NEED MODEL] saveNeed - saving needId: "${needId}", type: ${typeof needId}, length: ${needId.length}`);
         const result = await needsCollection.replaceOne(
             { needid: needId },
             {
@@ -84,8 +85,9 @@ async function loadUserNeeds(userId) {
     const needs = await needsCollection.find({ $or: query }).sort({ timestamp: -1 }).toArray();
     const needsMap = {};
     needs.forEach(row => {
-        needsMap[row.needid] = {
-            needId: row.needid,
+        const needId = row.needid;
+        needsMap[needId] = {
+            needId: needId,
             userId: row.userid,
             objectName: row.objectname ? row.objectname.trim() : row.objectname,
             date: row.date,
@@ -99,6 +101,7 @@ async function loadUserNeeds(userId) {
             number: row.number || null
         };
     });
+    console.log(`[NEED MODEL] loadUserNeeds - userId: ${normalizedUserId}, found ${needs.length} needs, needIds:`, Object.keys(needsMap));
     return needsMap;
 }
 

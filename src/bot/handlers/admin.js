@@ -4723,7 +4723,6 @@ ${fullName}
 
             const buttons = [
                 [Markup.button.callback('📝 Наименование', `admin_edit_need_name_${needId}`)],
-                [Markup.button.callback('🔢 Количество', `admin_edit_need_quantity_${needId}`)],
                 [Markup.button.callback('⏰ Срочность', `admin_edit_need_urgency_${needId}`)],
                 [Markup.button.callback('↩️ Назад', `admin_select_need_${needId}`)]
             ];
@@ -4782,20 +4781,6 @@ ${fullName}
             state.adminEditingNeedId = needId;
         }
         const message = await ctx.reply('📝 Введите новое наименование:');
-        addMessageId(ctx, message.message_id);
-    });
-
-    bot.action(/admin_edit_need_quantity_(.+)/, async (ctx) => {
-        const needId = ctx.match[1];
-        const userId = ctx.from.id.toString();
-        if (userId !== ADMIN_ID) return;
-        await clearPreviousMessages(ctx, userId);
-        const state = ensureUserState(ctx);
-        if (state) {
-            state.step = 'admin_edit_need_quantity';
-            state.adminEditingNeedId = needId;
-        }
-        const message = await ctx.reply('🔢 Введите новое количество (или "0" чтобы убрать количество):');
         addMessageId(ctx, message.message_id);
     });
 

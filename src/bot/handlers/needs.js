@@ -421,11 +421,18 @@ async function showNeedItems(ctx, objectIndex, dateIndex, page = 0) {
 async function showNeedDetails(ctx, needId) {
     const userId = ctx.from.id.toString();
     const needs = await loadUserNeeds(userId);
+    
+    console.log('[NEED DEBUG] showNeedDetails - needId:', needId);
+    console.log('[NEED DEBUG] showNeedDetails - userId:', userId);
+    console.log('[NEED DEBUG] showNeedDetails - needs keys:', Object.keys(needs));
+    console.log('[NEED DEBUG] showNeedDetails - need exists:', !!needs[needId]);
+    
     const need = needs[needId];
 
     await clearPreviousMessages(ctx, userId);
 
     if (!need) {
+        console.log('[NEED DEBUG] showNeedDetails - Need not found, available needIds:', Object.keys(needs));
         return ctx.reply('Ошибка: заявка не найдена.');
     }
 
@@ -491,9 +498,16 @@ ${escapeHtml(fullName)}
 async function editNeed(ctx, needId) {
     const userId = ctx.from.id.toString();
     const needs = await loadUserNeeds(userId);
+    
+    console.log('[NEED DEBUG] editNeed - needId:', needId);
+    console.log('[NEED DEBUG] editNeed - userId:', userId);
+    console.log('[NEED DEBUG] editNeed - needs keys:', Object.keys(needs));
+    console.log('[NEED DEBUG] editNeed - need exists:', !!needs[needId]);
+    
     const need = needs[needId];
 
     if (!need) {
+        console.log('[NEED DEBUG] editNeed - Need not found, available needIds:', Object.keys(needs));
         await clearPreviousMessages(ctx, userId);
         return ctx.reply('Ошибка: не удалось найти заявку для редактирования.');
     }
@@ -502,7 +516,6 @@ async function editNeed(ctx, needId) {
 
     const buttons = [
         [Markup.button.callback('📝 Наименование', `edit_need_name_${needId}`)],
-        [Markup.button.callback('🔢 Количество', `edit_need_quantity_${needId}`)],
         [Markup.button.callback('⏰ Срочность', `edit_need_urgency_${needId}`)],
         [Markup.button.callback('↩️ Назад', `select_need_item_${needId}`)]
     ];
@@ -514,9 +527,16 @@ async function editNeed(ctx, needId) {
 async function deleteNeedConfirmation(ctx, needId) {
     const userId = ctx.from.id.toString();
     const needs = await loadUserNeeds(userId);
+    
+    console.log('[NEED DEBUG] deleteNeedConfirmation - needId:', needId);
+    console.log('[NEED DEBUG] deleteNeedConfirmation - userId:', userId);
+    console.log('[NEED DEBUG] deleteNeedConfirmation - needs keys:', Object.keys(needs));
+    console.log('[NEED DEBUG] deleteNeedConfirmation - need exists:', !!needs[needId]);
+    
     const need = needs[needId];
 
     if (!need) {
+        console.log('[NEED DEBUG] deleteNeedConfirmation - Need not found, available needIds:', Object.keys(needs));
         await clearPreviousMessages(ctx, userId);
         return ctx.reply('Ошибка: заявка не найдена.');
     }
@@ -1719,7 +1739,6 @@ async function showManagedEditNeedMenu(ctx, needId) {
 
         const buttons = [
             [Markup.button.callback('📝 Наименование', `manage_edit_need_name_${needId}`)],
-            [Markup.button.callback('🔢 Количество', `manage_edit_need_quantity_${needId}`)],
             [Markup.button.callback('⏰ Срочность', `manage_edit_need_urgency_${needId}`)],
             [Markup.button.callback('↩️ Назад', `manage_select_need_${needId}`)]
         ];
@@ -1847,10 +1866,15 @@ module.exports = (bot) => {
     });
 
     // Выбор заявки
-    bot.action(/select_need_item_(.+)/, (ctx) => showNeedDetails(ctx, ctx.match[1]));
+    bot.action(/select_need_item_(.+)/, (ctx) => {
+        const needId = ctx.match[1];
+        console.log('[NEED DEBUG] select_need_item handler - received needId:', needId);
+        console.log('[NEED DEBUG] select_need_item handler - needId type:', typeof needId);
+        console.log('[NEED DEBUG] select_need_item handler - needId length:', needId.length);
+        showNeedDetails(ctx, needId);
+    });
 
-    // Редактирование
-    bot.action(/edit_need_(.+)/, (ctx) => editNeed(ctx, ctx.match[1]));
+    // Редактирование (более специфичные обработчики должны быть раньше)
     bot.action(/edit_need_name_(.+)/, async (ctx) => {
         const needId = ctx.match[1];
         const userId = ctx.from.id.toString();
@@ -1861,18 +1885,6 @@ module.exports = (bot) => {
             state.editingNeedId = needId;
         }
         const message = await ctx.reply('📝 Введите новое наименование:');
-        addMessageId(ctx, message.message_id);
-    });
-    bot.action(/edit_need_quantity_(.+)/, async (ctx) => {
-        const needId = ctx.match[1];
-        const userId = ctx.from.id.toString();
-        await clearPreviousMessages(ctx, userId);
-        const state = ensureUserState(ctx);
-        if (state) {
-            state.step = `editNeedQuantity`;
-            state.editingNeedId = needId;
-        }
-        const message = await ctx.reply('🔢 Введите новое количество (или отправьте "0" чтобы убрать количество):');
         addMessageId(ctx, message.message_id);
     });
     bot.action(/edit_need_urgency_(.+)/, async (ctx) => {
@@ -1891,6 +1903,13 @@ module.exports = (bot) => {
         ];
         const message = await ctx.reply('⏰ Выберите срочность:', Markup.inlineKeyboard(buttons));
         addMessageId(ctx, message.message_id);
+    });
+    
+    // Общий обработчик редактирования (должен быть после специфичных)
+    bot.action(/edit_need_(.+)/, (ctx) => {
+        const needId = ctx.match[1];
+        console.log('[NEED DEBUG] edit_need handler - received needId:', needId);
+        editNeed(ctx, needId);
     });
 
     // Установка срочности при редактировании
@@ -1920,7 +1939,11 @@ module.exports = (bot) => {
     });
 
     // Удаление
-    bot.action(/delete_need_(.+)/, (ctx) => deleteNeedConfirmation(ctx, ctx.match[1]));
+    bot.action(/delete_need_(.+)/, (ctx) => {
+        const needId = ctx.match[1];
+        console.log('[NEED DEBUG] delete_need handler - received needId:', needId);
+        deleteNeedConfirmation(ctx, needId);
+    });
     bot.action(/confirm_delete_need_(.+)/, (ctx) => confirmDeleteNeed(ctx, ctx.match[1]));
     bot.action(/manage_delete_need_(.+)/, (ctx) => manageDeleteNeedConfirmation(ctx, ctx.match[1]));
     bot.action(/manage_confirm_delete_need_(.+)/, (ctx) => manageConfirmDeleteNeed(ctx, ctx.match[1]));
@@ -1967,19 +1990,6 @@ module.exports = (bot) => {
             state.managedEditingNeedId = needId;
         }
         const message = await ctx.reply('📝 Введите новое наименование:');
-        addMessageId(ctx, message.message_id);
-    });
-
-    bot.action(/manage_edit_need_quantity_(.+)/, async (ctx) => {
-        const needId = ctx.match[1];
-        const userId = ctx.from.id.toString();
-        await clearPreviousMessages(ctx, userId);
-        const state = ensureUserState(ctx);
-        if (state) {
-            state.step = 'manage_edit_need_quantity';
-            state.managedEditingNeedId = needId;
-        }
-        const message = await ctx.reply('🔢 Введите новое количество (или "0" чтобы убрать количество):');
         addMessageId(ctx, message.message_id);
     });
 
