@@ -27,7 +27,7 @@ const {
 const {
     validateTimeFormat
 } = require('../utils/notificationHelper');
-const { escapeHtml } = require('../utils/htmlHelper');
+const { escapeHtml, entitiesToHtml } = require('../utils/htmlHelper');
 const { addMessageId } = require('../utils/stateHelper');
 
 const mediaGroups = new Map();
@@ -301,7 +301,13 @@ module.exports = (bot) => {
                 if (!state.announcement) {
                     state.announcement = {};
                 }
-                state.announcement.text = ctx.message.text.trim();
+                // Конвертируем entities в HTML, если они есть
+                const entities = ctx.message.entities || ctx.message.caption_entities || [];
+                const formattedText = entities.length > 0 
+                    ? entitiesToHtml(ctx.message.text, entities)
+                    : escapeHtml(ctx.message.text.trim());
+                
+                state.announcement.text = formattedText;
                 state.step = 'announcementPhotos';
                 state.mediaGroupIds = [];
                 state.announcement.photos = state.announcement.photos || [];
@@ -320,7 +326,13 @@ module.exports = (bot) => {
                     return;
                 }
                 const { updateAnnouncement: updateAnnouncementModel } = require('../../database/announcementModel');
-                await updateAnnouncementModel(editingAnnouncementId, { text: ctx.message.text.trim() });
+                // Конвертируем entities в HTML, если они есть
+                const editEntities = ctx.message.entities || ctx.message.caption_entities || [];
+                const formattedEditText = editEntities.length > 0
+                    ? entitiesToHtml(ctx.message.text, editEntities)
+                    : escapeHtml(ctx.message.text.trim());
+                
+                await updateAnnouncementModel(editingAnnouncementId, { text: formattedEditText });
                 state.step = null;
                 state.editingAnnouncementId = null;
                 await ctx.reply('✅ Текст объявления обновлен.');
