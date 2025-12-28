@@ -285,23 +285,6 @@ module.exports = (bot) => {
                     return;
                 }
                 state.need.name = name;
-                state.step = 'needQuantity';
-                const quantityMessage = await ctx.reply(
-                    '🔢 Введите количество (или нажмите "Пропустить"):',
-                    Markup.inlineKeyboard([[Markup.button.callback('⏭️ Пропустить', 'skip_need_quantity')]])
-                );
-                state.messageIds = [quantityMessage.message_id];
-                break;
-
-            case 'needQuantity':
-                const quantityText = ctx.message.text.trim();
-                const quantity = parseFloat(quantityText);
-                if (isNaN(quantity) || quantity < 0) {
-                    const msg = await ctx.reply('Введите корректное число (или нажмите "Пропустить"):');
-                    state.messageIds.push(msg.message_id);
-                    return;
-                }
-                state.need.quantity = quantity;
                 state.step = 'needUrgency';
                 const urgencyMessage = await ctx.reply(
                     '⏰ Выберите срочность:',
@@ -1424,24 +1407,6 @@ ${escapeHtml(report.materials)}</blockquote>
     });
 
     // Обработчики для создания заявки на потребности
-    bot.action('skip_need_quantity', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        const state = ctx.state.userStates[userId];
-        if (!state || state.step !== 'needQuantity') return;
-
-        state.need.quantity = null;
-        state.step = 'needUrgency';
-        await clearPreviousMessages(ctx, userId);
-        const message = await ctx.reply(
-            '⏰ Выберите срочность:',
-            Markup.inlineKeyboard([
-                [Markup.button.callback('🔥 Срочно', 'set_need_urgency_urgent')],
-                [Markup.button.callback('⏳ В ближайшее время', 'set_need_urgency_soon')],
-                [Markup.button.callback('📅 Планово', 'set_need_urgency_planned')]
-            ])
-        );
-        addMessageId(ctx, message.message_id);
-    });
 
     bot.action(/set_need_urgency_(.+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
@@ -1483,7 +1448,7 @@ ${escapeHtml(report.materials)}</blockquote>
             timestamp,
             type: state.need.type,
             name: state.need.name,
-            quantity: state.need.quantity,
+            quantity: null,
             urgency: state.need.urgency,
             status: 'new',
             fullName: users[userId].fullName || ''

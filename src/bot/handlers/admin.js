@@ -3745,22 +3745,26 @@ ${objectsList}
         try {
             const allNeeds = await loadAllNeeds();
             const state = ensureUserState(ctx);
-            let uniqueObjects;
-            if (state && state.adminNeedsObjectsList) {
-                uniqueObjects = state.adminNeedsObjectsList;
-            } else {
-                uniqueObjects = [...new Set(Object.values(allNeeds).map(n => n.objectName))];
-                if (state) {
-                    state.adminNeedsObjectsList = uniqueObjects;
-                }
+            
+            // Фильтруем только заявки с валидным objectName (как в showAllNeedsByObjects)
+            const needsArray = Object.values(allNeeds).filter(n => n && n.objectName);
+            const uniqueObjects = [...new Set(needsArray.map(n => n.objectName.trim()).filter(obj => obj))];
+            
+            // Сохраняем список объектов в state
+            if (state) {
+                state.adminNeedsObjectsList = uniqueObjects;
             }
+            
             const objectName = uniqueObjects[objectIndex];
+            if (!objectName) {
+                return ctx.reply('Ошибка: объект не найден.');
+            }
 
             await clearPreviousMessages(ctx, userId);
 
-            const normalizedObjectName = objectName && objectName.trim();
+            const normalizedObjectName = objectName.trim();
             const objectNeeds = Object.entries(allNeeds).filter(([_, n]) =>
-                n.objectName && n.objectName.trim() === normalizedObjectName
+                n && n.objectName && n.objectName.trim() === normalizedObjectName
             );
             const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
             // Получаем уникальные даты и сортируем их в обратном порядке (новые первыми)

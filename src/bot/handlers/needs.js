@@ -195,7 +195,7 @@ async function selectNeedType(ctx, type) {
     const state = ensureUserState(ctx);
     if (state) {
         state.step = 'needObject';
-        state.need = { type, objectName: null, name: null, quantity: null, urgency: null };
+        state.need = { type, objectName: null, name: null, urgency: null };
     }
 
     const buttons = userObjects.map((obj, index) => [Markup.button.callback(obj, `select_need_object_${index}`)]);
