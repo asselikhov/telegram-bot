@@ -95,19 +95,40 @@ function entitiesToHtml(text, entities) {
         }
     });
 
+    // Отслеживаем порядок открытия тегов для правильного порядка закрытия
+    const openOrder = new Map(); // Хранит порядок открытия для каждого типа тега на каждой позиции
+    let openCounter = 0;
+    
+    // Сначала заполняем порядок открытия
+    tags.forEach(tag => {
+        if (tag.isOpen) {
+            openOrder.set(`${tag.type}_${tag.pos}`, openCounter++);
+        }
+    });
+    
     // Сортируем теги по позиции
-    // При одинаковой позиции: сначала закрывающие теги (в обратном порядке открытия), потом открывающие
+    // При одинаковой позиции: сначала открывающие, потом закрывающие (в обратном порядке открытия LIFO)
     tags.sort((a, b) => {
         if (a.pos !== b.pos) {
             return a.pos - b.pos;
         }
+        // На одной позиции: сначала открывающие, потом закрывающие
         if (a.isOpen && !b.isOpen) {
             return -1; // Открывающие идут первыми
         }
         if (!a.isOpen && b.isOpen) {
             return 1; // Закрывающие идут после открывающих
         }
-        // Если оба открывающие или оба закрывающие на одной позиции - порядок не важен
+        // Если оба открывающие на одной позиции - порядок не важен
+        if (a.isOpen && b.isOpen) {
+            return 0;
+        }
+        // Если оба закрывающие на одной позиции - закрываем в обратном порядке открытия (LIFO)
+        if (!a.isOpen && !b.isOpen) {
+            const orderA = openOrder.get(`${a.type}_${a.pos}`) || 0;
+            const orderB = openOrder.get(`${b.type}_${b.pos}`) || 0;
+            return orderB - orderA; // Более поздние открытия закрываются первыми
+        }
         return 0;
     });
 
@@ -116,7 +137,9 @@ function entitiesToHtml(text, entities) {
     let result = '';
     let currentPos = 0;
 
-    tags.forEach(({ pos, tag, isOpen, type }) => {
+    tags.forEach((currentTag, tagIndex) => {
+        const { pos, tag, isOpen, type } = currentTag;
+        
         // Добавляем текст до текущей позиции
         if (pos > currentPos) {
             const textPart = text.substring(currentPos, pos);
@@ -130,11 +153,26 @@ function entitiesToHtml(text, entities) {
             result += tag;
         } else {
             // Закрывающий тег - находим соответствующий открывающий в стеке (с конца)
-            const matchingIndex = openTagsStack.map(t => t.type).lastIndexOf(type);
+            let matchingIndex = -1;
+            for (let i = openTagsStack.length - 1; i >= 0; i--) {
+                if (openTagsStack[i].type === type) {
+                    matchingIndex = i;
+                    break;
+                }
+            }
+            
             if (matchingIndex !== -1) {
+                // Проверяем, есть ли еще закрывающие теги на этой позиции (после текущего)
+                const otherCloseTagsAtSamePos = tags.filter((t, idx) => 
+                    idx > tagIndex && !t.isOpen && t.pos === pos
+                );
+                
+                // Сохраняем теги, которые нужно будет открыть обратно
+                const tagsToReopen = [];
+                
                 // Закрываем все теги после найденного (в обратном порядке LIFO)
                 while (openTagsStack.length > matchingIndex + 1) {
-                    const { type: closedType } = openTagsStack.pop();
+                    const { type: closedType, tag: closedTag } = openTagsStack.pop();
                     const closeTagMap = {
                         'bold': '</b>',
                         'italic': '</i>',
@@ -147,10 +185,27 @@ function entitiesToHtml(text, entities) {
                         'text_mention': '</a>'
                     };
                     result += closeTagMap[closedType] || '';
+                    
+                    // Сохраняем для повторного открытия только если этот тег не закрывается на той же позиции
+                    const closesAtSamePos = otherCloseTagsAtSamePos.some(t => t.type === closedType);
+                    if (!closesAtSamePos) {
+                        tagsToReopen.push({ type: closedType, tag: closedTag });
+                    }
                 }
+                
                 // Закрываем нужный тег
                 result += tag;
                 openTagsStack.pop();
+                
+                // Открываем обратно теги, которые были закрыты (в обратном порядке, чтобы сохранить исходный порядок)
+                // Только если нет других закрывающих тегов на той же позиции
+                if (otherCloseTagsAtSamePos.length === 0) {
+                    for (let i = tagsToReopen.length - 1; i >= 0; i--) {
+                        const tagInfo = tagsToReopen[i];
+                        result += tagInfo.tag;
+                        openTagsStack.push(tagInfo);
+                    }
+                }
             } else {
                 // Если не нашли соответствующий открывающий тег, просто добавляем закрывающий
                 result += tag;
@@ -178,6 +233,20 @@ function entitiesToHtml(text, entities) {
     // Добавляем оставшийся текст
     if (currentPos < text.length) {
         result += escapeHtml(text.substring(currentPos));
+    }
+
+    // Валидация: проверяем, что все открывающие теги закрыты
+    const openTagCount = (result.match(/<b>/g) || []).length;
+    const closeTagCount = (result.match(/<\/b>/g) || []).length;
+    if (openTagCount !== closeTagCount) {
+        console.warn(`[HTML HELPER] Mismatch in bold tags: ${openTagCount} open, ${closeTagCount} close`);
+    }
+    
+    const openUTagCount = (result.match(/<u>/g) || []).length;
+    const closeUTagCount = (result.match(/<\/u>/g) || []).length;
+    if (openUTagCount !== closeUTagCount) {
+        console.warn(`[HTML HELPER] Mismatch in underline tags: ${openUTagCount} open, ${closeUTagCount} close`);
+        console.warn(`[HTML HELPER] Result text: ${result.substring(0, 200)}...`);
     }
 
     return result;
