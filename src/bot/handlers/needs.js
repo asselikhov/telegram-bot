@@ -620,17 +620,17 @@ async function manageAllNeeds(ctx) {
         
         if (newNeeds.length > 0) {
             const urgencyParts = [];
-            if (newUrgent > 0) urgencyParts.push(`срочных: ${newUrgent}`);
+            if (newUrgent > 0) urgencyParts.push(`срочно: ${newUrgent}`);
             if (newSoon > 0) urgencyParts.push(`в ближайшее время: ${newSoon}`);
-            if (newPlanned > 0) urgencyParts.push(`плановых: ${newPlanned}`);
+            if (newPlanned > 0) urgencyParts.push(`планово: ${newPlanned}`);
             statsText += `Новых: ${newNeeds.length}${urgencyParts.length > 0 ? ` (${urgencyParts.join(', ')})` : ''}\n`;
         }
         
         if (inProgressNeeds.length > 0) {
             const urgencyParts = [];
-            if (inProgressUrgent > 0) urgencyParts.push(`срочных: ${inProgressUrgent}`);
+            if (inProgressUrgent > 0) urgencyParts.push(`срочно: ${inProgressUrgent}`);
             if (inProgressSoon > 0) urgencyParts.push(`в ближайшее время: ${inProgressSoon}`);
-            if (inProgressPlanned > 0) urgencyParts.push(`плановых: ${inProgressPlanned}`);
+            if (inProgressPlanned > 0) urgencyParts.push(`планово: ${inProgressPlanned}`);
             statsText += `В обработке: ${inProgressNeeds.length}${urgencyParts.length > 0 ? ` (${urgencyParts.join(', ')})` : ''}\n`;
         }
         
