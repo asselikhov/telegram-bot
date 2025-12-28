@@ -3804,7 +3804,13 @@ ${objectsList}
             const currentDates = uniqueDates.slice(startIndex, endIndex);
 
             if (currentDates.length === 0) {
-                return ctx.reply('Ошибка: нет дат для отображения.');
+                const state = ctx.state.userStates && ctx.state.userStates[userId] ? ctx.state.userStates[userId] : null;
+                const backButton = (state && state.adminNeedsObjectsList && objectIndex !== undefined) 
+                    ? `admin_needs_object_${objectIndex}` 
+                    : 'admin_show_all_needs';
+                return ctx.reply('Ошибка: нет дат для отображения.', Markup.inlineKeyboard([
+                    [Markup.button.callback('↩️ Назад', backButton)]
+                ]));
             }
 
             const dateButtons = currentDates.map((date) => {

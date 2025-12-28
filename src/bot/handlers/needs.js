@@ -282,7 +282,9 @@ async function showNeedDates(ctx, objectIndex, page = 0) {
     const currentDates = uniqueDates.slice(startIndex, endIndex);
 
     if (currentDates.length === 0) {
-        return ctx.reply('Ошибка: нет дат для отображения.');
+        return ctx.reply('Ошибка: нет дат для отображения.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'view_my_needs')]
+        ]));
     }
 
     const dateButtons = currentDates.map((date, index) => {
@@ -517,6 +519,143 @@ async function confirmDeleteNeed(ctx, needId) {
         await clearPreviousMessages(ctx, userId);
         const message = await ctx.reply('Ошибка при удалении заявки. Попробуйте позже.', Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', 'view_my_needs')]
+        ]));
+        addMessageId(ctx, message.message_id);
+    }
+}
+
+async function manageDeleteNeedConfirmation(ctx, needId) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) return;
+
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager) {
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
+            }
+        }
+    }
+
+    if (!isNeedManager) return;
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        const need = allNeeds[needId];
+
+        if (!need) {
+            await clearPreviousMessages(ctx, userId);
+            return ctx.reply('Ошибка: заявка не найдена.');
+        }
+
+        const normalizedNeedObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+        if (userId !== ADMIN_ID && !managedObjects.some(obj => obj.trim() === normalizedNeedObjectName)) {
+            await clearPreviousMessages(ctx, userId);
+            return ctx.reply('У вас нет прав для удаления этой заявки.');
+        }
+
+        await clearPreviousMessages(ctx, userId);
+
+        const buttons = [
+            [Markup.button.callback('✅ Да, удалить', `manage_confirm_delete_need_${needId}`)],
+            [Markup.button.callback('❌ Отмена', `manage_select_need_${needId}`)]
+        ];
+
+        const message = await ctx.reply(`Вы уверены, что хотите удалить заявку "${need.name}"?`, Markup.inlineKeyboard(buttons));
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в manageDeleteNeedConfirmation:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function manageConfirmDeleteNeed(ctx, needId) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) return;
+
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager) {
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
+            }
+        }
+    }
+
+    if (!isNeedManager) return;
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        const need = allNeeds[needId];
+
+        if (!need) {
+            await clearPreviousMessages(ctx, userId);
+            return ctx.reply('Ошибка: заявка не найдена.');
+        }
+
+        const normalizedNeedObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+        if (userId !== ADMIN_ID && !managedObjects.some(obj => obj.trim() === normalizedNeedObjectName)) {
+            await clearPreviousMessages(ctx, userId);
+            return ctx.reply('У вас нет прав для удаления этой заявки.');
+        }
+
+        const { connectMongo } = require('../../database/config/mongoConfig');
+        const db = await connectMongo();
+        const needsCollection = db.collection('needs');
+        const result = await needsCollection.deleteOne({ needid: needId });
+        if (result.deletedCount === 0) {
+            throw new Error('Заявка не была удалена');
+        }
+
+        console.log(`Заявка удалена (управление): needId=${needId}, userId=${userId}`);
+
+        await clearPreviousMessages(ctx, userId);
+        
+        // Определяем кнопку "Назад" в зависимости от статуса заявки
+        const state = ensureUserState(ctx);
+        let backButton = 'manage_all_needs';
+        if (state && state.managedNeedsObjectsList) {
+            const needObjectIndex = state.managedNeedsObjectsList.findIndex(obj => obj.trim() === normalizedNeedObjectName);
+            if (needObjectIndex !== -1) {
+                if (need.status === 'completed' || need.status === 'rejected') {
+                    backButton = `manage_needs_archive_object_${needObjectIndex}_page_0`;
+                } else {
+                    backButton = `manage_needs_object_${needObjectIndex}_dates_page_0`;
+                }
+            }
+        }
+
+        const message = await ctx.reply('✅ Заявка успешно удалена.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', backButton)]
+        ]));
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка удаления заявки (управление):', error);
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply('Ошибка при удалении заявки. Попробуйте позже.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', `manage_select_need_${needId}`)]
         ]));
         addMessageId(ctx, message.message_id);
     }
@@ -1493,6 +1632,7 @@ ${fullName}
         const buttons = [
             [Markup.button.callback('✏️ Редактировать', `manage_edit_need_${needId}`)],
             [Markup.button.callback('📊 Изменить статус', `manage_change_need_status_${needId}`)],
+            [Markup.button.callback('🗑️ Удалить', `manage_delete_need_${needId}`)],
             [Markup.button.callback('↩️ Назад', backButton)]
         ];
 
@@ -1751,6 +1891,8 @@ module.exports = (bot) => {
     // Удаление
     bot.action(/delete_need_(.+)/, (ctx) => deleteNeedConfirmation(ctx, ctx.match[1]));
     bot.action(/confirm_delete_need_(.+)/, (ctx) => confirmDeleteNeed(ctx, ctx.match[1]));
+    bot.action(/manage_delete_need_(.+)/, (ctx) => manageDeleteNeedConfirmation(ctx, ctx.match[1]));
+    bot.action(/manage_confirm_delete_need_(.+)/, (ctx) => manageConfirmDeleteNeed(ctx, ctx.match[1]));
 
     // Управление заявками для ответственных
     // Важно: более специфичные паттерны должны быть зарегистрированы раньше
