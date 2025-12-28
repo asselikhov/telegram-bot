@@ -19,6 +19,7 @@ const { formatDate } = require('./utils');
 const { getNotificationSettings, getAllNotificationSettings, getObjectGroups, getGeneralGroupChatIds, getOrganizationObjects, getReportUsers } = require('../database/configService');
 const { getAllObjects } = require('../database/objectModel');
 const { loadAllReports } = require('../database/reportModel');
+const { loadAllNeeds } = require('../database/needModel');
 const { formatNotificationMessage, parseTimeToCron } = require('./utils/notificationHelper');
 
 const bot = new Telegraf(BOT_TOKEN);
@@ -195,6 +196,8 @@ async function sendStatisticsNotifications() {
     const allObjects = await getAllObjects();
     const allReports = await loadAllReports();
     const allReportsArray = Object.values(allReports);
+    const allNeeds = await loadAllNeeds();
+    const allNeedsArray = Object.values(allNeeds);
     
     // Получаем отчеты за сегодня
     const todayReports = allReportsArray.filter(report => report.date === formattedDate);
@@ -306,6 +309,11 @@ async function sendStatisticsNotifications() {
           })
         );
         
+        // Подсчитываем не закрытые потребности (статусы "Новая" и "В обработке")
+        const openNeeds = allNeedsArray.filter(need => 
+          need.status === 'new' || need.status === 'in_progress'
+        );
+        
         // Формируем сообщение
         let statsMessage = `⚠️ Статистика за день:\n<blockquote>`;
         statsMessage += `1) Объектов в работе: ${objectsInWork.length}\n`;
@@ -317,6 +325,7 @@ async function sendStatisticsNotifications() {
         } else {
           statsMessage += `2) Не поданы отчеты по объектам: нет\n`;
         }
+        statsMessage += `3) Не закрытых потребностей: ${openNeeds.length}\n`;
         statsMessage += `</blockquote>`;
         
         // Отправляем в группу организации
