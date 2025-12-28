@@ -22,6 +22,17 @@ const TYPE_NAMES = {
     'accountable': 'Подотчетные'
 };
 
+const TYPE_EMOJIS = {
+    'materials': '📦',
+    'equipment': '⚙️',
+    'special_equipment': '🚜',
+    'office_supplies': '📎',
+    'accommodation': '🏠',
+    'services': '🔧',
+    'protective_clothing': '👔',
+    'accountable': '💳'
+};
+
 // Маппинг срочности
 const URGENCY_NAMES = {
     'urgent': { name: 'Срочно', emoji: '🔥' },
@@ -396,10 +407,11 @@ async function showNeedItems(ctx, objectIndex, dateIndex, page = 0) {
     const users = await loadUsers();
     const itemButtons = currentNeeds.map(([needId, need]) => {
         const typeName = TYPE_NAMES[need.type] || need.type;
+        const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
         const needUser = users[need.userId] || {};
         const position = formatPosition(needUser.position || '');
         const fullName = needUser.fullName || need.fullName || '';
-        const label = `📦 ${typeName} -> ${position} ${fullName}`.trim();
+        const label = `${typeEmoji} ${typeName} -> ${position} ${fullName}`.trim();
         return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `select_need_item_${needId}`)];
     });
 
@@ -1440,10 +1452,11 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
         const users = await loadUsers();
         const itemButtons = currentNeeds.map(([needId, need]) => {
             const typeName = TYPE_NAMES[need.type] || need.type;
+            const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
             const needUser = users[need.userId] || {};
             const position = formatPosition(needUser.position || '');
             const fullName = needUser.fullName || need.fullName || '';
-            const label = `📦 ${typeName} -> ${position} ${fullName}`.trim();
+            const label = `${typeEmoji} ${typeName} -> ${position} ${fullName}`.trim();
             return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `manage_select_need_${needId}`)];
         });
 
