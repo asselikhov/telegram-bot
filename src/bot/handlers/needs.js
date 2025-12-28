@@ -42,13 +42,23 @@ async function notifyNeedAuthorStatusChange(telegram, need, oldStatus, newStatus
         const newStatusName = STATUS_NAMES[newStatus] || newStatus;
         const typeName = TYPE_NAMES[need.type] || need.type;
         
-        const notificationText = `📦 Изменен статус вашей заявки на потребности\n\n` +
-            `Объект: ${need.objectName}\n` +
-            `Тип: ${typeName}\n` +
-            `Наименование: ${need.name}\n` +
-            `Статус изменен: ${oldStatusName} → ${newStatusName}`;
+        // Форматируем дату и время
+        const dateTime = new Date(need.timestamp);
+        const dateStr = dateTime.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timeStr = dateTime.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
         
-        await telegram.sendMessage(need.userId, notificationText).catch(err => {
+        // Эмодзи для статусов
+        const oldStatusEmoji = oldStatusName === 'Выполнена' ? '✅' : oldStatusName === 'Новая' ? '🆕' : oldStatusName === 'В обработке' ? '🔄' : oldStatusName === 'Отклонена' ? '❌' : '';
+        const newStatusEmoji = newStatusName === 'Выполнена' ? '✅' : newStatusName === 'Новая' ? '🆕' : newStatusName === 'В обработке' ? '🔄' : newStatusName === 'Отклонена' ? '❌' : '';
+        
+        const needNumber = need.number || '';
+        const notificationText = `⚠️Изменен статус вашей заявки на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''} по объекту ${need.objectName} 📅 ${dateStr} ${timeStr}\n\n` +
+            `<blockquote>Наименование: ${need.name}\n` +
+            `Статус изменен: ${oldStatusEmoji} ${oldStatusName} → ${newStatusEmoji} ${newStatusName}</blockquote>`;
+        
+        await telegram.sendMessage(need.userId, notificationText, {
+            parse_mode: 'HTML'
+        }).catch(err => {
             console.error(`Ошибка отправки уведомления пользователю ${need.userId}:`, err);
         });
     } catch (error) {
@@ -430,9 +440,9 @@ async function showNeedDetails(ctx, needId) {
     const fullName = needUser.fullName || need.fullName || '';
     const needNumber = need.number || '';
 
-    let needText = `Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
-${escapeHtml(need.objectName)}
-${dateStr} ${timeStr}
+    let needText = `<blockquote>Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
+по объекту ${escapeHtml(need.objectName)}
+📅 ${dateStr} ${timeStr}
 
 ${position ? escapeHtml(position) : ''}
 ${organization ? escapeHtml(organization) : ''}
@@ -440,7 +450,7 @@ ${escapeHtml(fullName)}
 
 Наименование: ${escapeHtml(need.name)}
 Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}
-Статус: ${statusEmoji} ${statusName}`;
+Статус: ${statusEmoji} ${statusName}</blockquote>`;
 
     const uniqueObjects = [...new Set(Object.values(needs).map(n => n.objectName))];
     const normalizedNeedObjectName = need.objectName && need.objectName.trim();
@@ -459,7 +469,10 @@ ${escapeHtml(fullName)}
         [Markup.button.callback('↩️ Назад', `select_need_date_${uniqueObjects.indexOf(need.objectName)}_${uniqueDates.indexOf(needDate)}`)]
     ];
 
-    const message = await ctx.reply(needText.trim(), Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply(needText.trim(), {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard(buttons)
+    });
     addMessageId(ctx, message.message_id);
 }
 
@@ -1603,9 +1616,9 @@ async function showManagedNeedDetails(ctx, needId) {
         const fullName = needUser.fullName || need.fullName || '';
         const needNumber = need.number || '';
 
-        let needText = `Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
-${need.objectName}
-${dateStr} ${timeStr}
+        let needText = `<blockquote>Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
+по объекту ${need.objectName}
+📅 ${dateStr} ${timeStr}
 
 ${position ? position : ''}
 ${organization ? organization : ''}
@@ -1613,7 +1626,7 @@ ${fullName}
 
 Наименование: ${need.name}
 Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}
-Статус: ${statusEmoji} ${statusName}`;
+Статус: ${statusEmoji} ${statusName}</blockquote>`;
 
         // Определяем, откуда пришли к деталям заявки
         const state = ensureUserState(ctx);
@@ -1639,7 +1652,10 @@ ${fullName}
             [Markup.button.callback('↩️ Назад', backButton)]
         ];
 
-        const message = await ctx.reply(needText.trim(), Markup.inlineKeyboard(buttons));
+        const message = await ctx.reply(needText.trim(), {
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard(buttons)
+        });
         addMessageId(ctx, message.message_id);
     } catch (error) {
         console.error('Ошибка в showManagedNeedDetails:', error);

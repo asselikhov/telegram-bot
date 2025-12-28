@@ -4678,9 +4678,9 @@ ${objectsList}
             const fullName = needUser.fullName || need.fullName || '';
             const needNumber = need.number || '';
 
-            let needText = `Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
-${need.objectName}
-${dateStr} ${timeStr}
+            let needText = `<blockquote>Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
+по объекту ${need.objectName}
+📅 ${dateStr} ${timeStr}
 
 ${position ? position : ''}
 ${organization ? organization : ''}
@@ -4688,7 +4688,7 @@ ${fullName}
 
 Наименование: ${need.name}
 Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}
-Статус: ${statusEmoji} ${statusName}`;
+Статус: ${statusEmoji} ${statusName}</blockquote>`;
 
             const buttons = [
                 [Markup.button.callback('✏️ Редактировать', `admin_edit_need_${needId}`)],
@@ -4696,7 +4696,10 @@ ${fullName}
                 [Markup.button.callback('↩️ Назад', 'admin_needs_all')]
             ];
 
-            const message = await ctx.reply(needText.trim(), Markup.inlineKeyboard(buttons));
+            const message = await ctx.reply(needText.trim(), {
+                parse_mode: 'HTML',
+                ...Markup.inlineKeyboard(buttons)
+            });
             addMessageId(ctx, message.message_id);
         } catch (error) {
             console.error('Ошибка в showAdminNeedDetails:', error);
