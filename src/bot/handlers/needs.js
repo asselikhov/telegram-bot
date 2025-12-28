@@ -593,6 +593,55 @@ async function manageAllNeeds(ctx) {
 
         await clearPreviousMessages(ctx, userId);
 
+        // Подсчет статистики
+        const allNeedsForStats = Object.values(filteredNeeds);
+        
+        // Статусы
+        const newNeeds = allNeedsForStats.filter(n => n.status === 'new');
+        const inProgressNeeds = allNeedsForStats.filter(n => n.status === 'in_progress');
+        const completedNeeds = allNeedsForStats.filter(n => n.status === 'completed');
+        const rejectedNeeds = allNeedsForStats.filter(n => n.status === 'rejected');
+        
+        // Не закрытые (Новая + В обработке)
+        const notClosedCount = newNeeds.length + inProgressNeeds.length;
+        
+        // Разбивка новых по срочности
+        const newUrgent = newNeeds.filter(n => n.urgency === 'urgent').length;
+        const newSoon = newNeeds.filter(n => n.urgency === 'soon').length;
+        const newPlanned = newNeeds.filter(n => n.urgency === 'planned').length;
+        
+        // Разбивка в обработке по срочности
+        const inProgressUrgent = inProgressNeeds.filter(n => n.urgency === 'urgent').length;
+        const inProgressSoon = inProgressNeeds.filter(n => n.urgency === 'soon').length;
+        const inProgressPlanned = inProgressNeeds.filter(n => n.urgency === 'planned').length;
+        
+        // Формирование текста статистики
+        let statsText = `Не закрытых заявок: ${notClosedCount}\n`;
+        
+        if (newNeeds.length > 0) {
+            const urgencyParts = [];
+            if (newUrgent > 0) urgencyParts.push(`срочных: ${newUrgent}`);
+            if (newSoon > 0) urgencyParts.push(`в ближайшее время: ${newSoon}`);
+            if (newPlanned > 0) urgencyParts.push(`плановых: ${newPlanned}`);
+            statsText += `Новых: ${newNeeds.length}${urgencyParts.length > 0 ? ` (${urgencyParts.join(', ')})` : ''}\n`;
+        }
+        
+        if (inProgressNeeds.length > 0) {
+            const urgencyParts = [];
+            if (inProgressUrgent > 0) urgencyParts.push(`срочных: ${inProgressUrgent}`);
+            if (inProgressSoon > 0) urgencyParts.push(`в ближайшее время: ${inProgressSoon}`);
+            if (inProgressPlanned > 0) urgencyParts.push(`плановых: ${inProgressPlanned}`);
+            statsText += `В обработке: ${inProgressNeeds.length}${urgencyParts.length > 0 ? ` (${urgencyParts.join(', ')})` : ''}\n`;
+        }
+        
+        if (completedNeeds.length > 0) {
+            statsText += `\nВыполненных заявок: ${completedNeeds.length}\n`;
+        }
+        
+        if (rejectedNeeds.length > 0) {
+            statsText += `\nОтклоненных заявок: ${rejectedNeeds.length}`;
+        }
+
         const buttons = uniqueObjects.map((obj, index) => {
             const objectNeeds = Object.values(filteredNeeds).filter(n =>
                 n.objectName && n.objectName.trim() === obj.trim()
@@ -603,10 +652,8 @@ async function manageAllNeeds(ctx) {
 
         buttons.push([Markup.button.callback('↩️ Назад', 'needs')]);
 
-        const message = await ctx.reply(
-            '⚙️ Управление заявками\n\nВыберите объект:',
-            Markup.inlineKeyboard(buttons)
-        );
+        const messageText = `⚙️ Управление заявками\n\n${statsText}\nВыберите объект:`;
+        const message = await ctx.reply(messageText, Markup.inlineKeyboard(buttons));
         addMessageId(ctx, message.message_id);
         
         const state = ensureUserState(ctx);
