@@ -1,4 +1,5 @@
 const { Markup } = require('telegraf');
+const ExcelJS = require('exceljs');
 const { loadUsers } = require('../../database/userModel');
 const { loadUserNeeds, saveNeed, deleteNeed, loadAllNeeds } = require('../../database/needModel');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
@@ -642,17 +643,13 @@ async function manageAllNeeds(ctx) {
             statsText += `\n<b><u>Отклоненных заявок: ${rejectedNeeds.length}</u></b>`;
         }
 
-        const buttons = uniqueObjects.map((obj, index) => {
-            const objectNeeds = Object.values(filteredNeeds).filter(n =>
-                n.objectName && n.objectName.trim() === obj.trim()
-            );
-            const displayObj = obj.length > 30 ? obj.substring(0, 27) + '...' : obj;
-            return [Markup.button.callback(`${displayObj} (${objectNeeds.length})`, `manage_needs_object_${index}`)];
-        });
+        const buttons = [
+            [Markup.button.callback('📊 Все заявки в Excel', 'download_all_needs_excel')],
+            [Markup.button.callback('📋 Заявки по объектам', 'manage_needs_objects')],
+            [Markup.button.callback('↩️ Назад', 'needs')]
+        ];
 
-        buttons.push([Markup.button.callback('↩️ Назад', 'needs')]);
-
-        const messageText = `⚙️ Управление заявками\n\n${statsText}\nВыберите объект:`;
+        const messageText = `⚙️ Управление заявками\n\n${statsText}`;
         const message = await ctx.reply(messageText, {
             parse_mode: 'HTML',
             reply_markup: Markup.inlineKeyboard(buttons).reply_markup
@@ -662,10 +659,275 @@ async function manageAllNeeds(ctx) {
         const state = ensureUserState(ctx);
         if (state) {
             state.managedNeedsObjectsList = uniqueObjects;
+            state.managedNeedsFilteredNeeds = filteredNeeds;
         }
     } catch (error) {
         console.error('Ошибка в manageAllNeeds:', error);
         await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showManagedNeedsObjects(ctx, page = 0) {
+    console.log(`[MANAGED_NEEDS] showManagedNeedsObjects CALLED: page=${page}`);
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) {
+        console.log(`[MANAGED_NEEDS] showManagedNeedsObjects: пользователь не найден или не одобрен`);
+        return;
+    }
+
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager) {
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
+            }
+        }
+    }
+
+    if (!isNeedManager) return;
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        
+        let filteredNeeds = allNeeds;
+        if (userId !== ADMIN_ID) {
+            const needsMap = {};
+            Object.values(allNeeds).forEach(need => {
+                const needObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+                if (needObjectName && managedObjects.includes(needObjectName)) {
+                    needsMap[need.needId] = need;
+                }
+            });
+            filteredNeeds = needsMap;
+        }
+
+        const needsArray = Object.values(filteredNeeds).filter(n => n && n.objectName);
+        const uniqueObjects = [...new Set(needsArray.map(n => n.objectName.trim()).filter(obj => obj))];
+
+        if (uniqueObjects.length === 0) {
+            await clearPreviousMessages(ctx, userId);
+            const message = await ctx.reply('Заявок на потребности пока нет.', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', 'manage_all_needs')]
+            ]));
+            addMessageId(ctx, message.message_id);
+            return;
+        }
+
+        await clearPreviousMessages(ctx, userId);
+
+        const itemsPerPage = 10;
+        const totalPages = Math.ceil(uniqueObjects.length / itemsPerPage);
+        const pageNum = typeof page === 'number' ? page : 0;
+        const startIndex = pageNum * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, uniqueObjects.length);
+        const currentObjects = uniqueObjects.slice(startIndex, endIndex);
+
+        const buttons = currentObjects.map((obj, index) => {
+            // Фильтруем заявки без архивных (completed и rejected)
+            const objectNeeds = Object.values(filteredNeeds).filter(n =>
+                n.objectName && 
+                n.objectName.trim() === obj.trim() && 
+                n.status !== 'completed' && 
+                n.status !== 'rejected'
+            );
+            const displayObj = obj.length > 30 ? obj.substring(0, 27) + '...' : obj;
+            const globalIndex = uniqueObjects.indexOf(obj);
+            return [Markup.button.callback(`${displayObj} (${objectNeeds.length})`, `manage_needs_object_${globalIndex}`)];
+        });
+
+        const paginationButtons = [];
+        if (totalPages > 1) {
+            if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `manage_needs_objects_page_${pageNum - 1}`));
+            if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `manage_needs_objects_page_${pageNum + 1}`));
+        }
+        if (paginationButtons.length > 0) buttons.push(paginationButtons);
+
+        buttons.push([Markup.button.callback('↩️ Назад', 'manage_all_needs')]);
+
+        const message = await ctx.reply(
+            `📋 Заявки по объектам (Страница ${pageNum + 1} из ${totalPages}):`,
+            Markup.inlineKeyboard(buttons)
+        );
+        addMessageId(ctx, message.message_id);
+        
+        const state = ensureUserState(ctx);
+        if (state) {
+            state.managedNeedsObjectsList = uniqueObjects;
+            state.managedNeedsFilteredNeeds = filteredNeeds;
+        }
+    } catch (error) {
+        console.error('Ошибка в showManagedNeedsObjects:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function downloadAllNeedsExcel(ctx) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) {
+        return ctx.reply('У вас нет прав для выгрузки данных.');
+    }
+
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager) {
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
+            }
+        }
+    }
+
+    if (!isNeedManager) {
+        return ctx.reply('У вас нет прав для выгрузки данных.');
+    }
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        
+        let filteredNeeds = allNeeds;
+        if (userId !== ADMIN_ID) {
+            const needsMap = {};
+            Object.values(allNeeds).forEach(need => {
+                const needObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+                if (needObjectName && managedObjects.includes(needObjectName)) {
+                    needsMap[need.needId] = need;
+                }
+            });
+            filteredNeeds = needsMap;
+        }
+
+        const needsArray = Object.values(filteredNeeds).filter(n => n && n.objectName);
+
+        if (needsArray.length === 0) {
+            return ctx.reply('Заявок для выгрузки не найдено.');
+        }
+
+        await clearPreviousMessages(ctx, userId);
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Заявки');
+
+        const headerStyle = {
+            font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } },
+            alignment: { horizontal: 'center', vertical: 'middle' },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        const centeredCellStyle = {
+            font: { name: 'Arial', size: 9 },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        const paddedCellStyle = {
+            font: { name: 'Arial', size: 9 },
+            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+
+        worksheet.getRow(1).values = ['№', 'Объект', 'Дата', 'Время', 'Тип', 'Наименование', 'Срочность', 'Статус', 'Должность', 'Организация', 'ФИО'];
+        worksheet.getRow(1).eachCell(cell => { cell.style = headerStyle; });
+
+        worksheet.columns = [
+            { key: 'number', width: 8 },
+            { key: 'objectName', width: 30 },
+            { key: 'date', width: 12 },
+            { key: 'time', width: 10 },
+            { key: 'type', width: 15 },
+            { key: 'name', width: 40 },
+            { key: 'urgency', width: 20 },
+            { key: 'status', width: 15 },
+            { key: 'position', width: 25 },
+            { key: 'organization', width: 30 },
+            { key: 'fullName', width: 30 }
+        ];
+
+        // Сортируем заявки по дате (новые первыми)
+        needsArray.sort((a, b) => {
+            const dateA = parseAndFormatDate(a.date);
+            const dateB = parseAndFormatDate(b.date);
+            const parseDate = (dateStr) => {
+                const [day, month, year] = dateStr.split('.').map(Number);
+                return new Date(year, month - 1, day);
+            };
+            const dateCompare = parseDate(dateB).getTime() - parseDate(dateA).getTime();
+            if (dateCompare === 0) {
+                return b.timestamp.localeCompare(a.timestamp);
+            }
+            return dateCompare;
+        });
+
+        let currentRow = 2;
+        for (const need of needsArray) {
+            const needUser = users[need.userId] || {};
+            const dateTime = new Date(need.timestamp);
+            const dateStr = dateTime.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' });
+            const timeStr = dateTime.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const typeName = TYPE_NAMES[need.type] || need.type;
+            const urgencyName = URGENCY_NAMES[need.urgency]?.name || need.urgency;
+            const statusName = STATUS_NAMES[need.status] || need.status;
+            const position = needUser.position || '';
+            const organization = needUser.organization || '';
+            const fullName = needUser.fullName || need.fullName || '';
+            const needNumber = need.number || '';
+
+            worksheet.getRow(currentRow).values = [
+                needNumber,
+                need.objectName,
+                dateStr,
+                timeStr,
+                typeName,
+                need.name,
+                urgencyName,
+                statusName,
+                position,
+                organization,
+                fullName
+            ];
+
+            worksheet.getCell(`A${currentRow}`).style = centeredCellStyle;
+            worksheet.getCell(`B${currentRow}`).style = paddedCellStyle;
+            worksheet.getCell(`C${currentRow}`).style = centeredCellStyle;
+            worksheet.getCell(`D${currentRow}`).style = centeredCellStyle;
+            worksheet.getCell(`E${currentRow}`).style = centeredCellStyle;
+            worksheet.getCell(`F${currentRow}`).style = paddedCellStyle;
+            worksheet.getCell(`G${currentRow}`).style = centeredCellStyle;
+            worksheet.getCell(`H${currentRow}`).style = centeredCellStyle;
+            worksheet.getCell(`I${currentRow}`).style = paddedCellStyle;
+            worksheet.getCell(`J${currentRow}`).style = paddedCellStyle;
+            worksheet.getCell(`K${currentRow}`).style = paddedCellStyle;
+
+            currentRow++;
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const filename = `all_needs_${formatDate(new Date())}.xlsx`;
+
+        const documentMessage = await ctx.replyWithDocument({ source: buffer, filename });
+        addMessageId(ctx, documentMessage.message_id);
+    } catch (error) {
+        console.error('Ошибка при выгрузке заявок в Excel:', error);
+        await ctx.reply('Произошла ошибка при выгрузке файла. Попробуйте позже.').catch(() => {});
     }
 }
 
@@ -707,7 +969,8 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
         if (userId !== ADMIN_ID) {
             const needsMap = {};
             Object.values(allNeeds).forEach(need => {
-                if (managedObjects.includes(need.objectName)) {
+                const needObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+                if (needObjectName && managedObjects.some(obj => obj.trim() === needObjectName)) {
                     needsMap[need.needId] = need;
                 }
             });
@@ -724,13 +987,20 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
                 state.managedNeedsObjectsList = uniqueObjects;
             }
         }
+        if (state) {
+            state.managedNeedsFilteredNeeds = filteredNeeds;
+        }
         const objectName = uniqueObjects[objectIndex];
 
         await clearPreviousMessages(ctx, userId);
 
         const normalizedObjectName = objectName && objectName.trim();
+        // Исключаем архивные заявки (completed и rejected) из обычного списка
         const objectNeeds = Object.entries(filteredNeeds).filter(([_, n]) =>
-            n.objectName && n.objectName.trim() === normalizedObjectName
+            n.objectName && 
+            n.objectName.trim() === normalizedObjectName &&
+            n.status !== 'completed' &&
+            n.status !== 'rejected'
         );
         const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
         const uniqueDatesArray = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
@@ -762,6 +1032,7 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
         // Сохраняем список дат в state для использования при выборе даты
         if (state) {
             state.managedNeedsDatesList = uniqueDates;
+            state.managedNeedsFilteredNeeds = filteredNeeds;
         }
 
         const dateButtons = currentDates.map((date, index) => {
@@ -778,7 +1049,8 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
         }
         if (paginationButtons.length > 0) buttons.push(paginationButtons);
         buttons.push(...dateButtons);
-        buttons.push([Markup.button.callback('↩️ Назад', 'manage_all_needs')]);
+        buttons.push([Markup.button.callback('📦 Архив', `manage_needs_archive_object_${objectIndex}_page_0`)]);
+        buttons.push([Markup.button.callback('↩️ Назад', 'manage_needs_objects')]);
 
         const message = await ctx.reply(
             `📦 Выберите дату для объекта "${objectName}" (Страница ${pageNum + 1} из ${totalPages}):`,
@@ -854,8 +1126,12 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
             return ctx.reply('Ошибка: объект не найден.');
         }
         const normalizedObjectName = objectName.trim();
+        // Исключаем архивные заявки (completed и rejected) из обычного списка
         const objectNeeds = Object.entries(filteredNeeds).filter(([_, n]) =>
-            n.objectName && n.objectName.trim() === normalizedObjectName
+            n.objectName && 
+            n.objectName.trim() === normalizedObjectName &&
+            n.status !== 'completed' &&
+            n.status !== 'rejected'
         );
 
         const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
@@ -928,7 +1204,7 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
         }
         if (paginationButtons.length > 0) buttons.push(paginationButtons);
         buttons.push(...itemButtons);
-        buttons.push([Markup.button.callback('↩️ Назад', `manage_needs_object_${objectIndex}`)]);
+        buttons.push([Markup.button.callback('↩️ Назад', `manage_needs_object_${objectIndex}_dates_page_0`)]);
 
         const message = await ctx.reply(
             `📦 Заявки для объекта "${objectName}" за ${selectedDate} (Страница ${pageNum + 1} из ${totalPages}):`,
@@ -937,6 +1213,125 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
         addMessageId(ctx, message.message_id);
     } catch (error) {
         console.error('Ошибка в showManagedNeedsItems:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showManagedNeedsArchive(ctx, objectIndex, page = 0) {
+    console.log(`[MANAGED_NEEDS] showManagedNeedsArchive CALLED: objectIndex=${objectIndex}, page=${page}`);
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+    const user = users[userId];
+
+    if (!user || !user.isApproved) {
+        console.log(`[MANAGED_NEEDS] showManagedNeedsArchive: пользователь не найден или не одобрен`);
+        return;
+    }
+
+    let isNeedManager = userId === ADMIN_ID;
+    const managedObjects = [];
+    
+    if (!isNeedManager) {
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
+            }
+        }
+    }
+
+    if (!isNeedManager) return;
+
+    try {
+        const allNeeds = await loadAllNeeds();
+        
+        let filteredNeeds = allNeeds;
+        if (userId !== ADMIN_ID) {
+            const needsMap = {};
+            Object.values(allNeeds).forEach(need => {
+                const needObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+                if (needObjectName && managedObjects.includes(needObjectName)) {
+                    needsMap[need.needId] = need;
+                }
+            });
+            filteredNeeds = needsMap;
+        }
+
+        const state = ensureUserState(ctx);
+        let uniqueObjects;
+        if (state && state.managedNeedsObjectsList) {
+            uniqueObjects = state.managedNeedsObjectsList;
+        } else {
+            const needsArray = Object.values(filteredNeeds).filter(n => n && n.objectName);
+            uniqueObjects = [...new Set(needsArray.map(n => n.objectName.trim()).filter(obj => obj))];
+            if (state) {
+                state.managedNeedsObjectsList = uniqueObjects;
+            }
+        }
+        const objectName = uniqueObjects[objectIndex];
+
+        await clearPreviousMessages(ctx, userId);
+
+        const normalizedObjectName = objectName && objectName.trim();
+        // Фильтруем только архивные заявки (completed и rejected)
+        const archivedNeeds = Object.entries(filteredNeeds).filter(([_, n]) =>
+            n.objectName && 
+            n.objectName.trim() === normalizedObjectName &&
+            (n.status === 'completed' || n.status === 'rejected')
+        );
+
+        const sortedArchivedNeeds = archivedNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
+
+        if (sortedArchivedNeeds.length === 0) {
+            return ctx.reply(`Архивных заявок для объекта "${objectName}" не найдено.`, Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', `manage_needs_object_${objectIndex}_dates_page_0`)]
+            ]));
+        }
+
+        const itemsPerPage = 10;
+        const totalPages = Math.ceil(sortedArchivedNeeds.length / itemsPerPage);
+        const pageNum = typeof page === 'number' ? page : 0;
+        const startIndex = pageNum * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, sortedArchivedNeeds.length);
+        const currentNeeds = sortedArchivedNeeds.slice(startIndex, endIndex);
+
+        // Функция для форматирования должности (сокращение)
+        const formatPosition = (position) => {
+            if (position === 'Производитель работ') return 'Произв. работ';
+            return position || '';
+        };
+
+        const itemButtons = currentNeeds.map(([needId, need]) => {
+            const typeName = TYPE_NAMES[need.type] || need.type;
+            const needUser = users[need.userId] || {};
+            const position = formatPosition(needUser.position || '');
+            const fullName = needUser.fullName || need.fullName || '';
+            const label = `📦 ${typeName} -> ${position} ${fullName}`.trim();
+            return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `manage_select_need_${needId}`)];
+        });
+
+        const buttons = [];
+        const paginationButtons = [];
+        if (totalPages > 1) {
+            if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `manage_needs_archive_object_${objectIndex}_page_${pageNum - 1}`));
+            if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `manage_needs_archive_object_${objectIndex}_page_${pageNum + 1}`));
+        }
+        if (paginationButtons.length > 0) buttons.push(paginationButtons);
+        buttons.push(...itemButtons);
+        buttons.push([Markup.button.callback('↩️ Назад', `manage_needs_object_${objectIndex}_dates_page_0`)]);
+
+        const message = await ctx.reply(
+            `📦 Архив заявок для объекта "${objectName}" (Страница ${pageNum + 1} из ${totalPages}):`,
+            Markup.inlineKeyboard(buttons)
+        );
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в showManagedNeedsArchive:', error);
         await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
     }
 }
@@ -978,7 +1373,8 @@ async function showManagedNeedDetails(ctx, needId) {
         }
 
         // Проверяем права доступа для ответственных (только для своих объектов)
-        if (userId !== ADMIN_ID && !managedObjects.includes(need.objectName)) {
+        const normalizedNeedObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+        if (userId !== ADMIN_ID && !managedObjects.some(obj => obj.trim() === normalizedNeedObjectName)) {
             await clearPreviousMessages(ctx, userId);
             return ctx.reply('У вас нет прав для просмотра этой заявки.');
         }
@@ -1020,10 +1416,27 @@ ${fullName}
 Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}
 Статус: ${statusEmoji} ${statusName}`;
 
+        // Определяем, откуда пришли к деталям заявки
+        const state = ensureUserState(ctx);
+        let backButton = 'manage_all_needs';
+        if (state && state.managedNeedsObjectsList) {
+            const normalizedNeedObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+            const needObjectIndex = state.managedNeedsObjectsList.findIndex(obj => obj.trim() === normalizedNeedObjectName);
+            if (needObjectIndex !== -1) {
+                // Если заявка из архива, возвращаемся в архив
+                if (need.status === 'completed' || need.status === 'rejected') {
+                    backButton = `manage_needs_archive_object_${needObjectIndex}_page_0`;
+                } else {
+                    // Иначе возвращаемся к списку дат
+                    backButton = `manage_needs_object_${needObjectIndex}_dates_page_0`;
+                }
+            }
+        }
+
         const buttons = [
             [Markup.button.callback('✏️ Редактировать', `manage_edit_need_${needId}`)],
             [Markup.button.callback('📊 Изменить статус', `manage_change_need_status_${needId}`)],
-            [Markup.button.callback('↩️ Назад', 'manage_all_needs')]
+            [Markup.button.callback('↩️ Назад', backButton)]
         ];
 
         const message = await ctx.reply(needText.trim(), Markup.inlineKeyboard(buttons));
@@ -1069,7 +1482,8 @@ async function showManagedEditNeedMenu(ctx, needId) {
             return ctx.reply('Ошибка: заявка не найдена.');
         }
 
-        if (userId !== ADMIN_ID && !managedObjects.includes(need.objectName)) {
+        const normalizedNeedObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+        if (userId !== ADMIN_ID && !managedObjects.some(obj => obj.trim() === normalizedNeedObjectName)) {
             return ctx.reply('У вас нет прав для редактирования этой заявки.');
         }
 
@@ -1125,7 +1539,8 @@ async function showManagedChangeStatusMenu(ctx, needId) {
             return ctx.reply('Ошибка: заявка не найдена.');
         }
 
-        if (userId !== ADMIN_ID && !managedObjects.includes(need.objectName)) {
+        const normalizedNeedObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+        if (userId !== ADMIN_ID && !managedObjects.some(obj => obj.trim() === normalizedNeedObjectName)) {
             return ctx.reply('У вас нет прав для изменения статуса этой заявки.');
         }
 
@@ -1283,6 +1698,14 @@ module.exports = (bot) => {
     // Управление заявками для ответственных
     // Важно: более специфичные паттерны должны быть зарегистрированы раньше
     bot.action('manage_all_needs', (ctx) => manageAllNeeds(ctx));
+    bot.action('download_all_needs_excel', (ctx) => downloadAllNeedsExcel(ctx));
+    bot.action('manage_needs_objects', (ctx) => showManagedNeedsObjects(ctx, 0));
+    bot.action(/manage_needs_objects_page_(\d+)/, (ctx) => {
+        showManagedNeedsObjects(ctx, parseInt(ctx.match[1], 10));
+    });
+    bot.action(/manage_needs_archive_object_(\d+)_page_(\d+)/, (ctx) => {
+        showManagedNeedsArchive(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10));
+    });
     bot.action(/manage_needs_object_(\d+)_date_(\d+)_page_(\d+)/, (ctx) => {
         console.log(`[MANAGED_NEEDS] Action handler called: manage_needs_object_${ctx.match[1]}_date_${ctx.match[2]}_page_${ctx.match[3]}`);
         showManagedNeedsItems(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), parseInt(ctx.match[3], 10));
@@ -1380,7 +1803,8 @@ module.exports = (bot) => {
                 return ctx.reply('Ошибка: заявка не найдена.');
             }
 
-            if (userId !== ADMIN_ID && !managedObjects.includes(need.objectName)) {
+            const normalizedNeedObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+            if (userId !== ADMIN_ID && !managedObjects.some(obj => obj.trim() === normalizedNeedObjectName)) {
                 return ctx.reply('У вас нет прав для изменения статуса этой заявки.');
             }
 
@@ -1440,7 +1864,8 @@ module.exports = (bot) => {
                 return ctx.reply('Ошибка: заявка не найдена.');
             }
 
-            if (userId !== ADMIN_ID && !managedObjects.includes(need.objectName)) {
+            const normalizedNeedObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+            if (userId !== ADMIN_ID && !managedObjects.some(obj => obj.trim() === normalizedNeedObjectName)) {
                 return ctx.reply('У вас нет прав для изменения срочности этой заявки.');
             }
 
