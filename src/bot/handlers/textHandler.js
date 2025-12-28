@@ -308,11 +308,11 @@ module.exports = (bot) => {
                     urgencyText,
                     {
                         parse_mode: 'HTML',
-                        ...Markup.inlineKeyboard([
+                        reply_markup: Markup.inlineKeyboard([
                             [Markup.button.callback('🔥 Срочно', 'set_need_urgency_urgent')],
                             [Markup.button.callback('⏳ В ближайшее время', 'set_need_urgency_soon')],
                             [Markup.button.callback('📅 Планово', 'set_need_urgency_planned')]
-                        ])
+                        ]).reply_markup
                     }
                 );
                 state.messageIds = [urgencyMessage.message_id];
