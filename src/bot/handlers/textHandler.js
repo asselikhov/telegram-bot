@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const { connectMongo } = require('../../config/mongoConfig');
-const { loadUsers, saveUser, incrementNextReportId } = require('../../database/userModel');
+const { loadUsers, saveUser, incrementNextReportId, incrementNextNeedNumber } = require('../../database/userModel');
 const { clearPreviousMessages, formatDate, parseAndFormatDate } = require('../utils');
 const { loadInviteCode, markInviteCodeAsUsed, validateInviteCode } = require('../../database/inviteCodeModel');
 const { showObjectSelection } = require('../actions/objects');
@@ -1392,7 +1392,7 @@ ${escapeHtml(report.materials)}</blockquote>
         }
 
         try {
-            await saveReport(userId, report);
+        await saveReport(userId, report);
             // nextReportId уже инкрементирован атомарно, не нужно вызывать saveUser для этого
         } catch (error) {
             console.error(`Ошибка сохранения отчета для пользователя ${userId}:`, error);
@@ -1437,12 +1437,14 @@ ${escapeHtml(report.materials)}</blockquote>
             return;
         }
 
-        // Атомарно инкрементируем nextReportId для генерации ID заявки
+        // Атомарно инкрементируем nextReportId для генерации ID заявки и nextNeedNumber для номера заявки
         let nextReportId;
+        let needNumber;
         try {
             nextReportId = await incrementNextReportId(userId);
+            needNumber = await incrementNextNeedNumber(userId);
         } catch (error) {
-            console.error(`Ошибка получения nextReportId для пользователя ${userId}:`, error);
+            console.error(`Ошибка получения nextReportId/nextNeedNumber для пользователя ${userId}:`, error);
             await ctx.reply('❌ Ошибка при создании заявки. Пожалуйста, попробуйте позже.');
             return;
         }
@@ -1463,7 +1465,8 @@ ${escapeHtml(report.materials)}</blockquote>
             quantity: null,
             urgency: state.need.urgency,
             status: 'new',
-            fullName: users[userId].fullName || ''
+            fullName: users[userId].fullName || '',
+            number: needNumber
         };
         
         console.log(`[NEED_SAVE] Сохранение заявки: needId=${needId}, userId=${userId}, objectName="${need.objectName}", type=${need.type}, name="${need.name}"`);
@@ -1638,7 +1641,7 @@ ${escapeHtml(newReport.materials)}</blockquote>
         }
 
         try {
-            await saveReport(userId, newReport);
+        await saveReport(userId, newReport);
             // nextReportId уже инкрементирован атомарно, не нужно вызывать saveUser для этого
         } catch (error) {
             console.error(`Ошибка сохранения отредактированного отчета для пользователя ${userId}:`, error);
@@ -1651,7 +1654,7 @@ ${escapeHtml(newReport.materials)}</blockquote>
         await ctx.reply(`✅ Ваш отчёт обновлён:\n\n${newReportText}${newReport.photos.length > 0 ? '\n(С изображениями)' : ''}`, {
             parse_mode: 'HTML',
             ...Markup.inlineKeyboard([
-                [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
+            [Markup.button.callback('↩️ Вернуться в личный кабинет', 'profile')]
             ])
         });
         state.step = null;

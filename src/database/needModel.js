@@ -34,7 +34,7 @@ async function saveNeed(userId, need) {
                 }
             }
         }
-        const { needId, userId: needUserId, objectName, date, timestamp, type, name, quantity, urgency, status, fullName } = need;
+        const { needId, userId: needUserId, objectName, date, timestamp, type, name, quantity, urgency, status, fullName, number } = need;
         
         // Проверяем, что needId не пустой
         if (!needId) {
@@ -60,7 +60,8 @@ async function saveNeed(userId, need) {
                 quantity: quantity || null,
                 urgency,
                 status: status || 'new',
-                fullname: fullName || ''
+                fullname: fullName || '',
+                number: number || null
             },
             { upsert: true }
         );
@@ -94,7 +95,8 @@ async function loadUserNeeds(userId) {
             quantity: row.quantity || null,
             urgency: row.urgency,
             status: row.status || 'new',
-            fullName: row.fullname || ''
+            fullName: row.fullname || '',
+            number: row.number || null
         };
     });
     return needsMap;
@@ -116,7 +118,8 @@ async function loadAllNeeds() {
             quantity: row.quantity || null,
             urgency: row.urgency,
             status: row.status || 'new',
-            fullName: row.fullname || ''
+            fullName: row.fullname || '',
+            number: row.number || null
         };
     });
     return needsMap;

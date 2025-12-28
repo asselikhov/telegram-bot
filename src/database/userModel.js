@@ -171,4 +171,73 @@ async function incrementNextReportId(telegramId) {
     }
 }
 
-module.exports = { loadUsers, saveUser, deleteUser, incrementNextReportId };
+/**
+ * Атомарно инкрементирует и возвращает nextNeedNumber для пользователя
+ * Использует $inc оператор MongoDB для избежания race conditions
+ * @param {string} telegramId - ID пользователя
+ * @returns {Promise<number>} Новое значение nextNeedNumber
+ */
+async function incrementNextNeedNumber(telegramId) {
+    if (!telegramId) {
+        throw new Error('telegramId is required');
+    }
+    const usersCollection = (await getDb()).collection('users');
+    try {
+        // Сначала пытаемся инкрементировать (если пользователь существует)
+        const incResult = await usersCollection.findOneAndUpdate(
+            { telegramId },
+            { $inc: { nextNeedNumber: 1 } },
+            { returnDocument: 'after' }
+        );
+        
+        // Если пользователь существует и инкремент успешен
+        if (incResult && incResult.value && incResult.value.nextNeedNumber) {
+            return incResult.value.nextNeedNumber;
+        }
+        
+        // Если пользователь не существует или nextNeedNumber отсутствует, создаем/обновляем
+        await usersCollection.updateOne(
+            { telegramId },
+            {
+                $setOnInsert: {
+                    telegramId,
+                    nextNeedNumber: 1
+                }
+            },
+            { upsert: true }
+        );
+        
+        // Теперь инкрементируем (пользователь точно существует)
+        const finalResult = await usersCollection.findOneAndUpdate(
+            { telegramId },
+            { $inc: { nextNeedNumber: 1 } },
+            { returnDocument: 'after' }
+        );
+        
+        if (!finalResult || !finalResult.value) {
+            // Если всё ещё не получилось, получаем значение напрямую
+            const user = await usersCollection.findOne({ telegramId });
+            if (user && user.nextNeedNumber) {
+                // Инкрементируем вручную
+                await usersCollection.updateOne(
+                    { telegramId },
+                    { $inc: { nextNeedNumber: 1 } }
+                );
+                return user.nextNeedNumber + 1;
+            }
+            // Если nextNeedNumber отсутствует, устанавливаем его в 1
+            await usersCollection.updateOne(
+                { telegramId },
+                { $set: { nextNeedNumber: 1 } }
+            );
+            return 1;
+        }
+        
+        return finalResult.value.nextNeedNumber || 1;
+    } catch (error) {
+        console.error(`Error incrementing nextNeedNumber for user ${telegramId}:`, error);
+        throw error;
+    }
+}
+
+module.exports = { loadUsers, saveUser, deleteUser, incrementNextReportId, incrementNextNeedNumber };

@@ -19,16 +19,6 @@ const TYPE_NAMES = {
     'services': 'Услуги'
 };
 
-// Эмодзи для типов потребностей
-const TYPE_EMOJIS = {
-    'materials': '📦',
-    'equipment': '⚙️',
-    'special_equipment': '🚜',
-    'office_supplies': '📎',
-    'accommodation': '🏠',
-    'services': '🔧'
-};
-
 // Маппинг срочности
 const URGENCY_NAMES = {
     'urgent': { name: 'Срочно', emoji: '🔥' },
@@ -43,60 +33,6 @@ const STATUS_NAMES = {
     'completed': 'Выполнена',
     'rejected': 'Отклонена'
 };
-
-// Эмодзи для статусов
-const STATUS_EMOJIS = {
-    'new': '🆕',
-    'in_progress': '⏳',
-    'completed': '✅',
-    'rejected': '❌'
-};
-
-// Эмодзи для срочности (для отображения в деталях)
-const URGENCY_EMOJIS = {
-    'urgent': '🔥',
-    'soon': '⏳',
-    'planned': '📅'
-};
-
-// Функция для вычисления номера заявки (порядковый номер среди всех заявок, отсортированных по timestamp по возрастанию)
-async function getNeedNumber(needId) {
-    const { loadAllNeeds } = require('../../database/needModel');
-    const allNeeds = await loadAllNeeds();
-    const allNeedsArray = Object.values(allNeeds);
-    // Сортируем по timestamp по возрастанию (старые первыми, чтобы старые получили меньшие номера)
-    const sortedNeeds = allNeedsArray.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-    // Находим индекс заявки
-    const index = sortedNeeds.findIndex(n => n.needId === needId);
-    if (index === -1) return 1; // Если не найдена, возвращаем 1
-    return index + 1; // Первая (самая старая) будет №1
-}
-
-// Функция для сокращения должности
-function shortenPosition(position) {
-    if (!position) return '';
-    const positionShort = {
-        'Производитель работ': 'Произв. работ',
-        'Инженерно-технический работник': 'ИТР',
-        'Руководитель': 'Руководитель',
-        'Менеджер': 'Менеджер'
-    };
-    return positionShort[position] || position;
-}
-
-// Функция для форматирования ФИО в короткий формат (Фамилия И.О.)
-function formatFullNameShort(fullName) {
-    if (!fullName) return '';
-    const parts = fullName.trim().split(/\s+/);
-    if (parts.length === 0) return '';
-    if (parts.length === 1) return parts[0];
-    
-    const lastName = parts[0];
-    const firstName = parts.length > 1 ? parts[1].charAt(0).toUpperCase() + '.' : '';
-    const middleName = parts.length > 2 ? parts[2].charAt(0).toUpperCase() + '.' : '';
-    
-    return `${lastName} ${firstName}${middleName ? ' ' + middleName : ''}`.trim();
-}
 
 async function notifyNeedAuthorStatusChange(telegram, need, oldStatus, newStatus) {
     try {
@@ -388,8 +324,22 @@ async function showNeedItems(ctx, objectIndex, dateIndex, page = 0) {
     );
 
     const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
-    const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
-    const selectedDate = uniqueDates[dateIndex];
+    // Получаем уникальные даты и сортируем их в обратном порядке (новые первыми)
+    const uniqueDatesArray = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+    const uniqueDatesSorted = uniqueDatesArray.sort((a, b) => {
+        // Парсим даты в формате ДД.ММ.ГГГГ для сравнения
+        const parseDate = (dateStr) => {
+            const [day, month, year] = dateStr.split('.').map(Number);
+            return new Date(year, month - 1, day);
+        };
+        return parseDate(b).getTime() - parseDate(a).getTime();
+    });
+    const selectedDate = uniqueDatesSorted[dateIndex];
+    
+    if (!selectedDate) {
+        console.log(`[USER_NEEDS] showNeedItems: ОШИБКА: дата не найдена по индексу ${dateIndex}, uniqueDatesSorted.length=${uniqueDatesSorted.length}`);
+        return ctx.reply('Ошибка: дата не найдена.');
+    }
 
     await clearPreviousMessages(ctx, userId);
 
@@ -407,15 +357,19 @@ async function showNeedItems(ctx, objectIndex, dateIndex, page = 0) {
         return ctx.reply('Ошибка: нет заявок для отображения.');
     }
 
+    // Функция для форматирования должности (сокращение)
+    const formatPosition = (position) => {
+        if (position === 'Производитель работ') return 'Произв. работ';
+        return position || '';
+    };
+
     const users = await loadUsers();
     const itemButtons = currentNeeds.map(([needId, need]) => {
-        const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
         const typeName = TYPE_NAMES[need.type] || need.type;
-        const author = users[need.userId] || {};
-        const position = author.position ? shortenPosition(author.position) : '';
-        const fullName = author.fullName ? formatFullNameShort(author.fullName) : '';
-        const authorInfo = position && fullName ? `${position} ${fullName}` : (fullName || need.userId);
-        const label = `${typeEmoji} ${typeName} -> ${authorInfo}`;
+        const needUser = users[need.userId] || {};
+        const position = formatPosition(needUser.position || '');
+        const fullName = needUser.fullName || need.fullName || '';
+        const label = `📦 ${typeName} -> ${position} ${fullName}`.trim();
         return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `select_need_item_${needId}`)];
     });
 
@@ -447,31 +401,39 @@ async function showNeedDetails(ctx, needId) {
         return ctx.reply('Ошибка: заявка не найдена.');
     }
 
-    const users = await loadUsers();
-    const author = users[need.userId] || {};
-    
     const formattedDate = parseAndFormatDate(need.date);
-    const time = new Date(need.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const dateTime = new Date(need.timestamp);
+    const dateStr = dateTime.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' });
+    const timeStr = dateTime.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const typeName = TYPE_NAMES[need.type] || need.type;
-    const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
     const urgencyInfo = URGENCY_NAMES[need.urgency] || { name: need.urgency, emoji: '' };
     const statusName = STATUS_NAMES[need.status] || need.status;
+    const statusEmoji = statusName === 'Выполнена' ? '✅' : statusName === 'Новая' ? '🆕' : statusName === 'В обработке' ? '🔄' : statusName === 'Отклонена' ? '❌' : '';
 
-    // Получаем номер заявки
-    const needNumber = await getNeedNumber(needId);
+    const users = await loadUsers();
+    const needUser = users[need.userId] || {};
     
-    const urgencyEmoji = URGENCY_EMOJIS[need.urgency] || '';
-    const statusEmoji = STATUS_EMOJIS[need.status] || '';
+    // Функция для форматирования должности (сокращение)
+    const formatPosition = (position) => {
+        if (position === 'Производитель работ') return 'Произв. работ';
+        return position || '';
+    };
+    
+    const position = formatPosition(needUser.position || '');
+    const organization = needUser.organization || '';
+    const fullName = needUser.fullName || need.fullName || '';
+    const needNumber = need.number || '';
 
-    let needText = `Заявка на ${typeName.toLowerCase()} №${needNumber}
+    let needText = `Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
 ${escapeHtml(need.objectName)}
-${formattedDate} ${time}
+${dateStr} ${timeStr}
 
-${author.position ? shortenPosition(author.position) : ''}${author.organization ? '\n' + escapeHtml(author.organization) : ''}
-${escapeHtml(author.fullName || need.fullName || 'Не указано')}
+${position ? escapeHtml(position) : ''}
+${organization ? escapeHtml(organization) : ''}
+${escapeHtml(fullName)}
 
 Наименование: ${escapeHtml(need.name)}
-Срочность: ${urgencyEmoji} ${urgencyInfo.name}
+Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}
 Статус: ${statusEmoji} ${statusName}`;
 
     const uniqueObjects = [...new Set(Object.values(needs).map(n => n.objectName))];
@@ -491,10 +453,7 @@ ${escapeHtml(author.fullName || need.fullName || 'Не указано')}
         [Markup.button.callback('↩️ Назад', `select_need_date_${uniqueObjects.indexOf(need.objectName)}_${uniqueDates.indexOf(needDate)}`)]
     ];
 
-    const message = await ctx.reply(needText.trim(), {
-        parse_mode: 'HTML',
-        reply_markup: Markup.inlineKeyboard(buttons).reply_markup
-    });
+    const message = await ctx.reply(needText.trim(), Markup.inlineKeyboard(buttons));
     addMessageId(ctx, message.message_id);
 }
 
@@ -638,8 +597,8 @@ async function manageAllNeeds(ctx) {
             const objectNeeds = Object.values(filteredNeeds).filter(n =>
                 n.objectName && n.objectName.trim() === obj.trim()
             );
-            const objName = obj.length > 30 ? obj.substring(0, 27) + '...' : obj;
-            return [Markup.button.callback(`${objName} (${objectNeeds.length})`, `manage_needs_object_${index}`)];
+            const displayObj = obj.length > 30 ? obj.substring(0, 27) + '...' : obj;
+            return [Markup.button.callback(`${displayObj} (${objectNeeds.length})`, `manage_needs_object_${index}`)];
         });
 
         buttons.push([Markup.button.callback('↩️ Назад', 'needs')]);
@@ -895,15 +854,19 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
             return ctx.reply('Ошибка: нет заявок для отображения.');
         }
 
+        // Функция для форматирования должности (сокращение)
+        const formatPosition = (position) => {
+            if (position === 'Производитель работ') return 'Произв. работ';
+            return position || '';
+        };
+
         const users = await loadUsers();
         const itemButtons = currentNeeds.map(([needId, need]) => {
-            const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
             const typeName = TYPE_NAMES[need.type] || need.type;
-            const author = users[need.userId] || {};
-            const position = author.position ? shortenPosition(author.position) : '';
-            const fullName = author.fullName ? formatFullNameShort(author.fullName) : '';
-            const authorInfo = position && fullName ? `${position} ${fullName}` : (fullName || need.userId);
-            const label = `${typeEmoji} ${typeName} -> ${authorInfo}`;
+            const needUser = users[need.userId] || {};
+            const position = formatPosition(needUser.position || '');
+            const fullName = needUser.fullName || need.fullName || '';
+            const label = `📦 ${typeName} -> ${position} ${fullName}`.trim();
             return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `manage_select_need_${needId}`)];
         });
 
@@ -972,29 +935,39 @@ async function showManagedNeedDetails(ctx, needId) {
 
         await clearPreviousMessages(ctx, userId);
 
-        const allUsers = await loadUsers();
-        const author = allUsers[need.userId] || {};
-        
         const formattedDate = parseAndFormatDate(need.date);
-        const time = new Date(need.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const dateTime = new Date(need.timestamp);
+        const dateStr = dateTime.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' });
+        const timeStr = dateTime.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const typeName = TYPE_NAMES[need.type] || need.type;
         const urgencyInfo = URGENCY_NAMES[need.urgency] || { name: need.urgency, emoji: '' };
         const statusName = STATUS_NAMES[need.status] || need.status;
-        const urgencyEmoji = URGENCY_EMOJIS[need.urgency] || '';
-        const statusEmoji = STATUS_EMOJIS[need.status] || '';
+        const statusEmoji = statusName === 'Выполнена' ? '✅' : statusName === 'Новая' ? '🆕' : statusName === 'В обработке' ? '🔄' : statusName === 'Отклонена' ? '❌' : '';
+
+        const users = await loadUsers();
+        const needUser = users[need.userId] || {};
         
-        // Получаем номер заявки
-        const needNumber = await getNeedNumber(needId);
+        // Функция для форматирования должности (сокращение)
+        const formatPosition = (position) => {
+            if (position === 'Производитель работ') return 'Произв. работ';
+            return position || '';
+        };
+        
+        const position = formatPosition(needUser.position || '');
+        const organization = needUser.organization || '';
+        const fullName = needUser.fullName || need.fullName || '';
+        const needNumber = need.number || '';
 
-        let needText = `Заявка на ${typeName.toLowerCase()} №${needNumber}
-${escapeHtml(need.objectName)}
-${formattedDate} ${time}
+        let needText = `Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
+${need.objectName}
+${dateStr} ${timeStr}
 
-${author.position ? shortenPosition(author.position) : ''}${author.organization ? '\n' + escapeHtml(author.organization) : ''}
-${escapeHtml(author.fullName || need.fullName || 'Не указано')}
+${position ? position : ''}
+${organization ? organization : ''}
+${fullName}
 
-Наименование: ${escapeHtml(need.name)}
-Срочность: ${urgencyEmoji} ${urgencyInfo.name}
+Наименование: ${need.name}
+Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}
 Статус: ${statusEmoji} ${statusName}`;
 
         const buttons = [
@@ -1003,10 +976,7 @@ ${escapeHtml(author.fullName || need.fullName || 'Не указано')}
             [Markup.button.callback('↩️ Назад', 'manage_all_needs')]
         ];
 
-        const message = await ctx.reply(needText.trim(), {
-            parse_mode: 'HTML',
-            reply_markup: Markup.inlineKeyboard(buttons).reply_markup
-        });
+        const message = await ctx.reply(needText.trim(), Markup.inlineKeyboard(buttons));
         addMessageId(ctx, message.message_id);
     } catch (error) {
         console.error('Ошибка в showManagedNeedDetails:', error);

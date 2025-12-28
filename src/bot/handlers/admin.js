@@ -3577,8 +3577,8 @@ ${objectsList}
                 const objectNeeds = needsArray.filter(n => 
                     n.objectName && n.objectName.trim() === obj.trim()
                 );
-                const objName = obj.length > 30 ? obj.substring(0, 27) + '...' : obj;
-                return [Markup.button.callback(`${objName} (${objectNeeds.length})`, `admin_needs_object_${uniqueObjects.indexOf(obj)}`)];
+                const displayObj = obj.length > 30 ? obj.substring(0, 27) + '...' : obj;
+                return [Markup.button.callback(`${displayObj} (${objectNeeds.length})`, `admin_needs_object_${uniqueObjects.indexOf(obj)}`)];
             });
 
             const paginationButtons = [];
@@ -3689,7 +3689,6 @@ ${objectsList}
             const currentNeeds = dateNeeds.slice(startIndex, endIndex);
 
             const { escapeHtml } = require('../utils/htmlHelper');
-            const { loadUsers } = require('../../database/userModel');
             const TYPE_NAMES = {
                 'materials': 'Материалы',
                 'equipment': 'Оборудование',
@@ -3698,50 +3697,31 @@ ${objectsList}
                 'accommodation': 'Проживание',
                 'services': 'Услуги'
             };
-            const TYPE_EMOJIS = {
-                'materials': '📦',
-                'equipment': '⚙️',
-                'special_equipment': '🚜',
-                'office_supplies': '📎',
-                'accommodation': '🏠',
-                'services': '🔧'
+            const URGENCY_NAMES = {
+                'urgent': { name: 'Срочно', emoji: '🔥' },
+                'soon': { name: 'В ближайшее время', emoji: '⏳' },
+                'planned': { name: 'Планово', emoji: '📅' }
             };
-            
-            // Функция для сокращения должности
-            function shortenPosition(position) {
-                if (!position) return '';
-                const positionShort = {
-                    'Производитель работ': 'Произв. работ',
-                    'Инженерно-технический работник': 'ИТР',
-                    'Руководитель': 'Руководитель',
-                    'Менеджер': 'Менеджер'
-                };
-                return positionShort[position] || position;
-            }
+            const STATUS_NAMES = {
+                'new': 'Новая',
+                'in_progress': 'В обработке',
+                'completed': 'Выполнена',
+                'rejected': 'Отклонена'
+            };
 
-            // Функция для форматирования ФИО в короткий формат (Фамилия И.О.)
-            function formatFullNameShort(fullName) {
-                if (!fullName) return '';
-                const parts = fullName.trim().split(/\s+/);
-                if (parts.length === 0) return '';
-                if (parts.length === 1) return parts[0];
-                
-                const lastName = parts[0];
-                const firstName = parts.length > 1 ? parts[1].charAt(0).toUpperCase() + '.' : '';
-                const middleName = parts.length > 2 ? parts[2].charAt(0).toUpperCase() + '.' : '';
-                
-                return `${lastName} ${firstName}${middleName ? ' ' + middleName : ''}`.trim();
-            }
-            
+            // Функция для форматирования должности (сокращение)
+            const formatPosition = (position) => {
+                if (position === 'Производитель работ') return 'Произв. работ';
+                return position || '';
+            };
+
             const users = await loadUsers();
             const itemButtons = currentNeeds.map(([needId, need]) => {
-                const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
                 const typeName = TYPE_NAMES[need.type] || need.type;
-                const author = users[need.userId] || {};
-                const position = author.position ? shortenPosition(author.position) : '';
-                const fullName = author.fullName ? formatFullNameShort(author.fullName) : '';
-                const authorInfo = position && fullName ? `${position} ${fullName}` : (fullName || need.userId);
-                const label = `${typeEmoji} ${typeName} -> ${authorInfo}`;
+                const needUser = users[need.userId] || {};
+                const position = formatPosition(needUser.position || '');
+                const fullName = needUser.fullName || need.fullName || '';
+                const label = `📦 ${typeName} -> ${position} ${fullName}`.trim();
                 return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `admin_select_need_${needId}`)];
             });
 
@@ -3890,78 +3870,40 @@ ${objectsList}
                 'completed': 'Выполнена',
                 'rejected': 'Отклонена'
             };
-            
-            const STATUS_EMOJIS = {
-                'new': '🆕',
-                'in_progress': '⏳',
-                'completed': '✅',
-                'rejected': '❌'
-            };
-            
-            const URGENCY_EMOJIS = {
-                'urgent': '🔥',
-                'soon': '⏳',
-                'planned': '📅'
-            };
 
-            const { loadUsers } = require('../../database/userModel');
-            const TYPE_EMOJIS = {
-                'materials': '📦',
-                'equipment': '⚙️',
-                'special_equipment': '🚜',
-                'office_supplies': '📎',
-                'accommodation': '🏠',
-                'services': '🔧'
-            };
-            
-            // Функция для сокращения должности
-            function shortenPosition(position) {
-                if (!position) return '';
-                const positionShort = {
-                    'Производитель работ': 'Произв. работ',
-                    'Инженерно-технический работник': 'ИТР',
-                    'Руководитель': 'Руководитель',
-                    'Менеджер': 'Менеджер'
-                };
-                return positionShort[position] || position;
-            }
-            
-            // Функция для вычисления номера заявки (порядковый номер среди всех заявок, отсортированных по timestamp по возрастанию)
-            async function getNeedNumber(needId) {
-                const { loadAllNeeds } = require('../../database/needModel');
-                const allNeeds = await loadAllNeeds();
-                const allNeedsArray = Object.values(allNeeds);
-                // Сортируем по timestamp по возрастанию (старые первыми, чтобы старые получили меньшие номера)
-                const sortedNeeds = allNeedsArray.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-                // Находим индекс заявки
-                const index = sortedNeeds.findIndex(n => n.needId === needId);
-                if (index === -1) return 1; // Если не найдена, возвращаем 1
-                return index + 1; // Первая (самая старая) будет №1
-            }
-            
-            const users = await loadUsers();
-            const author = users[need.userId] || {};
-            
             const formattedDate = parseAndFormatDate(need.date);
-            const time = new Date(need.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const dateTime = new Date(need.timestamp);
+            const dateStr = dateTime.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' });
+            const timeStr = dateTime.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const typeName = TYPE_NAMES[need.type] || need.type;
             const urgencyInfo = URGENCY_NAMES[need.urgency] || { name: need.urgency, emoji: '' };
             const statusName = STATUS_NAMES[need.status] || need.status;
-            const urgencyEmoji = URGENCY_EMOJIS[need.urgency] || '';
-            const statusEmoji = STATUS_EMOJIS[need.status] || '';
+            const statusEmoji = statusName === 'Выполнена' ? '✅' : statusName === 'Новая' ? '🆕' : statusName === 'В обработке' ? '🔄' : statusName === 'Отклонена' ? '❌' : '';
+
+            const users = await loadUsers();
+            const needUser = users[need.userId] || {};
             
-            // Получаем номер заявки
-            const needNumber = await getNeedNumber(needId);
+            // Функция для форматирования должности (сокращение)
+            const formatPosition = (position) => {
+                if (position === 'Производитель работ') return 'Произв. работ';
+                return position || '';
+            };
+            
+            const position = formatPosition(needUser.position || '');
+            const organization = needUser.organization || '';
+            const fullName = needUser.fullName || need.fullName || '';
+            const needNumber = need.number || '';
 
-            let needText = `Заявка на ${typeName.toLowerCase()} №${needNumber}
-${escapeHtml(need.objectName)}
-${formattedDate} ${time}
+            let needText = `Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
+${need.objectName}
+${dateStr} ${timeStr}
 
-${author.position ? shortenPosition(author.position) : ''}${author.organization ? '\n' + escapeHtml(author.organization) : ''}
-${escapeHtml(author.fullName || need.fullName || 'Не указано')}
+${position ? position : ''}
+${organization ? organization : ''}
+${fullName}
 
-Наименование: ${escapeHtml(need.name)}
-Срочность: ${urgencyEmoji} ${urgencyInfo.name}
+Наименование: ${need.name}
+Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}
 Статус: ${statusEmoji} ${statusName}`;
 
             const buttons = [
@@ -3970,10 +3912,7 @@ ${escapeHtml(author.fullName || need.fullName || 'Не указано')}
                 [Markup.button.callback('↩️ Назад', 'admin_needs_all')]
             ];
 
-            const message = await ctx.reply(needText.trim(), {
-                parse_mode: 'HTML',
-                reply_markup: Markup.inlineKeyboard(buttons).reply_markup
-            });
+            const message = await ctx.reply(needText.trim(), Markup.inlineKeyboard(buttons));
             addMessageId(ctx, message.message_id);
         } catch (error) {
             console.error('Ошибка в showAdminNeedDetails:', error);
