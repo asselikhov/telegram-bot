@@ -16,7 +16,7 @@ const {
     createPosition, updatePosition, positionExists
 } = require('../../database/positionModel');
 const {
-    createObject, updateObject, objectExists
+    createObject, updateObject, objectExists, getObject
 } = require('../../database/objectModel');
 const {
     clearConfigCache, getObjectGroups, getGeneralGroupChatIds, getAllOrganizationObjectsMap, getNotificationSettings
@@ -656,7 +656,7 @@ module.exports = (bot) => {
                     }
                     
                     // Получаем текущую организацию
-                    const { getOrganization } = require('../../database/organizationModel');
+                    const { getOrganization, updateOrganization } = require('../../database/organizationModel');
                     const currentOrg = await getOrganization(oldOrgName);
                     if (!currentOrg) {
                         await ctx.reply('Организация не найдена.');
@@ -722,6 +722,124 @@ module.exports = (bot) => {
                     }
                 } catch (error) {
                     await ctx.reply('Ошибка при редактировании ID чата: ' + error.message);
+                    state.step = null;
+                }
+                break;
+                
+            case 'admin_obj_edit_name':
+                if (userId !== ADMIN_ID) break;
+                try {
+                    const oldObjName = state.adminSelectedObjName;
+                    if (!oldObjName) {
+                        await ctx.reply('Ошибка: объект не выбран.');
+                        state.step = null;
+                        break;
+                    }
+                    const newObjName = ctx.message.text.trim();
+                    if (!newObjName) {
+                        const msg = await ctx.reply('Название не может быть пустым. Введите снова:');
+                        state.messageIds.push(msg.message_id);
+                        return;
+                    }
+                    
+                    // Проверяем, не существует ли объект с таким названием
+                    if (newObjName !== oldObjName) {
+                        const { objectExists } = require('../../database/objectModel');
+                        const objExists = await objectExists(newObjName);
+                        if (objExists) {
+                            const msg = await ctx.reply('Объект с таким названием уже существует. Введите другое название:');
+                            state.messageIds.push(msg.message_id);
+                            return;
+                        }
+                    }
+                    
+                    // Получаем текущий объект
+                    const currentObj = await getObject(oldObjName);
+                    if (!currentObj) {
+                        await ctx.reply('Объект не найден.');
+                        state.step = null;
+                        break;
+                    }
+                    
+                    if (newObjName !== oldObjName) {
+                        const { connectMongo } = require('../../config/mongoConfig');
+                        const db = await connectMongo();
+                        
+                        // Обновляем название объекта в коллекции objects
+                        const objectsCollection = db.collection('objects');
+                        const oldObj = await objectsCollection.findOne({ name: oldObjName });
+                        if (oldObj) {
+                            // Удаляем старый документ и создаем новый с новым именем
+                            await objectsCollection.deleteOne({ name: oldObjName });
+                            const newObj = {
+                                ...oldObj,
+                                name: newObjName,
+                                updatedAt: new Date()
+                            };
+                            delete newObj._id; // Убираем _id для создания нового документа
+                            await objectsCollection.insertOne(newObj);
+                        }
+                        
+                        // Обновляем связи объектов с организациями
+                        const orgObjectsCollection = db.collection('organization_objects');
+                        await orgObjectsCollection.updateMany(
+                            { objectName: oldObjName },
+                            { $set: { objectName: newObjName } }
+                        );
+                        
+                        // Обновляем объекты у пользователей
+                        const users = await loadUsers();
+                        for (const [uid, user] of Object.entries(users)) {
+                            if (user.selectedObjects && Array.isArray(user.selectedObjects)) {
+                                const index = user.selectedObjects.indexOf(oldObjName);
+                                if (index !== -1) {
+                                    user.selectedObjects[index] = newObjName;
+                                    await saveUser(uid, user);
+                                }
+                            }
+                        }
+                        
+                        // Обновляем объекты в отчетах
+                        const reportsCollection = db.collection('reports');
+                        await reportsCollection.updateMany(
+                            { objectname: oldObjName },
+                            { $set: { objectname: newObjName } }
+                        );
+                        
+                        // Обновляем объекты в заявках потребностей
+                        const needsCollection = db.collection('needs');
+                        await needsCollection.updateMany(
+                            { objectname: oldObjName },
+                            { $set: { objectname: newObjName } }
+                        );
+                        
+                        // Обновляем object_report_users
+                        const objectReportUsersCollection = db.collection('object_report_users');
+                        await objectReportUsersCollection.updateMany(
+                            { objectName: oldObjName },
+                            { $set: { objectName: newObjName } }
+                        );
+                        
+                        // Обновляем object_need_users
+                        const objectNeedUsersCollection = db.collection('object_need_users');
+                        await objectNeedUsersCollection.updateMany(
+                            { objectName: oldObjName },
+                            { $set: { objectName: newObjName } }
+                        );
+                        
+                        // Обновляем state для дальнейшего использования
+                        state.adminSelectedObjName = newObjName;
+                    }
+                    
+                    clearConfigCache();
+                    state.step = null;
+                    await ctx.reply(`Объект обновлен.${newObjName !== oldObjName ? ` Новое название: "${newObjName}"` : ''}`);
+                    const adminModule = require('./admin');
+                    if (adminModule.showObjectsList) {
+                        await adminModule.showObjectsList(ctx);
+                    }
+                } catch (error) {
+                    await ctx.reply('Ошибка при редактировании объекта: ' + error.message);
                     state.step = null;
                 }
                 break;

@@ -885,10 +885,28 @@ ${objectsList}
         await clearPreviousMessages(ctx, userId);
         const statusEmoji = obj.status === 'В работе' ? '🟢' : '❄️';
         const message = await ctx.reply(`✏️ Редактирование объекта "${objName}"\n\n📊 Статус: ${statusEmoji} ${obj.status || 'В работе'}`, Markup.inlineKeyboard([
+            [Markup.button.callback('✏️ Название', 'admin_obj_edit_name')],
             [Markup.button.callback('📊 Статус', 'admin_obj_edit_status')],
             [Markup.button.callback('📱 ID группы (Telegram)', 'admin_obj_edit_groupid')],
             [Markup.button.callback('👁 Просмотреть группу', 'admin_obj_view_group')],
             [Markup.button.callback('↩️ Назад', `obj_${objIndex}`)]
+        ]));
+        ctx.state.userStates[userId].messageIds.push(message.message_id);
+    });
+    
+    bot.action('admin_obj_edit_name', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const objName = ctx.state.userStates[userId].adminSelectedObjName;
+        if (!objName) {
+            await ctx.reply('Ошибка: объект не выбран.');
+            return;
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        ctx.state.userStates[userId].step = 'admin_obj_edit_name';
+        const message = await ctx.reply('Введите новое название объекта:', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Отмена', 'admin_obj_edit')]
         ]));
         ctx.state.userStates[userId].messageIds.push(message.message_id);
     });
