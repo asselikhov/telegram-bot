@@ -3612,25 +3612,28 @@ ${objectsList}
             const allNeeds = await loadAllNeeds();
             console.log(`[ADMIN_NEEDS] showNeedsForObject: загружено заявок: ${Object.keys(allNeeds).length}`);
             const state = ensureUserState(ctx);
-            let uniqueObjects;
-            if (state && state.adminNeedsObjectsList) {
-                uniqueObjects = state.adminNeedsObjectsList;
-            } else {
-                uniqueObjects = [...new Set(Object.values(allNeeds).map(n => n.objectName))];
-                if (state) {
-                    state.adminNeedsObjectsList = uniqueObjects;
-                }
+            
+            // Фильтруем только заявки с валидным objectName (как в showAllNeedsByObjects)
+            const needsArray = Object.values(allNeeds).filter(n => n && n.objectName);
+            const uniqueObjects = [...new Set(needsArray.map(n => n.objectName.trim()).filter(obj => obj))];
+            
+            // Сохраняем список объектов в state
+            if (state) {
+                state.adminNeedsObjectsList = uniqueObjects;
             }
+            
             const objectName = uniqueObjects[objectIndex];
             if (!objectName) {
+                console.log(`[ADMIN_NEEDS] ОШИБКА: объект не найден по индексу ${objectIndex}, uniqueObjects.length=${uniqueObjects.length}`);
                 return ctx.reply('Ошибка: объект не найден.');
             }
 
-            const normalizedObjectName = objectName && objectName.trim();
+            const normalizedObjectName = objectName.trim();
             const objectNeeds = Object.entries(allNeeds).filter(([_, n]) =>
-                n.objectName && n.objectName.trim() === normalizedObjectName
+                n && n.objectName && n.objectName.trim() === normalizedObjectName
             );
             const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
+            
             // Получаем уникальные даты и сортируем их в обратном порядке (новые первыми)
             const uniqueDatesArray = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
             // Сортируем даты в обратном порядке для единообразия
@@ -3645,21 +3648,9 @@ ${objectsList}
             
             console.log(`[ADMIN_NEEDS] showNeedsForObject START: objectIndex=${objectIndex}, objectName="${objectName}", dateIndex=${dateIndex}, page=${page}`);
             console.log(`[ADMIN_NEEDS] uniqueDatesSorted (${uniqueDatesSorted.length}):`, JSON.stringify(uniqueDatesSorted));
-            console.log(`[ADMIN_NEEDS] state.adminNeedsDatesList:`, state?.adminNeedsDatesList ? JSON.stringify(state.adminNeedsDatesList) : 'null');
             
-            // Используем сохраненный список дат из state, если он есть и длина совпадает, иначе используем текущий
-            let datesList = uniqueDatesSorted;
-            if (state && state.adminNeedsDatesList && state.adminNeedsDatesList.length === uniqueDatesSorted.length) {
-                datesList = state.adminNeedsDatesList;
-                console.log(`[ADMIN_NEEDS] Используем сохраненный список дат из state`);
-            } else if (state) {
-                state.adminNeedsDatesList = uniqueDatesSorted;
-                datesList = uniqueDatesSorted;
-                console.log(`[ADMIN_NEEDS] Сохраняем новый список дат в state`);
-            }
-            
-            console.log(`[ADMIN_NEEDS] datesList (${datesList.length}):`, JSON.stringify(datesList));
-            const selectedDate = datesList[dateIndex];
+            // Используем текущий список дат (не используем state.adminNeedsDatesList, так как он может быть для другого объекта)
+            const selectedDate = uniqueDatesSorted[dateIndex];
             console.log(`[ADMIN_NEEDS] selectedDate по индексу ${dateIndex}: "${selectedDate}"`);
             
             if (!selectedDate) {
@@ -3961,10 +3952,11 @@ ${objectsList}
     bot.action('admin_needs', showNeedsManagementMenu);
     bot.action('admin_needs_all', (ctx) => showAllNeedsByObjects(ctx, 0));
     bot.action(/admin_needs_all_page_(\d+)/, (ctx) => showAllNeedsByObjects(ctx, parseInt(ctx.match[1], 10)));
-    bot.action(/admin_needs_object_(\d+)/, (ctx) => showNeedsDatesForObject(ctx, parseInt(ctx.match[1], 10), 0));
-    bot.action(/admin_needs_object_(\d+)_dates_page_(\d+)/, (ctx) => showNeedsDatesForObject(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
-    bot.action(/admin_needs_object_(\d+)_date_(\d+)/, (ctx) => showNeedsForObject(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), 0));
+    // Регистрируем более специфичные паттерны ПЕРЕД общими, чтобы они перехватывали запросы первыми
     bot.action(/admin_needs_object_(\d+)_date_(\d+)_page_(\d+)/, (ctx) => showNeedsForObject(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), parseInt(ctx.match[3], 10)));
+    bot.action(/admin_needs_object_(\d+)_date_(\d+)/, (ctx) => showNeedsForObject(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), 0));
+    bot.action(/admin_needs_object_(\d+)_dates_page_(\d+)/, (ctx) => showNeedsDatesForObject(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10)));
+    bot.action(/admin_needs_object_(\d+)/, (ctx) => showNeedsDatesForObject(ctx, parseInt(ctx.match[1], 10), 0));
     bot.action(/admin_select_need_(.+)/, (ctx) => showAdminNeedDetails(ctx, ctx.match[1]));
     bot.action(/admin_edit_need_(.+)/, (ctx) => showEditNeedMenu(ctx, ctx.match[1]));
     bot.action(/admin_change_need_status_(.+)/, (ctx) => showChangeStatusMenu(ctx, ctx.match[1]));
