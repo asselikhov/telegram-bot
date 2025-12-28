@@ -20,7 +20,6 @@ async function showMainMenu(ctx) {
     const menuText = `
 🚀 ГЛАВНОЕ МЕНЮ 
 ➖➖➖➖➖➖➖➖➖➖➖  
-Выберите действие ниже:  
     `.trim();
 
     const buttons = [

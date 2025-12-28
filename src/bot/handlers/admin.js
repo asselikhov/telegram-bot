@@ -87,7 +87,6 @@ async function showAdminPanel(ctx) {
     const menuText = `
 👑 АДМИН-ПАНЕЛЬ
 ➖➖➖➖➖➖➖➖➖➖➖
-Выберите действие:
     `.trim();
     
     const message = await ctx.reply(

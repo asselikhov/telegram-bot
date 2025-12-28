@@ -151,7 +151,6 @@ async function showNeedsMenu(ctx) {
     const menuText = `
 📦 ПОТРЕБНОСТИ
 ➖➖➖➖➖➖➖➖➖➖➖
-Выберите действие:
     `.trim();
 
     const buttons = [

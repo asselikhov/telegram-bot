@@ -43,7 +43,6 @@ async function showReportsMenu(ctx) {
     const menuText = `
 📋 ОТЧЕТЫ
 ➖➖➖➖➖➖➖➖➖➖➖
-Выберите действие:
     `.trim();
 
     const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
