@@ -3625,43 +3625,47 @@ ${objectsList}
                 return parseDate(b).getTime() - parseDate(a).getTime();
             });
             
-            console.log(`[showNeedsForObject] objectIndex=${objectIndex}, objectName="${objectName}", dateIndex=${dateIndex}`);
-            console.log(`[showNeedsForObject] uniqueDatesSorted (${uniqueDatesSorted.length}):`, uniqueDatesSorted);
-            console.log(`[showNeedsForObject] state.adminNeedsDatesList:`, state?.adminNeedsDatesList);
+            console.log(`[ADMIN_NEEDS] showNeedsForObject START: objectIndex=${objectIndex}, objectName="${objectName}", dateIndex=${dateIndex}, page=${page}`);
+            console.log(`[ADMIN_NEEDS] uniqueDatesSorted (${uniqueDatesSorted.length}):`, JSON.stringify(uniqueDatesSorted));
+            console.log(`[ADMIN_NEEDS] state.adminNeedsDatesList:`, state?.adminNeedsDatesList ? JSON.stringify(state.adminNeedsDatesList) : 'null');
             
             // Используем сохраненный список дат из state, если он есть и длина совпадает, иначе используем текущий
             let datesList = uniqueDatesSorted;
             if (state && state.adminNeedsDatesList && state.adminNeedsDatesList.length === uniqueDatesSorted.length) {
                 datesList = state.adminNeedsDatesList;
-                console.log(`[showNeedsForObject] Используем сохраненный список дат из state`);
+                console.log(`[ADMIN_NEEDS] Используем сохраненный список дат из state`);
             } else if (state) {
                 state.adminNeedsDatesList = uniqueDatesSorted;
                 datesList = uniqueDatesSorted;
-                console.log(`[showNeedsForObject] Сохраняем новый список дат в state`);
+                console.log(`[ADMIN_NEEDS] Сохраняем новый список дат в state`);
             }
             
-            console.log(`[showNeedsForObject] datesList (${datesList.length}):`, datesList);
+            console.log(`[ADMIN_NEEDS] datesList (${datesList.length}):`, JSON.stringify(datesList));
             const selectedDate = datesList[dateIndex];
-            console.log(`[showNeedsForObject] selectedDate по индексу ${dateIndex}: "${selectedDate}"`);
+            console.log(`[ADMIN_NEEDS] selectedDate по индексу ${dateIndex}: "${selectedDate}"`);
             
             if (!selectedDate) {
-                console.log(`[showNeedsForObject] ОШИБКА: дата не найдена по индексу ${dateIndex}`);
+                console.log(`[ADMIN_NEEDS] ОШИБКА: дата не найдена по индексу ${dateIndex}, datesList.length=${datesList.length}`);
                 return ctx.reply('Ошибка: дата не найдена.');
             }
 
             await clearPreviousMessages(ctx, userId);
 
             // Фильтруем заявки по выбранной дате
-            console.log(`[showNeedsForObject] Всего заявок для объекта: ${sortedNeeds.length}`);
+            console.log(`[ADMIN_NEEDS] Всего заявок для объекта: ${sortedNeeds.length}`);
             const sampleDates = sortedNeeds.slice(0, 10).map(([_, n]) => ({ needId: n.needId, date: n.date, parsedDate: parseAndFormatDate(n.date) }));
-            console.log(`[showNeedsForObject] Примеры дат из заявок:`, sampleDates);
+            console.log(`[ADMIN_NEEDS] Примеры дат из заявок:`, JSON.stringify(sampleDates));
             
             const dateNeeds = sortedNeeds.filter(([_, n]) => {
                 const needDate = parseAndFormatDate(n.date);
-                return needDate === selectedDate;
+                const matches = needDate === selectedDate;
+                if (!matches && sampleDates.some(sd => sd.needId === n.needId)) {
+                    console.log(`[ADMIN_NEEDS] Не совпадает: needDate="${needDate}" !== selectedDate="${selectedDate}"`);
+                }
+                return matches;
             });
             
-            console.log(`[showNeedsForObject] Найдено заявок для даты "${selectedDate}": ${dateNeeds.length}`);
+            console.log(`[ADMIN_NEEDS] Найдено заявок для даты "${selectedDate}": ${dateNeeds.length}`);
 
             if (dateNeeds.length === 0) {
                 console.log(`[showNeedsForObject] ОШИБКА: Нет заявок для объекта "${objectName}" за ${selectedDate}`);
