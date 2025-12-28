@@ -6,6 +6,7 @@ const { addMessageId, ensureUserState } = require('../utils/stateHelper');
 const { escapeHtml } = require('../utils/htmlHelper');
 const { incrementNextReportId } = require('../../database/userModel');
 const { getNeedUsers } = require('../../database/configService');
+const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
 const { ADMIN_ID } = require('../../config/config');
 
 // Маппинг типов потребностей
@@ -485,7 +486,6 @@ async function manageAllNeeds(ctx) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
         const allSettings = await getAllNeedUsers();
         
         for (const setting of allSettings) {
@@ -571,7 +571,6 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
         const allSettings = await getAllNeedUsers();
         
         for (const setting of allSettings) {
@@ -676,7 +675,6 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
         const allSettings = await getAllNeedUsers();
         
         for (const setting of allSettings) {
@@ -792,7 +790,6 @@ async function showManagedNeedDetails(ctx, needId) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
         const allSettings = await getAllNeedUsers();
         
         for (const setting of allSettings) {
@@ -875,7 +872,6 @@ async function showManagedEditNeedMenu(ctx, needId) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
         const allSettings = await getAllNeedUsers();
         
         for (const setting of allSettings) {
@@ -932,7 +928,6 @@ async function showManagedChangeStatusMenu(ctx, needId) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
         const allSettings = await getAllNeedUsers();
         
         for (const setting of allSettings) {
