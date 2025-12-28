@@ -49,12 +49,19 @@ module.exports = (bot) => {
             clearTimeout(group.timeout);
             group.timeout = setTimeout(async () => {
                 const state = ctx.state.userStates[userId];
-                if (!state || (state.step !== 'photos' && state.step !== 'editPhotos')) {
+                if (!state || (state.step !== 'photos' && state.step !== 'editPhotos' && state.step !== 'announcementPhotos' && state.step !== 'editAnnouncementPhotos')) {
                     mediaGroups.delete(mediaGroupId);
                     return;
                 }
 
-                state.report.photos = [...(state.report.photos || []), ...group.photos];
+                if (state.step === 'announcementPhotos' || state.step === 'editAnnouncementPhotos') {
+                    if (!state.announcement) {
+                        state.announcement = {};
+                    }
+                    state.announcement.photos = [...(state.announcement.photos || []), ...group.photos];
+                } else {
+                    state.report.photos = [...(state.report.photos || []), ...group.photos];
+                }
 
                 if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
                     for (const msgId of state.mediaGroupIds) {
@@ -63,17 +70,31 @@ module.exports = (bot) => {
                     state.mediaGroupIds = [];
                 }
 
-                const mediaGroup = state.report.photos.map((photoId, index) => ({
+                let photosArray;
+                let finishAction;
+                if (state.step === 'announcementPhotos') {
+                    photosArray = state.announcement.photos;
+                    finishAction = 'finish_announcement_photos';
+                } else if (state.step === 'editAnnouncementPhotos') {
+                    photosArray = state.announcement.photos;
+                    const announcementId = state.editingAnnouncementId || '';
+                    finishAction = `finish_edit_announcement_photos_${announcementId}`;
+                } else {
+                    photosArray = state.report.photos;
+                    finishAction = state.step === 'photos' ? 'finish_report' : 'finish_edit_report';
+                }
+
+                const mediaGroup = photosArray.map((photoId, index) => ({
                     type: 'photo',
                     media: photoId,
-                    caption: index === 0 ? `Добавлено ${state.report.photos.length} фото:` : undefined
+                    caption: index === 0 ? `Добавлено ${photosArray.length} фото:` : undefined
                 }));
                 const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
                 state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
 
                 const text = 'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.';
                 const keyboard = Markup.inlineKeyboard([
-                    [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
+                    [Markup.button.callback('Готово', finishAction)]
                 ]);
 
                 if (state.messageIds && state.messageIds.length > 0) {
@@ -274,6 +295,37 @@ module.exports = (bot) => {
                     ])
                 );
                 state.messageIds = [editMessage.message_id];
+                break;
+
+            case 'announcementText':
+                if (!state.announcement) {
+                    state.announcement = {};
+                }
+                state.announcement.text = ctx.message.text.trim();
+                state.step = 'announcementPhotos';
+                state.mediaGroupIds = [];
+                state.announcement.photos = state.announcement.photos || [];
+                const announcementPhotoMessage = await ctx.reply(
+                    '📸 Прикрепите изображения к объявлению или нажмите "Готово" для завершения',
+                    Markup.inlineKeyboard([[Markup.button.callback('Готово', 'finish_announcement_photos')]])
+                );
+                state.messageIds = [announcementPhotoMessage.message_id];
+                break;
+
+            case 'editAnnouncementText':
+                const editingAnnouncementId = state.editingAnnouncementId;
+                if (!editingAnnouncementId) {
+                    await ctx.reply('Ошибка: объявление не найдено.');
+                    state.step = null;
+                    return;
+                }
+                const { updateAnnouncement: updateAnnouncementModel } = require('../../database/announcementModel');
+                await updateAnnouncementModel(editingAnnouncementId, { text: ctx.message.text.trim() });
+                state.step = null;
+                state.editingAnnouncementId = null;
+                await ctx.reply('✅ Текст объявления обновлен.');
+                const { showAnnouncementDetails } = require('./admin');
+                await showAnnouncementDetails(ctx, editingAnnouncementId);
                 break;
 
             // Обработка создания заявки на потребности
@@ -1352,11 +1404,34 @@ module.exports = (bot) => {
     bot.on('photo', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
-        if (!state || (state.step !== 'photos' && state.step !== 'editPhotos') || ctx.message.media_group_id) return;
+        if (!state || (state.step !== 'photos' && state.step !== 'editPhotos' && state.step !== 'announcementPhotos' && state.step !== 'editAnnouncementPhotos') || ctx.message.media_group_id) return;
 
         const photoId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-        state.report.photos = state.report.photos || [];
-        state.report.photos.push(photoId);
+        
+        let photosArray;
+        let finishAction;
+        if (state.step === 'announcementPhotos') {
+            if (!state.announcement) {
+                state.announcement = {};
+            }
+            state.announcement.photos = state.announcement.photos || [];
+            photosArray = state.announcement.photos;
+            finishAction = 'finish_announcement_photos';
+        } else if (state.step === 'editAnnouncementPhotos') {
+            if (!state.announcement) {
+                state.announcement = {};
+            }
+            state.announcement.photos = state.announcement.photos || [];
+            photosArray = state.announcement.photos;
+            const announcementId = state.editingAnnouncementId || '';
+            finishAction = `finish_edit_announcement_photos_${announcementId}`;
+        } else {
+            state.report.photos = state.report.photos || [];
+            photosArray = state.report.photos;
+            finishAction = state.step === 'photos' ? 'finish_report' : 'finish_edit_report';
+        }
+        
+        photosArray.push(photoId);
 
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
@@ -1365,17 +1440,17 @@ module.exports = (bot) => {
             state.mediaGroupIds = [];
         }
 
-        const mediaGroup = state.report.photos.map((photoId, index) => ({
+        const mediaGroup = photosArray.map((photoId, index) => ({
             type: 'photo',
             media: photoId,
-            caption: index === 0 ? `Добавлено ${state.report.photos.length} фото:` : undefined
+            caption: index === 0 ? `Добавлено ${photosArray.length} фото:` : undefined
         }));
         const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
         state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
 
         const text = 'Фото добавлено. Отправьте еще или нажмите "Готово" для завершения.';
         const keyboard = Markup.inlineKeyboard([
-            [Markup.button.callback('Готово', state.step === 'photos' ? 'finish_report' : 'finish_edit_report')]
+            [Markup.button.callback('Готово', finishAction)]
         ]);
 
         if (state.messageIds && state.messageIds.length > 0) {
@@ -1632,6 +1707,29 @@ ${escapeHtml(report.materials)}</blockquote>
             ])
         );
         state.messageIds = [newMessage.message_id];
+    });
+
+    bot.action('finish_announcement_photos', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'announcementPhotos') return;
+        
+        if (!state.announcement || !state.announcement.text) {
+            await ctx.reply('Ошибка: текст объявления не указан.');
+            return;
+        }
+        
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
+            }
+        }
+        await clearPreviousMessages(ctx, userId);
+        state.mediaGroupIds = [];
+        state.messageIds = [];
+        
+        const { showAnnouncementPreview } = require('./admin');
+        await showAnnouncementPreview(ctx);
     });
 
     bot.action('finish_edit_report', async (ctx) => {

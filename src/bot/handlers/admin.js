@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const { loadUsers, saveUser, deleteUser } = require('../../database/userModel');
-const { clearPreviousMessages, parseAndFormatDate } = require('../utils');
+const { clearPreviousMessages, parseAndFormatDate, formatDate } = require('../utils');
 const { showMainMenu } = require('./menu');
 const { ADMIN_ID } = require('../../config/config');
 const { loadInviteCode } = require('../../database/inviteCodeModel');
@@ -76,6 +76,15 @@ const {
 } = require('../utils/notificationHelper');
 const { ensureUserState, addMessageId } = require('../utils/stateHelper');
 const { notifyNeedAuthorStatusChange } = require('./needs');
+const { escapeHtml } = require('../utils/htmlHelper');
+const { 
+    saveAnnouncement, 
+    loadAllAnnouncements, 
+    loadAnnouncement, 
+    deleteAnnouncement, 
+    updateAnnouncement 
+} = require('../../database/announcementModel');
+const { getObjectGroups } = require('../../database/configService');
 
 async function showAdminPanel(ctx) {
     const userId = ctx.from.id.toString();
@@ -96,6 +105,7 @@ async function showAdminPanel(ctx) {
             [Markup.button.callback('👥 Управление пользователями', 'admin_users')],
             [Markup.button.callback('🏢 Управление организациями', 'admin_organizations')],
             [Markup.button.callback('🏗 Управление объектами', 'admin_objects')],
+            [Markup.button.callback('📢 Объявления', 'admin_announcements')],
             [Markup.button.callback('🔔 Настройки уведомлений', 'admin_notifications')],
             [Markup.button.callback('📈 Статистика', 'admin_statistics')],
             [Markup.button.callback('↩️ Назад', 'main_menu')]
@@ -105,6 +115,522 @@ async function showAdminPanel(ctx) {
     } catch (error) {
         console.error('Ошибка в showAdminPanel:', error);
         await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showAnnouncementsMenu(ctx) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    
+    try {
+        await clearPreviousMessages(ctx, userId);
+        
+        const menuText = `
+📢 ОБЪЯВЛЕНИЯ
+➖➖➖➖➖➖➖➖➖➖➖
+        `.trim();
+        
+        const message = await ctx.reply(
+            menuText,
+            Markup.inlineKeyboard([
+                [Markup.button.callback('➕ Создать объявление', 'admin_announcements_create')],
+                [Markup.button.callback('📋 Мои объявления', 'admin_announcements_list')],
+                [Markup.button.callback('↩️ Назад', 'admin_panel')]
+            ])
+        );
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в showAnnouncementsMenu:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showAnnouncementObjectSelection(ctx, selected = [], messageId = null) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    
+    try {
+        const allObjects = await getAllObjects();
+        const objectNames = allObjects.map(obj => obj.name);
+        
+        if (!objectNames.length) {
+            await clearPreviousMessages(ctx, userId);
+            await ctx.reply('В базе данных нет объектов.');
+            return;
+        }
+        
+        const state = ensureUserState(ctx);
+        const isEditMode = state.step === 'editAnnouncementObjects';
+        
+        const buttons = objectNames.map((objName, index) => {
+            const isSelected = selected.includes(objName);
+            return [Markup.button.callback(`${isSelected ? '✅ ' : ''}${objName}`, `announcement_toggle_object_${index}`)];
+        });
+        if (isEditMode) {
+            buttons.push([Markup.button.callback('Готово', 'announcement_confirm_objects_edit')]);
+        } else {
+            buttons.push([Markup.button.callback('Готово', 'announcement_confirm_objects')]);
+        }
+        buttons.push([Markup.button.callback('↩️ Назад', isEditMode ? `admin_announcement_view_${state.editingAnnouncementId}` : 'admin_announcements')]);
+        
+        const keyboard = Markup.inlineKeyboard(buttons);
+        const text = 'Выберите объекты для объявления (можно выбрать несколько):';
+        
+        if (messageId) {
+            try {
+                await ctx.telegram.editMessageText(ctx.chat.id, messageId, null, text, keyboard);
+            } catch (e) {
+                await ctx.reply(text, keyboard);
+            }
+        } else {
+            await clearPreviousMessages(ctx, userId);
+            const message = await ctx.reply(text, keyboard);
+            ensureUserState(ctx);
+            addMessageId(ctx, message.message_id);
+        }
+    } catch (error) {
+        console.error('Ошибка в showAnnouncementObjectSelection:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showAnnouncementPreview(ctx) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    
+    try {
+        const state = ensureUserState(ctx);
+        if (!state.announcement || !state.announcement.text || !state.selectedObjects || state.selectedObjects.length === 0) {
+            await ctx.reply('Ошибка: данные объявления неполные.');
+            return;
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        
+        const announcementText = state.announcement.text;
+        const objectNames = state.selectedObjects;
+        const photos = state.announcement.photos || [];
+        
+        const objectsList = objectNames.map(obj => `· ${escapeHtml(obj)}`).join('\n');
+        const previewText = `
+📢 ОБЪЯВЛЕНИЕ
+
+${escapeHtml(announcementText)}
+
+🏗 Объекты:
+${objectsList}
+        `.trim();
+        
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
+            }
+            state.mediaGroupIds = [];
+        }
+        
+        if (photos.length > 0) {
+            const mediaGroup = photos.map((photoId, index) => ({
+                type: 'photo',
+                media: photoId,
+                caption: index === 0 ? previewText.slice(0, 1024) : undefined,
+                parse_mode: 'HTML'
+            }));
+            const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
+            state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
+        } else {
+            const message = await ctx.reply(previewText, {
+                parse_mode: 'HTML'
+            });
+            state.mediaGroupIds = [message.message_id];
+        }
+        
+        const buttons = [
+            [Markup.button.callback('✅ Отправить', 'send_announcement')],
+            [Markup.button.callback('↩️ Отмена', 'admin_announcements')]
+        ];
+        const previewMessage = await ctx.reply('Предпросмотр объявления:', Markup.inlineKeyboard(buttons));
+        addMessageId(ctx, previewMessage.message_id);
+    } catch (error) {
+        console.error('Ошибка в showAnnouncementPreview:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function sendAnnouncement(ctx) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    
+    try {
+        const state = ensureUserState(ctx);
+        if (!state.announcement || !state.announcement.text || !state.selectedObjects || state.selectedObjects.length === 0) {
+            await ctx.reply('Ошибка: данные объявления неполные.');
+            return;
+        }
+        
+        const users = await loadUsers();
+        const user = users[userId];
+        if (!user) {
+            await ctx.reply('Ошибка: пользователь не найден.');
+            return;
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        
+        const announcementText = state.announcement.text;
+        const objectNames = state.selectedObjects;
+        const photos = state.announcement.photos || [];
+        
+        const objectsList = objectNames.map(obj => `· ${escapeHtml(obj)}`).join('\n');
+        const messageText = `
+📢 ОБЪЯВЛЕНИЕ
+
+${escapeHtml(announcementText)}
+
+🏗 Объекты:
+${objectsList}
+        `.trim();
+        
+        const objectGroups = await getObjectGroups();
+        const date = new Date();
+        const formattedDate = formatDate(date);
+        const timestamp = date.toISOString();
+        const announcementId = `announcement_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const groupMessageIds = {};
+        
+        const tempMessage = await ctx.reply('⏳ Отправка объявления в группы...');
+        addMessageId(ctx, tempMessage.message_id);
+        
+        for (const objectName of objectNames) {
+            const groupChatId = objectGroups[objectName];
+            if (!groupChatId) {
+                console.warn(`У объекта "${objectName}" нет группы Telegram`);
+                continue;
+            }
+            
+            try {
+                if (photos.length > 0) {
+                    const mediaGroup = photos.map((photoId, index) => ({
+                        type: 'photo',
+                        media: photoId,
+                        caption: index === 0 ? messageText.slice(0, 1024) : undefined,
+                        parse_mode: 'HTML'
+                    }));
+                    const messages = await ctx.telegram.sendMediaGroup(groupChatId, mediaGroup);
+                    groupMessageIds[groupChatId] = messages[0].message_id;
+                } else {
+                    const message = await ctx.telegram.sendMessage(groupChatId, messageText, {
+                        parse_mode: 'HTML'
+                    });
+                    groupMessageIds[groupChatId] = message.message_id;
+                }
+            } catch (error) {
+                console.error(`Ошибка отправки объявления в группу ${groupChatId}:`, error);
+            }
+        }
+        
+        const announcement = {
+            announcementId,
+            userId,
+            text: announcementText,
+            objectNames,
+            date: formattedDate,
+            timestamp,
+            groupMessageIds,
+            photos,
+            fullName: user.fullName || ''
+        };
+        
+        await saveAnnouncement(userId, announcement);
+        
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
+            }
+        }
+        
+        await clearPreviousMessages(ctx, userId);
+        
+        const successMessage = await ctx.reply('✅ Объявление успешно отправлено в выбранные группы!');
+        addMessageId(ctx, successMessage.message_id);
+        
+        delete state.announcement;
+        delete state.selectedObjects;
+        state.step = null;
+        
+        setTimeout(async () => {
+            await showAnnouncementsMenu(ctx);
+        }, 2000);
+    } catch (error) {
+        console.error('Ошибка в sendAnnouncement:', error);
+        await ctx.reply('Произошла ошибка при отправке объявления. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showAnnouncementsDates(ctx, page = 0) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    
+    try {
+        await clearPreviousMessages(ctx, userId);
+        
+        const allAnnouncements = await loadAllAnnouncements();
+        const announcementsArray = Object.values(allAnnouncements);
+        
+        if (announcementsArray.length === 0) {
+            const message = await ctx.reply('У вас пока нет объявлений.', Markup.inlineKeyboard([
+                [Markup.button.callback('↩️ Назад', 'admin_announcements')]
+            ]));
+            addMessageId(ctx, message.message_id);
+            return;
+        }
+        
+        const sortedAnnouncements = announcementsArray.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        const uniqueDates = [...new Set(sortedAnnouncements.map(a => parseAndFormatDate(a.date)))].sort((a, b) => {
+            const dateA = new Date(a.split('.').reverse().join('-'));
+            const dateB = new Date(b.split('.').reverse().join('-'));
+            return dateB - dateA;
+        });
+        
+        const itemsPerPage = 10;
+        const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
+        const pageNum = typeof page === 'number' ? page : 0;
+        
+        const startIndex = pageNum * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, uniqueDates.length);
+        const currentDates = uniqueDates.slice(startIndex, endIndex);
+        
+        if (currentDates.length === 0) {
+            return ctx.reply('Ошибка: нет дат для отображения.');
+        }
+        
+        const dateButtons = currentDates.map((date, index) =>
+            [Markup.button.callback(date, `admin_announcement_date_${startIndex + index}_page_${pageNum}`)]
+        ).reverse();
+        
+        const buttons = [];
+        const paginationButtons = [];
+        if (totalPages > 1) {
+            if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `admin_announcements_dates_page_${pageNum - 1}`));
+            if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `admin_announcements_dates_page_${pageNum + 1}`));
+        }
+        if (paginationButtons.length > 0) buttons.push(paginationButtons);
+        buttons.push(...dateButtons);
+        buttons.push([Markup.button.callback('↩️ Назад', 'admin_announcements')]);
+        
+        const message = await ctx.reply(
+            `Выберите дату (Страница ${pageNum + 1} из ${totalPages}):`,
+            Markup.inlineKeyboard(buttons)
+        );
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в showAnnouncementsDates:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showAnnouncementsByDate(ctx, dateIndex, page = 0) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    
+    try {
+        await clearPreviousMessages(ctx, userId);
+        
+        const allAnnouncements = await loadAllAnnouncements();
+        const announcementsArray = Object.values(allAnnouncements);
+        
+        const sortedAnnouncements = announcementsArray.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        const uniqueDates = [...new Set(sortedAnnouncements.map(a => parseAndFormatDate(a.date)))].sort((a, b) => {
+            const dateA = new Date(a.split('.').reverse().join('-'));
+            const dateB = new Date(b.split('.').reverse().join('-'));
+            return dateB - dateA;
+        });
+        
+        const selectedDate = uniqueDates[dateIndex];
+        if (!selectedDate) {
+            await ctx.reply('Ошибка: дата не найдена.');
+            return;
+        }
+        
+        const dateAnnouncements = sortedAnnouncements.filter(a => parseAndFormatDate(a.date) === selectedDate);
+        
+        const itemsPerPage = 10;
+        const totalPages = Math.ceil(dateAnnouncements.length / itemsPerPage);
+        const pageNum = typeof page === 'number' ? page : 0;
+        
+        const startIndex = pageNum * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, dateAnnouncements.length);
+        const currentAnnouncements = dateAnnouncements.slice(startIndex, endIndex);
+        
+        if (currentAnnouncements.length === 0) {
+            return ctx.reply('Ошибка: нет объявлений для отображения.');
+        }
+        
+        const announcementButtons = currentAnnouncements.map((announcement) => {
+            const time = new Date(announcement.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
+            const preview = announcement.text.length > 50 ? announcement.text.substring(0, 50) + '...' : announcement.text;
+            return [Markup.button.callback(`${time} - ${preview}`, `admin_announcement_view_${announcement.announcementId}`)];
+        }).reverse();
+        
+        const buttons = [];
+        const paginationButtons = [];
+        if (totalPages > 1) {
+            if (pageNum > 0) paginationButtons.push(Markup.button.callback('⬅️ Назад', `admin_announcement_date_${dateIndex}_page_${pageNum - 1}`));
+            if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `admin_announcement_date_${dateIndex}_page_${pageNum + 1}`));
+        }
+        if (paginationButtons.length > 0) buttons.push(paginationButtons);
+        buttons.push(...announcementButtons);
+        buttons.push([Markup.button.callback('↩️ Назад', 'admin_announcements_list')]);
+        
+        const message = await ctx.reply(
+            `Объявления за ${selectedDate} (Страница ${pageNum + 1} из ${totalPages}):`,
+            Markup.inlineKeyboard(buttons)
+        );
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в showAnnouncementsByDate:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function showAnnouncementDetails(ctx, announcementId) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    
+    try {
+        await clearPreviousMessages(ctx, userId);
+        
+        const announcement = await loadAnnouncement(announcementId);
+        if (!announcement) {
+            await ctx.reply('Объявление не найдено.');
+            return;
+        }
+        
+        const objectsList = announcement.objectNames.map(obj => `· ${escapeHtml(obj)}`).join('\n');
+        const time = new Date(announcement.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
+        
+        let detailsText = `
+📢 ОБЪЯВЛЕНИЕ
+
+${escapeHtml(announcement.text)}
+
+🏗 Объекты:
+${objectsList}
+
+📅 Дата: ${announcement.date}
+⏰ Время: ${time}
+👤 Автор: ${escapeHtml(announcement.fullName)}
+        `.trim();
+        
+        if (announcement.photos && announcement.photos.length > 0) {
+            detailsText += `\n📸 Фото: ${announcement.photos.length} шт.`;
+        }
+        
+        const buttons = [
+            [Markup.button.callback('✏️ Редактировать', `admin_announcement_edit_${announcementId}`)],
+            [Markup.button.callback('🗑️ Удалить', `admin_announcement_delete_${announcementId}`)],
+            [Markup.button.callback('↩️ Назад', 'admin_announcements_list')]
+        ];
+        
+        if (announcement.photos && announcement.photos.length > 0) {
+            const mediaGroup = announcement.photos.map((photoId, index) => ({
+                type: 'photo',
+                media: photoId,
+                caption: index === 0 ? detailsText.slice(0, 1024) : undefined,
+                parse_mode: 'HTML'
+            }));
+            const messages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
+            messages.forEach(msg => addMessageId(ctx, msg.message_id));
+        }
+        
+        const message = await ctx.reply(detailsText, {
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard(buttons)
+        });
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в showAnnouncementDetails:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function editAnnouncement(ctx, announcementId) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    
+    try {
+        await clearPreviousMessages(ctx, userId);
+        
+        const announcement = await loadAnnouncement(announcementId);
+        if (!announcement) {
+            await ctx.reply('Объявление не найдено.');
+            return;
+        }
+        
+        const buttons = [
+            [Markup.button.callback('✏️ Текст', `admin_announcement_edit_text_${announcementId}`)],
+            [Markup.button.callback('📸 Фото', `admin_announcement_edit_photos_${announcementId}`)],
+            [Markup.button.callback('🏗 Объекты', `admin_announcement_edit_objects_${announcementId}`)],
+            [Markup.button.callback('↩️ Назад', `admin_announcement_view_${announcementId}`)]
+        ];
+        
+        const message = await ctx.reply('Что вы хотите редактировать?', Markup.inlineKeyboard(buttons));
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в editAnnouncement:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function confirmDeleteAnnouncement(ctx, announcementId) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    
+    try {
+        await clearPreviousMessages(ctx, userId);
+        
+        const buttons = [
+            [Markup.button.callback('✅ Удалить', `admin_announcement_confirm_delete_${announcementId}`)],
+            [Markup.button.callback('↩️ Отмена', `admin_announcement_view_${announcementId}`)]
+        ];
+        
+        const message = await ctx.reply('Вы уверены, что хотите удалить это объявление?', Markup.inlineKeyboard(buttons));
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка в confirmDeleteAnnouncement:', error);
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+    }
+}
+
+async function deleteAnnouncementHandler(ctx, announcementId) {
+    const userId = ctx.from.id.toString();
+    if (userId !== ADMIN_ID) return;
+    
+    try {
+        await clearPreviousMessages(ctx, userId);
+        
+        const announcement = await loadAnnouncement(announcementId);
+        if (!announcement) {
+            await ctx.reply('Объявление не найдено.');
+            return;
+        }
+        
+        // Удаляем сообщения из групп
+        for (const [chatId, messageId] of Object.entries(announcement.groupMessageIds)) {
+            try {
+                await ctx.telegram.deleteMessage(chatId, messageId);
+            } catch (error) {
+                console.error(`Ошибка удаления сообщения из группы ${chatId}:`, error);
+            }
+        }
+        
+        // Удаляем объявление из базы данных
+        await deleteAnnouncement(announcementId);
+        
+        await ctx.reply('✅ Объявление успешно удалено.');
+        await showAnnouncementsDates(ctx, 0);
+    } catch (error) {
+        console.error('Ошибка в deleteAnnouncementHandler:', error);
+        await ctx.reply('Произошла ошибка при удалении объявления. Попробуйте позже.').catch(() => {});
     }
 }
 
@@ -177,6 +703,239 @@ const exportedFunctions = {
 module.exports = (bot) => {
     bot.action('admin_panel', showAdminPanel);
     bot.action('view_applications', showApplications);
+    
+    // Объявления
+    bot.action('admin_announcements', showAnnouncementsMenu);
+    bot.action('admin_announcements_create', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const state = ensureUserState(ctx);
+        state.selectedObjects = [];
+        state.announcement = {};
+        state.step = 'announcementObjects';
+        await showAnnouncementObjectSelection(ctx, []);
+    });
+    bot.action('admin_announcements_list', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        await showAnnouncementsDates(ctx, 0);
+    });
+    
+    bot.action(/announcement_toggle_object_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const objectIndex = parseInt(ctx.match[1], 10);
+        const state = ensureUserState(ctx);
+        const allObjects = await getAllObjects();
+        const objectNames = allObjects.map(obj => obj.name);
+        const objectName = objectNames[objectIndex];
+        
+        if (!state.selectedObjects) {
+            state.selectedObjects = [];
+        }
+        
+        const index = state.selectedObjects.indexOf(objectName);
+        if (index === -1) {
+            state.selectedObjects.push(objectName);
+        } else {
+            state.selectedObjects.splice(index, 1);
+        }
+        
+        const lastMessageId = state.messageIds && state.messageIds[state.messageIds.length - 1];
+        await showAnnouncementObjectSelection(ctx, state.selectedObjects, lastMessageId);
+    });
+    
+    bot.action('announcement_confirm_objects', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const state = ensureUserState(ctx);
+        if (!state.selectedObjects || state.selectedObjects.length === 0) {
+            await ctx.reply('Выберите хотя бы один объект.');
+            await showAnnouncementObjectSelection(ctx, []);
+            return;
+        }
+        
+        state.step = 'announcementText';
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply('💡 Введите объявление:');
+        addMessageId(ctx, message.message_id);
+    });
+    
+    bot.action('send_announcement', sendAnnouncement);
+    
+    bot.action(/admin_announcements_dates_page_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const page = parseInt(ctx.match[1], 10);
+        await showAnnouncementsDates(ctx, page);
+    });
+    
+    bot.action(/admin_announcement_date_(\d+)_page_(\d+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const dateIndex = parseInt(ctx.match[1], 10);
+        const page = parseInt(ctx.match[2], 10);
+        await showAnnouncementsByDate(ctx, dateIndex, page);
+    });
+    
+    bot.action(/admin_announcement_view_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const announcementId = ctx.match[1];
+        await showAnnouncementDetails(ctx, announcementId);
+    });
+    
+    bot.action(/admin_announcement_edit_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const announcementId = ctx.match[1];
+        await editAnnouncement(ctx, announcementId);
+    });
+    
+    bot.action(/admin_announcement_edit_text_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const announcementId = ctx.match[1];
+        const state = ensureUserState(ctx);
+        state.step = 'editAnnouncementText';
+        state.editingAnnouncementId = announcementId;
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply('Введите новый текст объявления:');
+        addMessageId(ctx, message.message_id);
+    });
+    
+    bot.action(/admin_announcement_edit_photos_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const announcementId = ctx.match[1];
+        const announcement = await loadAnnouncement(announcementId);
+        if (!announcement) {
+            await ctx.reply('Объявление не найдено.');
+            return;
+        }
+        const state = ensureUserState(ctx);
+        state.step = 'editAnnouncementPhotos';
+        state.editingAnnouncementId = announcementId;
+        state.announcement = {
+            photos: [...(announcement.photos || [])],
+            text: announcement.text
+        };
+        state.mediaGroupIds = [];
+        await clearPreviousMessages(ctx, userId);
+        const message = await ctx.reply(
+            '📸 Прикрепите новые изображения к объявлению или нажмите "Готово" для завершения',
+            Markup.inlineKeyboard([
+                [Markup.button.callback('Удалить все фото', `admin_announcement_delete_all_photos_${announcementId}`)],
+                [Markup.button.callback('Готово', `finish_edit_announcement_photos_${announcementId}`)]
+            ])
+        );
+        addMessageId(ctx, message.message_id);
+    });
+    
+    bot.action(/admin_announcement_edit_objects_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const announcementId = ctx.match[1];
+        const announcement = await loadAnnouncement(announcementId);
+        if (!announcement) {
+            await ctx.reply('Объявление не найдено.');
+            return;
+        }
+        const state = ensureUserState(ctx);
+        state.editingAnnouncementId = announcementId;
+        state.selectedObjects = [...(announcement.objectNames || [])];
+        state.step = 'editAnnouncementObjects';
+        await showAnnouncementObjectSelection(ctx, state.selectedObjects);
+    });
+    
+    bot.action(/admin_announcement_delete_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const announcementId = ctx.match[1];
+        await confirmDeleteAnnouncement(ctx, announcementId);
+    });
+    
+    bot.action(/admin_announcement_confirm_delete_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const announcementId = ctx.match[1];
+        await deleteAnnouncementHandler(ctx, announcementId);
+    });
+    
+    bot.action(/admin_announcement_delete_all_photos_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const announcementId = ctx.match[1];
+        const state = ensureUserState(ctx);
+        if (state.announcement) {
+            state.announcement.photos = [];
+        }
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
+            }
+            state.mediaGroupIds = [];
+        }
+        await ctx.answerCbQuery('Все фото удалены');
+    });
+    
+    bot.action(/finish_edit_announcement_photos_(.+)/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        const announcementId = ctx.match[1];
+        const state = ensureUserState(ctx);
+        if (!state || state.step !== 'editAnnouncementPhotos') return;
+        
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
+            }
+        }
+        await clearPreviousMessages(ctx, userId);
+        state.mediaGroupIds = [];
+        state.messageIds = [];
+        
+        const photos = state.announcement ? (state.announcement.photos || []) : [];
+        await updateAnnouncement(announcementId, { photos });
+        
+        state.step = null;
+        state.editingAnnouncementId = null;
+        state.announcement = null;
+        
+        await ctx.reply('✅ Фото объявления обновлены.');
+        await showAnnouncementDetails(ctx, announcementId);
+    });
+    
+    bot.action(/announcement_confirm_objects_edit/, async (ctx) => {
+        const userId = ctx.from.id.toString();
+        if (userId !== ADMIN_ID) return;
+        
+        const state = ensureUserState(ctx);
+        if (!state.selectedObjects || state.selectedObjects.length === 0) {
+            await ctx.reply('Выберите хотя бы один объект.');
+            await showAnnouncementObjectSelection(ctx, []);
+            return;
+        }
+        
+        const announcementId = state.editingAnnouncementId;
+        if (!announcementId) {
+            await ctx.reply('Ошибка: объявление не найдено.');
+            return;
+        }
+        
+        await updateAnnouncement(announcementId, { objectNames: state.selectedObjects });
+        
+        state.step = null;
+        state.editingAnnouncementId = null;
+        state.selectedObjects = [];
+        
+        await clearPreviousMessages(ctx, userId);
+        await ctx.reply('✅ Объекты объявления обновлены.');
+        await showAnnouncementDetails(ctx, announcementId);
+    });
 
     bot.action(/review_(\d+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
@@ -4587,6 +5346,9 @@ ${fullName}
 
 // Экспортируем функции для использования в других модулях
 Object.assign(module.exports, {
+    showAnnouncementsMenu,
+    showAnnouncementPreview,
+    sendAnnouncement,
     showOrganizationsList: (ctx) => {
         if (exportedFunctions.showOrganizationsList) {
             return exportedFunctions.showOrganizationsList(ctx);
