@@ -3890,6 +3890,19 @@ ${objectsList}
                 'completed': 'Выполнена',
                 'rejected': 'Отклонена'
             };
+            
+            const STATUS_EMOJIS = {
+                'new': '🆕',
+                'in_progress': '⏳',
+                'completed': '✅',
+                'rejected': '❌'
+            };
+            
+            const URGENCY_EMOJIS = {
+                'urgent': '🔥',
+                'soon': '⏳',
+                'planned': '📅'
+            };
 
             const { loadUsers } = require('../../database/userModel');
             const TYPE_EMOJIS = {
@@ -3913,39 +3926,43 @@ ${objectsList}
                 return positionShort[position] || position;
             }
             
+            // Функция для вычисления номера заявки (порядковый номер среди всех заявок, отсортированных по timestamp по возрастанию)
+            async function getNeedNumber(needId) {
+                const { loadAllNeeds } = require('../../database/needModel');
+                const allNeeds = await loadAllNeeds();
+                const allNeedsArray = Object.values(allNeeds);
+                // Сортируем по timestamp по возрастанию (старые первыми, чтобы старые получили меньшие номера)
+                const sortedNeeds = allNeedsArray.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+                // Находим индекс заявки
+                const index = sortedNeeds.findIndex(n => n.needId === needId);
+                if (index === -1) return 1; // Если не найдена, возвращаем 1
+                return index + 1; // Первая (самая старая) будет №1
+            }
+            
             const users = await loadUsers();
             const author = users[need.userId] || {};
             
             const formattedDate = parseAndFormatDate(need.date);
             const time = new Date(need.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const typeName = TYPE_NAMES[need.type] || need.type;
-            const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
             const urgencyInfo = URGENCY_NAMES[need.urgency] || { name: need.urgency, emoji: '' };
             const statusName = STATUS_NAMES[need.status] || need.status;
+            const urgencyEmoji = URGENCY_EMOJIS[need.urgency] || '';
+            const statusEmoji = STATUS_EMOJIS[need.status] || '';
             
-            // Функция для сокращения должности
-            function shortenPosition(position) {
-                if (!position) return '';
-                const positionShort = {
-                    'Производитель работ': 'Произв. работ',
-                    'Инженерно-технический работник': 'ИТР',
-                    'Руководитель': 'Руководитель',
-                    'Менеджер': 'Менеджер'
-                };
-                return positionShort[position] || position;
-            }
+            // Получаем номер заявки
+            const needNumber = await getNeedNumber(needId);
 
-            let needText = `Заявка на ${typeName.toLowerCase()}
+            let needText = `Заявка на ${typeName.toLowerCase()} №${needNumber}
 ${escapeHtml(need.objectName)}
 ${formattedDate} ${time}
 
 ${author.position ? shortenPosition(author.position) : ''}${author.organization ? '\n' + escapeHtml(author.organization) : ''}
 ${escapeHtml(author.fullName || need.fullName || 'Не указано')}
 
-${typeEmoji} Тип: ${typeName}
-📝 Наименование: ${escapeHtml(need.name)}
-📅 Срочность: ${urgencyInfo.name}
-📊 Статус: ${statusName}`;
+Наименование: ${escapeHtml(need.name)}
+Срочность: ${urgencyEmoji} ${urgencyInfo.name}
+Статус: ${statusEmoji} ${statusName}`;
 
             const buttons = [
                 [Markup.button.callback('✏️ Редактировать', `admin_edit_need_${needId}`)],
