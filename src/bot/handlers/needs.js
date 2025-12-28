@@ -583,11 +583,15 @@ async function manageAllNeeds(ctx) {
 }
 
 async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
+    console.log(`[MANAGED_NEEDS] showManagedNeedsDates CALLED: objectIndex=${objectIndex}, page=${page}`);
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const user = users[userId];
 
-    if (!user || !user.isApproved) return;
+    if (!user || !user.isApproved) {
+        console.log(`[MANAGED_NEEDS] showManagedNeedsDates: пользователь не найден или не одобрен`);
+        return;
+    }
 
     let isNeedManager = userId === ADMIN_ID;
     const managedObjects = [];
@@ -1038,6 +1042,7 @@ async function showManagedChangeStatusMenu(ctx, needId) {
 }
 
 module.exports = (bot) => {
+    console.log('[NEEDS_HANDLERS] Registering needs handlers...');
     bot.action('needs', showNeedsMenu);
     bot.action('create_need', createNeed);
     bot.action('view_my_needs', showUserNeeds);
@@ -1171,7 +1176,12 @@ module.exports = (bot) => {
 
     // Управление заявками для ответственных
     // Важно: более специфичные паттерны должны быть зарегистрированы раньше
-    bot.action('manage_all_needs', (ctx) => manageAllNeeds(ctx));
+    console.log('[NEEDS_HANDLERS] Registering manage_all_needs handler...');
+    bot.action('manage_all_needs', (ctx) => {
+        console.log('[MANAGED_NEEDS] manage_all_needs action triggered');
+        manageAllNeeds(ctx);
+    });
+    console.log('[NEEDS_HANDLERS] Registering manage_needs_object handlers...');
     bot.action(/manage_needs_object_(\d+)_date_(\d+)_page_(\d+)/, (ctx) => {
         console.log(`[MANAGED_NEEDS] Action handler called: manage_needs_object_${ctx.match[1]}_date_${ctx.match[2]}_page_${ctx.match[3]}`);
         showManagedNeedsItems(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), parseInt(ctx.match[3], 10));
