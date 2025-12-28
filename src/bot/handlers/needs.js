@@ -54,10 +54,41 @@ async function notifyNeedAuthorStatusChange(telegram, need, oldStatus, newStatus
         const newStatusName = STATUS_NAMES[newStatus] || newStatus;
         const typeName = TYPE_NAMES[need.type] || need.type;
         
-        // Форматируем дату и время
-        const dateTime = new Date(need.timestamp);
-        const dateStr = dateTime.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' });
-        const timeStr = dateTime.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        // Получаем данные автора
+        const { loadUsers } = require('../../database/userModel');
+        const users = await loadUsers();
+        const author = users[need.userId] || {};
+        
+        // Функция для форматирования должности (сокращение)
+        const formatPosition = (position) => {
+            if (position === 'Производитель работ') return 'Произв. работ';
+            return position || '';
+        };
+        
+        // Функция для форматирования имени (сокращение)
+        const formatFullName = (fullName) => {
+            if (!fullName) return '';
+            const parts = fullName.trim().split(/\s+/);
+            if (parts.length === 0) return '';
+            if (parts.length === 1) return parts[0];
+            
+            const lastName = parts[0];
+            const firstName = parts.length > 1 ? parts[1] : '';
+            const middleName = parts.length > 2 ? parts[2] : '';
+            
+            let result = lastName;
+            if (firstName) {
+                result += ` ${firstName.charAt(0).toUpperCase()}.`;
+            }
+            if (middleName) {
+                result += `${middleName.charAt(0).toUpperCase()}.`;
+            }
+            return result;
+        };
+        
+        const position = formatPosition(author.position || '');
+        const organization = author.organization || '';
+        const authorName = formatFullName(author.fullName || need.fullName || '');
         
         // Эмодзи для статусов
         const oldStatusEmoji = oldStatusName === 'Выполнена' ? '✅' : oldStatusName === 'Новая' ? '🆕' : oldStatusName === 'В обработке' ? '🔄' : oldStatusName === 'Отклонена' ? '❌' : '';
@@ -67,7 +98,11 @@ async function notifyNeedAuthorStatusChange(telegram, need, oldStatus, newStatus
         const notificationText = `<blockquote>Изменен статус заявки ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''} 
 ${oldStatusEmoji} ${oldStatusName} → ${newStatusEmoji} ${newStatusName}
 ${need.objectName} 
-${dateStr} ${timeStr}
+
+${position ? position : ''}
+${organization ? organization : ''}
+${authorName}
+
 Наименование: ${need.name}</blockquote>`;
         
         await telegram.sendMessage(need.userId, notificationText, {
