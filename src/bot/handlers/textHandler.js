@@ -305,13 +305,20 @@ module.exports = (bot) => {
                 const entities = ctx.message.entities || ctx.message.caption_entities || [];
                 let formattedText;
                 if (entities.length > 0) {
-                    formattedText = entitiesToHtml(ctx.message.text, entities);
+                    // Проверяем наличие blockquote entities
+                    const hasBlockquote = entities.some(e => e.type === 'blockquote');
+                    console.log('[ANNOUNCEMENT DEBUG] Total entities:', entities.length);
+                    console.log('[ANNOUNCEMENT DEBUG] Has blockquote:', hasBlockquote);
                     console.log('[ANNOUNCEMENT DEBUG] Entities:', JSON.stringify(entities, null, 2));
                     console.log('[ANNOUNCEMENT DEBUG] Original text:', ctx.message.text);
+                    console.log('[ANNOUNCEMENT DEBUG] Text length:', ctx.message.text.length);
+                    
+                    formattedText = entitiesToHtml(ctx.message.text, entities);
                     console.log('[ANNOUNCEMENT DEBUG] Formatted text:', formattedText);
+                    console.log('[ANNOUNCEMENT DEBUG] Formatted text contains blockquote:', formattedText.includes('<blockquote>'));
                 } else {
                     formattedText = escapeHtml(ctx.message.text.trim());
-                    console.log('[ANNOUNCEMENT DEBUG] No entities found');
+                    console.log('[ANNOUNCEMENT DEBUG] No entities found, using plain text');
                 }
                 
                 state.announcement.text = formattedText;
@@ -357,13 +364,13 @@ module.exports = (bot) => {
                 }
                 state.need.name = name;
                 state.step = 'needUrgency';
-                const urgencyText = `<blockquote><b>🔥 <u>Срочно</u></b>
+                const urgencyText = `<blockquote><b>🔥 <u>Срочно</u></b><br>
 Нужно сегодня / максимум завтра. 
 Работа встанет, если не привезти</blockquote>
-<blockquote><b>⏳ <u>В ближайшее время</u></b>
+<blockquote><b>⏳ <u>В ближайшее время</u></b><br>
 Нужно в течение 1–3 дней. 
 Можно планировать поставку</blockquote>
-<blockquote><b>📅 <u>Планово</u></b>
+<blockquote><b>📅 <u>Планово</u></b><br>
 Нужно позже 3 дней. 
 Для включения в общий график закупок</blockquote>
 
@@ -375,7 +382,8 @@ module.exports = (bot) => {
                         reply_markup: Markup.inlineKeyboard([
                             [Markup.button.callback('🔥 Срочно', 'set_need_urgency_urgent')],
                             [Markup.button.callback('⏳ В ближайшее время', 'set_need_urgency_soon')],
-                            [Markup.button.callback('📅 Планово', 'set_need_urgency_planned')]
+                            [Markup.button.callback('📅 Планово', 'set_need_urgency_planned')],
+                            [Markup.button.callback('↩️ Назад', 'need_urgency_back')]
                         ]).reply_markup
                     }
                 );
@@ -1633,6 +1641,18 @@ ${escapeHtml(report.materials)}</blockquote>
     });
 
     // Обработчики для создания заявки на потребности
+
+    bot.action('need_urgency_back', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || state.step !== 'needUrgency' || !state.need) return;
+
+        await clearPreviousMessages(ctx, userId);
+        state.step = 'needName';
+        state.messageIds = [];
+        const message = await ctx.reply('📝 Введите наименование и количество:');
+        state.messageIds.push(message.message_id);
+    });
 
     bot.action(/set_need_urgency_(.+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
