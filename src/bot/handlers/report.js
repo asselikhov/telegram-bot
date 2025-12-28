@@ -32,7 +32,7 @@ async function showReportsMenu(ctx) {
         buttons.push([Markup.button.callback('📝 Создать отчет', 'create_report')]);
     }
 
-    buttons.push([Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')]);
+    buttons.push([Markup.button.callback('📋 Мои отчеты', 'view_reports')]);
 
     if (user.isApproved) {
         buttons.push([Markup.button.callback('📤 Выгрузить отчеты', 'download_reports')]);
@@ -40,10 +40,13 @@ async function showReportsMenu(ctx) {
 
     buttons.push([Markup.button.callback('↩️ Назад', 'main_menu')]);
 
-    const message = await ctx.reply(
-        '📋 Отчеты\nВыберите действие:',
-        Markup.inlineKeyboard(buttons)
-    );
+    const menuText = `
+📋 ОТЧЕТЫ
+➖➖➖➖➖➖➖➖➖➖➖
+Выберите действие:
+    `.trim();
+
+    const message = await ctx.reply(menuText, Markup.inlineKeyboard(buttons));
     addMessageId(ctx, message.message_id);
 }
 

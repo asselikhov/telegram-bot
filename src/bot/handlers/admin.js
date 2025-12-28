@@ -82,19 +82,26 @@ async function showAdminPanel(ctx) {
     if (userId !== ADMIN_ID) return;
 
     try {
-        await clearPreviousMessages(ctx, userId);
-        const message = await ctx.reply(
-            '👑 Админ-панель\nВыберите действие:',
-            Markup.inlineKeyboard([
-                [Markup.button.callback('📋 Просмотреть заявки', 'view_applications')],
-                [Markup.button.callback('👥 Управление пользователями', 'admin_users')],
-                [Markup.button.callback('🏢 Управление организациями', 'admin_organizations')],
-                [Markup.button.callback('🏗 Управление объектами', 'admin_objects')],
-                [Markup.button.callback('🔔 Настройки уведомлений', 'admin_notifications')],
-                [Markup.button.callback('📈 Статистика', 'admin_statistics')],
-                [Markup.button.callback('↩️ Назад', 'main_menu')]
-            ])
-        );
+    await clearPreviousMessages(ctx, userId);
+    
+    const menuText = `
+👑 АДМИН-ПАНЕЛЬ
+➖➖➖➖➖➖➖➖➖➖➖
+Выберите действие:
+    `.trim();
+    
+    const message = await ctx.reply(
+        menuText,
+        Markup.inlineKeyboard([
+            [Markup.button.callback('📋 Просмотреть заявки', 'view_applications')],
+            [Markup.button.callback('👥 Управление пользователями', 'admin_users')],
+            [Markup.button.callback('🏢 Управление организациями', 'admin_organizations')],
+            [Markup.button.callback('🏗 Управление объектами', 'admin_objects')],
+            [Markup.button.callback('🔔 Настройки уведомлений', 'admin_notifications')],
+            [Markup.button.callback('📈 Статистика', 'admin_statistics')],
+            [Markup.button.callback('↩️ Назад', 'main_menu')]
+        ])
+    );
         addMessageId(ctx, message.message_id);
     } catch (error) {
         console.error('Ошибка в showAdminPanel:', error);
@@ -107,27 +114,27 @@ async function showApplications(ctx) {
     if (userId !== ADMIN_ID) return;
 
     try {
-        await clearPreviousMessages(ctx, userId);
-        const users = await loadUsers();
-        const pendingUsers = Object.entries(users).filter(([_, user]) => !user.isApproved);
+    await clearPreviousMessages(ctx, userId);
+    const users = await loadUsers();
+    const pendingUsers = Object.entries(users).filter(([_, user]) => !user.isApproved);
 
-        if (pendingUsers.length === 0) {
-            const message = await ctx.reply('Заявок на рассмотрение нет.', Markup.inlineKeyboard([
-                [Markup.button.callback('↩️ Назад', 'admin_panel')]
-            ]));
+    if (pendingUsers.length === 0) {
+        const message = await ctx.reply('Заявок на рассмотрение нет.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'admin_panel')]
+        ]));
             addMessageId(ctx, message.message_id);
-            return;
-        }
+        return;
+    }
 
-        const buttons = pendingUsers.map(([uid, user]) => [
-            Markup.button.callback(
-                `${user.fullName} (${user.organization})`,
-                `review_${uid}`
-            )
-        ]);
-        buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
+    const buttons = pendingUsers.map(([uid, user]) => [
+        Markup.button.callback(
+            `${user.fullName} (${user.organization})`,
+            `review_${uid}`
+        )
+    ]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
 
-        const message = await ctx.reply('Заявки на рассмотрение:', Markup.inlineKeyboard(buttons));
+    const message = await ctx.reply('Заявки на рассмотрение:', Markup.inlineKeyboard(buttons));
         addMessageId(ctx, message.message_id);
     } catch (error) {
         console.error('Ошибка в showApplications:', error);
@@ -177,11 +184,11 @@ module.exports = (bot) => {
         if (userId !== ADMIN_ID) return;
 
         try {
-            const reviewUserId = ctx.match[1];
-            const users = await loadUsers();
-            const user = users[reviewUserId];
+        const reviewUserId = ctx.match[1];
+        const users = await loadUsers();
+        const user = users[reviewUserId];
 
-            if (!user || user.isApproved) return;
+        if (!user || user.isApproved) return;
 
         const inviteCodeData = await loadInviteCode(reviewUserId);
 
@@ -222,14 +229,14 @@ ${objectsList}
 ⏰ **Использован:** ${usedAt}
         `.trim();
 
-            const message = await ctx.reply(userData, {
-                parse_mode: 'Markdown',
-                reply_markup: Markup.inlineKeyboard([
-                    [Markup.button.callback('✅ Одобрить', `approve_${reviewUserId}`)],
-                    [Markup.button.callback('❌ Отклонить', `reject_${reviewUserId}`)],
-                    [Markup.button.callback('↩️ Назад', 'view_applications')]
-                ]).reply_markup
-            });
+        const message = await ctx.reply(userData, {
+            parse_mode: 'Markdown',
+            reply_markup: Markup.inlineKeyboard([
+                [Markup.button.callback('✅ Одобрить', `approve_${reviewUserId}`)],
+                [Markup.button.callback('❌ Отклонить', `reject_${reviewUserId}`)],
+                [Markup.button.callback('↩️ Назад', 'view_applications')]
+            ]).reply_markup
+        });
             addMessageId(ctx, message.message_id);
         } catch (error) {
             console.error('Ошибка в обработчике review:', error);
@@ -242,17 +249,17 @@ ${objectsList}
         if (userId !== ADMIN_ID) return;
 
         try {
-            const approveUserId = ctx.match[1];
-            const users = await loadUsers();
-            const user = users[approveUserId];
+        const approveUserId = ctx.match[1];
+        const users = await loadUsers();
+        const user = users[approveUserId];
 
-            if (user && !user.isApproved) {
-                users[approveUserId].isApproved = 1;
-                await saveUser(approveUserId, users[approveUserId]);
+        if (user && !user.isApproved) {
+            users[approveUserId].isApproved = 1;
+            await saveUser(approveUserId, users[approveUserId]);
                 await ctx.telegram.sendMessage(approveUserId, '✅ Ваша заявка одобрена! Используйте /start для входа в меню.').catch(() => {});
-                await ctx.reply(`Заявка ${user.fullName || approveUserId} одобрена.`);
-            }
-            await showApplications(ctx);
+            await ctx.reply(`Заявка ${user.fullName || approveUserId} одобрена.`);
+        }
+        await showApplications(ctx);
         } catch (error) {
             console.error('Ошибка в обработчике approve:', error);
             await ctx.reply('Произошла ошибка при одобрении заявки.').catch(() => {});
@@ -264,16 +271,16 @@ ${objectsList}
         if (userId !== ADMIN_ID) return;
 
         try {
-            const rejectUserId = ctx.match[1];
-            const users = await loadUsers();
-            const user = users[rejectUserId];
+        const rejectUserId = ctx.match[1];
+        const users = await loadUsers();
+        const user = users[rejectUserId];
 
-            if (user && !user.isApproved) {
-                await deleteUser(rejectUserId);
+        if (user && !user.isApproved) {
+            await deleteUser(rejectUserId);
                 await ctx.telegram.sendMessage(rejectUserId, '❌ Ваша заявка отклонена администратором.').catch(() => {});
-                await ctx.reply(`Заявка ${user.fullName || rejectUserId} отклонена.`);
-            }
-            await showApplications(ctx);
+            await ctx.reply(`Заявка ${user.fullName || rejectUserId} отклонена.`);
+        }
+        await showApplications(ctx);
         } catch (error) {
             console.error('Ошибка в обработчике reject:', error);
             await ctx.reply('Произошла ошибка при отклонении заявки.').catch(() => {});
@@ -287,19 +294,19 @@ ${objectsList}
         if (userId !== ADMIN_ID) return;
         
         try {
-            await clearPreviousMessages(ctx, userId);
-            const organizations = await getAllOrganizations();
-            
-            if (organizations.length === 0) {
-                const message = await ctx.reply('Организаций нет.', Markup.inlineKeyboard([
-                    [Markup.button.callback('➕ Добавить организацию', 'admin_org_add')],
-                    [Markup.button.callback('↩️ Назад', 'admin_panel')]
-                ]));
+        await clearPreviousMessages(ctx, userId);
+        const organizations = await getAllOrganizations();
+        
+        if (organizations.length === 0) {
+            const message = await ctx.reply('Организаций нет.', Markup.inlineKeyboard([
+                [Markup.button.callback('➕ Добавить организацию', 'admin_org_add')],
+                [Markup.button.callback('↩️ Назад', 'admin_panel')]
+            ]));
                 addMessageId(ctx, message.message_id);
             return;
         }
         
-            // Сохраняем список организаций в state для использования в обработчике
+        // Сохраняем список организаций в state для использования в обработчике
             const state = ensureUserState(ctx);
             if (state) {
                 state.adminOrganizationsList = organizations.map(org => org.name);
@@ -316,7 +323,7 @@ ${objectsList}
         buttons.push([Markup.button.callback('➕ Добавить организацию', 'admin_org_add')]);
         buttons.push([Markup.button.callback('↩️ Назад', 'admin_panel')]);
         
-            const message = await ctx.reply('🏢 Управление организациями\nВыберите организацию:', Markup.inlineKeyboard(buttons));
+        const message = await ctx.reply('🏢 Управление организациями\nВыберите организацию:', Markup.inlineKeyboard(buttons));
             addMessageId(ctx, message.message_id);
         } catch (error) {
             console.error('Ошибка в showOrganizationsList:', error);
@@ -515,9 +522,9 @@ ${objectsList}
         const messageIds = ctx.state.userStates[userId].messageIds || [];
         const lastMessageId = messageIds.length > 0 ? messageIds[messageIds.length - 1] : null;
         if (lastMessageId) {
-            try {
-                await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите объекты для организации (можно выбрать несколько):', Markup.inlineKeyboard(buttons));
-            } catch (e) {
+        try {
+            await ctx.telegram.editMessageText(ctx.chat.id, lastMessageId, null, 'Выберите объекты для организации (можно выбрать несколько):', Markup.inlineKeyboard(buttons));
+        } catch (e) {
                 await ctx.reply('Выберите объекты для организации (можно выбрать несколько):', Markup.inlineKeyboard(buttons));
             }
         } else {
@@ -4571,7 +4578,7 @@ ${fullName}
 
         await showNeedsAssignOrganizations(ctx, objectIndex);
     });
-
+    
     // Экспортируем функции для использования в других модулях
     exportedFunctions.showOrganizationsList = showOrganizationsList;
     exportedFunctions.showObjectsList = showObjectsList;
