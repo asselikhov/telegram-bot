@@ -1450,7 +1450,14 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
 
         if (currentDates.length === 0) {
             console.log(`[MANAGED_NEEDS] showManagedNeedsDates: нет дат для отображения`);
-            return ctx.reply('Ошибка: нет дат для отображения.');
+            const buttons = [
+                [Markup.button.callback('📦 Архив', `manage_needs_archive_object_${objectIndex}_page_0`)],
+                [Markup.button.callback('↩️ Назад', 'manage_needs_objects')]
+            ];
+            return ctx.reply(
+                `📦 Нет активных заявок для объекта "${objectName}".\nВыберите "Архив" для просмотра закрытых заявок.`,
+                Markup.inlineKeyboard(buttons)
+            );
         }
 
         // Сохраняем список дат в state для использования при выборе даты
