@@ -16,19 +16,8 @@ async function showReportsMenu(ctx) {
 
     const buttons = [];
 
-    // Проверяем, должен ли пользователь подавать отчеты
-    let shouldShowCreateReport = false;
-    if (user.isApproved && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
-        for (const objectName of user.selectedObjects) {
-            const reportUsers = await getReportUsers(user.organization, objectName);
-            if (reportUsers && reportUsers.includes(userId)) {
-                shouldShowCreateReport = true;
-                break;
-            }
-        }
-    }
-
-    if (shouldShowCreateReport) {
+    // Показываем кнопку "Создать отчет" всем пользователям с выбранными объектами
+    if (user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
         buttons.push([Markup.button.callback('📝 Создать отчет', 'create_report')]);
     }
 
@@ -480,23 +469,7 @@ async function createReport(ctx) {
     const users = await loadUsers();
     const user = users[userId];
     
-    if (!user || !user.isApproved) {
-        return ctx.reply('У вас нет прав для создания отчетов.');
-    }
-    
-    // Проверяем, должен ли пользователь подавать отчеты
-    let hasReportPermission = false;
-    if (user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
-        for (const objectName of user.selectedObjects) {
-            const reportUsers = await getReportUsers(user.organization, objectName);
-            if (reportUsers && reportUsers.includes(userId)) {
-                hasReportPermission = true;
-                break;
-            }
-        }
-    }
-    
-    if (!hasReportPermission) {
+    if (!user) {
         return ctx.reply('У вас нет прав для создания отчетов.');
     }
 
