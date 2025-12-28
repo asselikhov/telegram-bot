@@ -102,7 +102,21 @@ module.exports = (bot) => {
             }
         } catch (error) {
             console.error(`Error processing /start for user ${telegramId}:`, error);
-            await ctx.reply('Произошла ошибка. Попробуйте снова позже.');
+            
+            // Не пытаемся отправлять сообщение об ошибке, если сама ошибка связана с отправкой сообщения
+            const isNetworkError = error.code === 'ETIMEDOUT' || 
+                                  error.code === 'ECONNRESET' || 
+                                  error.code === 'ENOTFOUND' ||
+                                  error.type === 'system' ||
+                                  (error.message && error.message.includes('sendMessage'));
+            
+            if (!isNetworkError) {
+                try {
+                    await ctx.reply('Произошла ошибка. Попробуйте снова позже.').catch(() => {});
+                } catch (e) {
+                    // Игнорируем ошибки при отправке сообщения об ошибке
+                }
+            }
         }
     });
 };

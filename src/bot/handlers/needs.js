@@ -446,11 +446,16 @@ async function showNeedItems(ctx, objectIndex, dateIndex, page = 0) {
     buttons.push(...itemButtons);
     buttons.push([Markup.button.callback('↩️ Назад', `select_need_list_object_${objectIndex}`)]);
 
-    const message = await ctx.reply(
-        `Выберите заявку для объекта "${objectName}" за ${selectedDate} (Страница ${pageNum + 1} из ${totalPages}):`,
-        Markup.inlineKeyboard(buttons)
-    );
-    addMessageId(ctx, message.message_id);
+    try {
+        const message = await ctx.reply(
+            `Выберите заявку для объекта "${objectName}" за ${selectedDate} (Страница ${pageNum + 1} из ${totalPages}):`,
+            Markup.inlineKeyboard(buttons)
+        );
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка отправки сообщения со списком заявок:', error);
+        // Не пробрасываем ошибку дальше, чтобы не создавать дополнительные запросы
+    }
 }
 
 async function showNeedDetails(ctx, needId) {
@@ -523,11 +528,16 @@ ${escapeHtml(fullName)}
         [Markup.button.callback('↩️ Назад', `select_need_date_${uniqueObjects.indexOf(need.objectName)}_${uniqueDates.indexOf(needDate)}`)]
     ];
 
-    const message = await ctx.reply(needText.trim(), {
-        parse_mode: 'HTML',
-        ...Markup.inlineKeyboard(buttons)
-    });
-    addMessageId(ctx, message.message_id);
+    try {
+        const message = await ctx.reply(needText.trim(), {
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard(buttons)
+        });
+        addMessageId(ctx, message.message_id);
+    } catch (error) {
+        console.error('Ошибка отправки деталей заявки:', error);
+        // Не пробрасываем ошибку дальше, чтобы не создавать дополнительные запросы
+    }
 }
 
 async function editNeed(ctx, needId) {

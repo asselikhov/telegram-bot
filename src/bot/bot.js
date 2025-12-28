@@ -71,10 +71,22 @@ bot.action(/.*/, async (ctx, next) => {
     return await next();
   } catch (error) {
     console.error('Ошибка в action handler:', error);
-    try {
-      await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
-    } catch (e) {
-      // Игнорируем ошибки при отправке сообщения об ошибке
+    
+    // Не пытаемся отправлять сообщение об ошибке, если сама ошибка связана с отправкой сообщения
+    const isNetworkError = error.code === 'ETIMEDOUT' || 
+                          error.code === 'ECONNRESET' || 
+                          error.code === 'ENOTFOUND' ||
+                          error.type === 'system' ||
+                          (error.message && error.message.includes('sendMessage'));
+    
+    if (!isNetworkError) {
+      try {
+        await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
+      } catch (e) {
+        // Игнорируем ошибки при отправке сообщения об ошибке
+      }
+    } else {
+      console.error('Сетевая ошибка при обработке action, пропускаем отправку сообщения об ошибке');
     }
   }
 });

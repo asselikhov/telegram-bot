@@ -28,7 +28,7 @@ function entitiesToHtml(text, entities) {
         return text || '';
     }
 
-    // Создаем массив для хранения всех тегов с их позициями
+    // Создаем массив для хранения всех тегов с их позициями и типами
     const tags = [];
 
     // Обрабатываем каждую entity
@@ -90,33 +90,90 @@ function entitiesToHtml(text, entities) {
         }
 
         if (openTag && closeTag) {
-            tags.push({ pos: start, tag: openTag, isOpen: true });
-            tags.push({ pos: end, tag: closeTag, isOpen: false });
+            tags.push({ pos: start, tag: openTag, isOpen: true, type });
+            tags.push({ pos: end, tag: closeTag, isOpen: false, type });
         }
     });
 
-    // Сортируем теги по позиции (открывающие теги с одинаковой позицией идут перед закрывающими)
+    // Сортируем теги по позиции
+    // При одинаковой позиции: сначала закрывающие теги (в обратном порядке открытия), потом открывающие
     tags.sort((a, b) => {
         if (a.pos !== b.pos) {
             return a.pos - b.pos;
         }
-        return a.isOpen ? -1 : 1;
+        if (a.isOpen && !b.isOpen) {
+            return -1; // Открывающие идут первыми
+        }
+        if (!a.isOpen && b.isOpen) {
+            return 1; // Закрывающие идут после открывающих
+        }
+        // Если оба открывающие или оба закрывающие на одной позиции - порядок не важен
+        return 0;
     });
 
-    // Строим результирующую строку, вставляя теги в правильном порядке
+    // Используем стек для отслеживания открытых тегов и правильной вложенности
+    const openTagsStack = [];
     let result = '';
     let currentPos = 0;
 
-    tags.forEach(({ pos, tag }) => {
+    tags.forEach(({ pos, tag, isOpen, type }) => {
         // Добавляем текст до текущей позиции
         if (pos > currentPos) {
             const textPart = text.substring(currentPos, pos);
             result += escapeHtml(textPart);
             currentPos = pos;
         }
-        // Добавляем тег
-        result += tag;
+
+        if (isOpen) {
+            // Открывающий тег - добавляем в стек и в результат
+            openTagsStack.push({ type, tag });
+            result += tag;
+        } else {
+            // Закрывающий тег - находим соответствующий открывающий в стеке (с конца)
+            const matchingIndex = openTagsStack.map(t => t.type).lastIndexOf(type);
+            if (matchingIndex !== -1) {
+                // Закрываем все теги после найденного (в обратном порядке LIFO)
+                while (openTagsStack.length > matchingIndex + 1) {
+                    const { type: closedType } = openTagsStack.pop();
+                    const closeTagMap = {
+                        'bold': '</b>',
+                        'italic': '</i>',
+                        'underline': '</u>',
+                        'strikethrough': '</s>',
+                        'code': '</code>',
+                        'pre': '</pre>',
+                        'blockquote': '</blockquote>',
+                        'text_link': '</a>',
+                        'text_mention': '</a>'
+                    };
+                    result += closeTagMap[closedType] || '';
+                }
+                // Закрываем нужный тег
+                result += tag;
+                openTagsStack.pop();
+            } else {
+                // Если не нашли соответствующий открывающий тег, просто добавляем закрывающий
+                result += tag;
+            }
+        }
     });
+
+    // Закрываем все оставшиеся открытые теги
+    while (openTagsStack.length > 0) {
+        const { type: closedType } = openTagsStack.pop();
+        const closeTagMap = {
+            'bold': '</b>',
+            'italic': '</i>',
+            'underline': '</u>',
+            'strikethrough': '</s>',
+            'code': '</code>',
+            'pre': '</pre>',
+            'blockquote': '</blockquote>',
+            'text_link': '</a>',
+            'text_mention': '</a>'
+        };
+        result += closeTagMap[closedType] || '';
+    }
 
     // Добавляем оставшийся текст
     if (currentPos < text.length) {
