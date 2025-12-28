@@ -4833,16 +4833,24 @@ ${fullName}
         }
     });
 
-    bot.action(/admin_set_need_urgency_(.+)_(.+)/, async (ctx) => {
+    bot.action(/admin_set_need_urgency_(.+)_(urgent|soon|planned)/, async (ctx) => {
         const needId = ctx.match[1];
         const urgency = ctx.match[2];
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
 
+        console.log('[NEED DEBUG] admin_set_need_urgency handler - needId:', needId);
+        console.log('[NEED DEBUG] admin_set_need_urgency handler - urgency:', urgency);
+        console.log('[NEED DEBUG] admin_set_need_urgency handler - userId:', userId);
+
         try {
             const allNeeds = await loadAllNeeds();
+            console.log('[NEED DEBUG] admin_set_need_urgency handler - allNeeds keys:', Object.keys(allNeeds));
+            console.log('[NEED DEBUG] admin_set_need_urgency handler - need exists:', !!allNeeds[needId]);
+            
             const need = allNeeds[needId];
             if (!need) {
+                console.log('[NEED DEBUG] admin_set_need_urgency handler - Need not found, available needIds:', Object.keys(allNeeds));
                 return ctx.reply('Ошибка: заявка не найдена.');
             }
 

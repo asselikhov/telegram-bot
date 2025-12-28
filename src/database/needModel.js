@@ -129,23 +129,36 @@ async function loadAllNeeds() {
 }
 
 async function deleteNeed(userId, needId) {
+    console.log(`[NEED MODEL] deleteNeed - called with userId: ${userId}, needId: ${needId}`);
+    
     if (!needId) {
         throw new Error('needId is required');
     }
     const needsCollection = (await getDb()).collection('needs');
     const normalizedUserId = String(userId);
     
+    console.log(`[NEED MODEL] deleteNeed - searching for need with needid: ${needId}`);
     // Проверяем, что заявка принадлежит пользователю
     const need = await needsCollection.findOne({ needid: needId });
+    console.log(`[NEED MODEL] deleteNeed - found need:`, need ? `yes, userid: ${need.userid}` : 'no');
+    
     if (!need) {
+        console.log(`[NEED MODEL] deleteNeed - need not found in database`);
         throw new Error('Заявка не найдена');
     }
+    
+    console.log(`[NEED MODEL] deleteNeed - checking user permissions: need.userid=${need.userid}, normalizedUserId=${normalizedUserId}`);
     if (String(need.userid) !== normalizedUserId) {
+        console.log(`[NEED MODEL] deleteNeed - permission denied: user mismatch`);
         throw new Error('У вас нет прав для удаления этой заявки');
     }
     
+    console.log(`[NEED MODEL] deleteNeed - attempting to delete need with needid: ${needId}`);
     const result = await needsCollection.deleteOne({ needid: needId });
+    console.log(`[NEED MODEL] deleteNeed - delete result: deletedCount=${result.deletedCount}, acknowledged=${result.acknowledged}`);
+    
     if (result.deletedCount === 0) {
+        console.log(`[NEED MODEL] deleteNeed - deletion failed: deletedCount is 0`);
         throw new Error('Заявка не была удалена');
     }
     console.log(`Заявка удалена: needId=${needId}, userId=${normalizedUserId}`);

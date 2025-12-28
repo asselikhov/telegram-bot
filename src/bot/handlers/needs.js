@@ -554,9 +554,14 @@ async function deleteNeedConfirmation(ctx, needId) {
 
 async function confirmDeleteNeed(ctx, needId) {
     const userId = ctx.from.id.toString();
+    
+    console.log('[NEED DEBUG] confirmDeleteNeed - needId:', needId);
+    console.log('[NEED DEBUG] confirmDeleteNeed - userId:', userId);
 
     try {
+        console.log('[NEED DEBUG] confirmDeleteNeed - calling deleteNeed...');
         await deleteNeed(userId, needId);
+        console.log('[NEED DEBUG] confirmDeleteNeed - deleteNeed completed successfully');
         await clearPreviousMessages(ctx, userId);
         const message = await ctx.reply('✅ Заявка успешно удалена.', Markup.inlineKeyboard([
             [Markup.button.callback('↩️ Назад', 'view_my_needs')]
@@ -1913,14 +1918,23 @@ module.exports = (bot) => {
     });
 
     // Установка срочности при редактировании
-    bot.action(/set_urgency_(.+)_(.+)/, async (ctx) => {
+    bot.action(/set_urgency_(urgent|soon|planned)_(.+)/, async (ctx) => {
         const urgency = ctx.match[1];
         const needId = ctx.match[2];
         const userId = ctx.from.id.toString();
+        
+        console.log('[NEED DEBUG] set_urgency handler - urgency:', urgency);
+        console.log('[NEED DEBUG] set_urgency handler - needId:', needId);
+        console.log('[NEED DEBUG] set_urgency handler - userId:', userId);
+        
         const needs = await loadUserNeeds(userId);
+        console.log('[NEED DEBUG] set_urgency handler - needs keys:', Object.keys(needs));
+        console.log('[NEED DEBUG] set_urgency handler - need exists:', !!needs[needId]);
+        
         const need = needs[needId];
 
         if (!need) {
+            console.log('[NEED DEBUG] set_urgency handler - Need not found, available needIds:', Object.keys(needs));
             return ctx.reply('Ошибка: заявка не найдена.');
         }
 
@@ -1944,7 +1958,12 @@ module.exports = (bot) => {
         console.log('[NEED DEBUG] delete_need handler - received needId:', needId);
         deleteNeedConfirmation(ctx, needId);
     });
-    bot.action(/confirm_delete_need_(.+)/, (ctx) => confirmDeleteNeed(ctx, ctx.match[1]));
+    bot.action(/confirm_delete_need_(.+)/, async (ctx) => {
+        const needId = ctx.match[1];
+        console.log('[NEED DEBUG] confirm_delete_need handler - received needId:', needId);
+        await ctx.answerCallbackQuery().catch(() => {});
+        await confirmDeleteNeed(ctx, needId);
+    });
     bot.action(/manage_delete_need_(.+)/, (ctx) => manageDeleteNeedConfirmation(ctx, ctx.match[1]));
     bot.action(/manage_confirm_delete_need_(.+)/, (ctx) => manageConfirmDeleteNeed(ctx, ctx.match[1]));
 
@@ -2068,7 +2087,7 @@ module.exports = (bot) => {
         }
     });
 
-    bot.action(/manage_set_need_urgency_(.+)_(.+)/, async (ctx) => {
+    bot.action(/manage_set_need_urgency_(.+)_(urgent|soon|planned)/, async (ctx) => {
         const needId = ctx.match[1];
         const urgency = ctx.match[2];
         const userId = ctx.from.id.toString();
@@ -2097,10 +2116,18 @@ module.exports = (bot) => {
 
         if (!isNeedManager) return;
 
+        console.log('[NEED DEBUG] manage_set_need_urgency handler - needId:', needId);
+        console.log('[NEED DEBUG] manage_set_need_urgency handler - urgency:', urgency);
+        console.log('[NEED DEBUG] manage_set_need_urgency handler - userId:', userId);
+
         try {
             const allNeeds = await loadAllNeeds();
+            console.log('[NEED DEBUG] manage_set_need_urgency handler - allNeeds keys:', Object.keys(allNeeds));
+            console.log('[NEED DEBUG] manage_set_need_urgency handler - need exists:', !!allNeeds[needId]);
+            
             const need = allNeeds[needId];
             if (!need) {
+                console.log('[NEED DEBUG] manage_set_need_urgency handler - Need not found, available needIds:', Object.keys(allNeeds));
                 return ctx.reply('Ошибка: заявка не найдена.');
             }
 
