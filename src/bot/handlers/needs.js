@@ -486,18 +486,12 @@ async function manageAllNeeds(ctx) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsersMap } = require('../../database/configService');
-        const allNeedUsersMap = await getAllNeedUsersMap();
+        const allSettings = await getAllNeedUsers();
         
-        for (const [key, userIds] of Object.entries(allNeedUsersMap)) {
-            // key имеет формат "organizationName_objectName"
-            const parts = key.split('_');
-            if (parts.length < 2) continue;
-            
-            const objectName = parts.slice(1).join('_'); // На случай если в названии объекта есть _
-            if (userIds && userIds.includes(userId)) {
-                const normalizedObjectName = objectName.trim();
-                if (!managedObjects.includes(normalizedObjectName)) {
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
                     managedObjects.push(normalizedObjectName);
                     isNeedManager = true;
                 }
@@ -577,18 +571,12 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsersMap } = require('../../database/configService');
-        const allNeedUsersMap = await getAllNeedUsersMap();
+        const allSettings = await getAllNeedUsers();
         
-        for (const [key, userIds] of Object.entries(allNeedUsersMap)) {
-            // key имеет формат "organizationName_objectName"
-            const parts = key.split('_');
-            if (parts.length < 2) continue;
-            
-            const objectName = parts.slice(1).join('_'); // На случай если в названии объекта есть _
-            if (userIds && userIds.includes(userId)) {
-                const normalizedObjectName = objectName.trim();
-                if (!managedObjects.includes(normalizedObjectName)) {
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
                     managedObjects.push(normalizedObjectName);
                     isNeedManager = true;
                 }
@@ -687,18 +675,12 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsersMap } = require('../../database/configService');
-        const allNeedUsersMap = await getAllNeedUsersMap();
+        const allSettings = await getAllNeedUsers();
         
-        for (const [key, userIds] of Object.entries(allNeedUsersMap)) {
-            // key имеет формат "organizationName_objectName"
-            const parts = key.split('_');
-            if (parts.length < 2) continue;
-            
-            const objectName = parts.slice(1).join('_'); // На случай если в названии объекта есть _
-            if (userIds && userIds.includes(userId)) {
-                const normalizedObjectName = objectName.trim();
-                if (!managedObjects.includes(normalizedObjectName)) {
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
                     managedObjects.push(normalizedObjectName);
                     isNeedManager = true;
                 }
@@ -808,18 +790,12 @@ async function showManagedNeedDetails(ctx, needId) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsersMap } = require('../../database/configService');
-        const allNeedUsersMap = await getAllNeedUsersMap();
+        const allSettings = await getAllNeedUsers();
         
-        for (const [key, userIds] of Object.entries(allNeedUsersMap)) {
-            // key имеет формат "organizationName_objectName"
-            const parts = key.split('_');
-            if (parts.length < 2) continue;
-            
-            const objectName = parts.slice(1).join('_'); // На случай если в названии объекта есть _
-            if (userIds && userIds.includes(userId)) {
-                const normalizedObjectName = objectName.trim();
-                if (!managedObjects.includes(normalizedObjectName)) {
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
                     managedObjects.push(normalizedObjectName);
                     isNeedManager = true;
                 }
@@ -896,18 +872,12 @@ async function showManagedEditNeedMenu(ctx, needId) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsersMap } = require('../../database/configService');
-        const allNeedUsersMap = await getAllNeedUsersMap();
+        const allSettings = await getAllNeedUsers();
         
-        for (const [key, userIds] of Object.entries(allNeedUsersMap)) {
-            // key имеет формат "organizationName_objectName"
-            const parts = key.split('_');
-            if (parts.length < 2) continue;
-            
-            const objectName = parts.slice(1).join('_'); // На случай если в названии объекта есть _
-            if (userIds && userIds.includes(userId)) {
-                const normalizedObjectName = objectName.trim();
-                if (!managedObjects.includes(normalizedObjectName)) {
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
                     managedObjects.push(normalizedObjectName);
                     isNeedManager = true;
                 }
@@ -958,18 +928,12 @@ async function showManagedChangeStatusMenu(ctx, needId) {
     
     if (!isNeedManager) {
         // Находим все объекты, для которых пользователь является ответственным из всех организаций
-        const { getAllNeedUsersMap } = require('../../database/configService');
-        const allNeedUsersMap = await getAllNeedUsersMap();
+        const allSettings = await getAllNeedUsers();
         
-        for (const [key, userIds] of Object.entries(allNeedUsersMap)) {
-            // key имеет формат "organizationName_objectName"
-            const parts = key.split('_');
-            if (parts.length < 2) continue;
-            
-            const objectName = parts.slice(1).join('_'); // На случай если в названии объекта есть _
-            if (userIds && userIds.includes(userId)) {
-                const normalizedObjectName = objectName.trim();
-                if (!managedObjects.includes(normalizedObjectName)) {
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
                     managedObjects.push(normalizedObjectName);
                     isNeedManager = true;
                 }
