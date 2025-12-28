@@ -3770,6 +3770,10 @@ ${objectsList}
             if (state) {
                 state.adminNeedsDatesList = uniqueDates;
             }
+            
+            console.log(`[ADMIN_NEEDS] showNeedsDatesForObject: objectIndex=${objectIndex}, objectName="${objectName}", page=${page}`);
+            console.log(`[ADMIN_NEEDS] uniqueDates (${uniqueDates.length}):`, JSON.stringify(uniqueDates));
+            console.log(`[ADMIN_NEEDS] Сохраняем список дат в state.adminNeedsDatesList`);
 
             const itemsPerPage = 10;
             const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
@@ -3785,6 +3789,7 @@ ${objectsList}
             const dateButtons = currentDates.map((date) => {
                 // Используем индекс из полного списка uniqueDates для данного объекта
                 const dateIndexInFullList = uniqueDates.indexOf(date);
+                console.log(`[ADMIN_NEEDS] Кнопка даты: "${date}" -> индекс ${dateIndexInFullList}, callback: admin_needs_object_${objectIndex}_date_${dateIndexInFullList}`);
                 return [Markup.button.callback(date, `admin_needs_object_${objectIndex}_date_${dateIndexInFullList}`)];
             }).reverse();
 

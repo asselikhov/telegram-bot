@@ -22,15 +22,15 @@ function normalizeMessageLink(messageLink) {
 
 async function saveReport(userId, report) {
     try {
-        const reportsCollection = (await getDb()).collection('reports');
-        const { reportId, userId: reportUserId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
+    const reportsCollection = (await getDb()).collection('reports');
+    const { reportId, userId: reportUserId, objectName, date, timestamp, workDone, materials, groupMessageIds, messageLink, fullName, photos } = report;
         
         // Проверяем, что reportId не пустой
         if (!reportId) {
             throw new Error('reportId is required and cannot be null or undefined');
         }
         
-        const normalizedMessageLink = normalizeMessageLink(messageLink);
+    const normalizedMessageLink = normalizeMessageLink(messageLink);
         // Нормализуем название объекта (убираем пробелы в начале и конце)
         const normalizedObjectName = objectName ? objectName.trim() : objectName;
         // Нормализуем userid до строки для консистентности
@@ -39,8 +39,8 @@ async function saveReport(userId, report) {
         // Используем replaceOne для полной замены документа, что избегает проблем с уникальным индексом
         // Это также удалит возможные старые поля с другими регистрами (reportId vs reportid)
         const result = await reportsCollection.replaceOne(
-            { reportid: reportId },
-            {
+        { reportid: reportId },
+        {
                 reportid: reportId,
                 userid: normalizedUserId,
                 objectname: normalizedObjectName,
@@ -52,9 +52,9 @@ async function saveReport(userId, report) {
                 messagelink: normalizedMessageLink || null,
                 fullname: fullName,
                 photos: JSON.stringify(photos || [])
-            },
-            { upsert: true }
-        );
+        },
+        { upsert: true }
+    );
         console.log(`Отчет сохранен: reportId=${reportId}, userId=${normalizedUserId}, objectName=${normalizedObjectName}, date=${date}, inserted=${result.upsertedCount > 0}, modified=${result.modifiedCount}`);
     } catch (error) {
         console.error(`Ошибка сохранения отчета: reportId=${report?.reportId}, userId=${userId}`, error);
