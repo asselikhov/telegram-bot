@@ -3601,11 +3601,16 @@ ${objectsList}
     }
 
     async function showNeedsForObject(ctx, objectIndex, dateIndex = 0, page = 0) {
+        console.log(`[ADMIN_NEEDS] showNeedsForObject CALLED: objectIndex=${objectIndex}, dateIndex=${dateIndex}, page=${page}`);
         const userId = ctx.from.id.toString();
-        if (userId !== ADMIN_ID) return;
+        if (userId !== ADMIN_ID) {
+            console.log(`[ADMIN_NEEDS] showNeedsForObject: пользователь не является администратором (userId=${userId}, ADMIN_ID=${ADMIN_ID})`);
+            return;
+        }
 
         try {
             const allNeeds = await loadAllNeeds();
+            console.log(`[ADMIN_NEEDS] showNeedsForObject: загружено заявок: ${Object.keys(allNeeds).length}`);
             const state = ensureUserState(ctx);
             let uniqueObjects;
             if (state && state.adminNeedsObjectsList) {
