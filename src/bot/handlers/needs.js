@@ -74,16 +74,31 @@ async function notifyResponsibleUsersNewNeed(telegram, need, userOrganization) {
         notificationText += `Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}\n`;
         notificationText += `Дата: ${need.date}`;
         
-        // Get responsible users for this organization-object pair
-        const { getNeedUsers } = require('../../database/configService');
-        const responsibleUserIds = await getNeedUsers(userOrganization, need.objectName);
+        // Get ALL responsible users for this object from ALL organizations
+        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
+        const allSettings = await getAllNeedUsers();
+        const normalizedObjectName = need.objectName ? need.objectName.trim() : need.objectName;
         
-        if (!responsibleUserIds || responsibleUserIds.length === 0) {
+        // Собираем всех ответственных пользователей для данного объекта из всех организаций
+        const allResponsibleUserIds = new Set();
+        for (const setting of allSettings) {
+            const settingObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+            // Сравниваем нормализованные названия объектов
+            if (settingObjectName === normalizedObjectName && setting.userIds && setting.userIds.length > 0) {
+                setting.userIds.forEach(userId => allResponsibleUserIds.add(userId));
+            }
+        }
+        
+        const responsibleUserIdsArray = Array.from(allResponsibleUserIds);
+        
+        if (responsibleUserIdsArray.length === 0) {
             return; // No responsible users to notify
         }
         
+        console.log(`[NEED_NOTIFICATION] Отправка уведомлений о новой заявке для объекта "${need.objectName}" ответственным пользователям:`, responsibleUserIdsArray);
+        
         // Send notification to each responsible user
-        const notificationPromises = responsibleUserIds.map(respUserId => {
+        const notificationPromises = responsibleUserIdsArray.map(respUserId => {
             return telegram.sendMessage(respUserId, notificationText).catch(err => {
                 console.error(`Ошибка отправки уведомления ответственному пользователю ${respUserId}:`, err);
             });
@@ -111,10 +126,13 @@ async function showNeedsMenu(ctx) {
     let isNeedManager = false;
     if (userId === ADMIN_ID) {
         isNeedManager = true;
-    } else if (user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
-        for (const objectName of user.selectedObjects) {
-            const needUsers = await getNeedUsers(user.organization, objectName);
-            if (needUsers && needUsers.includes(userId)) {
+    } else {
+        // Находим все объекты, для которых пользователь является ответственным из всех организаций
+        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
                 isNeedManager = true;
                 break;
             }
@@ -465,12 +483,18 @@ async function manageAllNeeds(ctx) {
     let isNeedManager = userId === ADMIN_ID;
     const managedObjects = [];
     
-    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
-        for (const objectName of user.selectedObjects) {
-            const needUsers = await getNeedUsers(user.organization, objectName);
-            if (needUsers && needUsers.includes(userId)) {
-                isNeedManager = true;
-                managedObjects.push(objectName);
+    if (!isNeedManager) {
+        // Находим все объекты, для которых пользователь является ответственным из всех организаций
+        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
             }
         }
     }
@@ -545,12 +569,18 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
     let isNeedManager = userId === ADMIN_ID;
     const managedObjects = [];
     
-    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
-        for (const objectName of user.selectedObjects) {
-            const needUsers = await getNeedUsers(user.organization, objectName);
-            if (needUsers && needUsers.includes(userId)) {
-                isNeedManager = true;
-                managedObjects.push(objectName);
+    if (!isNeedManager) {
+        // Находим все объекты, для которых пользователь является ответственным из всех организаций
+        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
             }
         }
     }
@@ -644,12 +674,18 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
     let isNeedManager = userId === ADMIN_ID;
     const managedObjects = [];
     
-    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
-        for (const objectName of user.selectedObjects) {
-            const needUsers = await getNeedUsers(user.organization, objectName);
-            if (needUsers && needUsers.includes(userId)) {
-                isNeedManager = true;
-                managedObjects.push(objectName);
+    if (!isNeedManager) {
+        // Находим все объекты, для которых пользователь является ответственным из всех организаций
+        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
             }
         }
     }
@@ -721,7 +757,7 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
             const statusName = STATUS_NAMES[need.status] || need.status;
             const label = `${urgencyInfo.emoji} ${typeName}: ${need.name} (${statusName})`;
             return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `manage_select_need_${needId}`)];
-        }).reverse();
+        });
 
         const buttons = [];
         const paginationButtons = [];
@@ -754,12 +790,18 @@ async function showManagedNeedDetails(ctx, needId) {
     let isNeedManager = userId === ADMIN_ID;
     const managedObjects = [];
     
-    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
-        for (const objectName of user.selectedObjects) {
-            const needUsers = await getNeedUsers(user.organization, objectName);
-            if (needUsers && needUsers.includes(userId)) {
-                isNeedManager = true;
-                managedObjects.push(objectName);
+    if (!isNeedManager) {
+        // Находим все объекты, для которых пользователь является ответственным из всех организаций
+        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
             }
         }
     }
@@ -831,12 +873,18 @@ async function showManagedEditNeedMenu(ctx, needId) {
     let isNeedManager = userId === ADMIN_ID;
     const managedObjects = [];
     
-    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
-        for (const objectName of user.selectedObjects) {
-            const needUsers = await getNeedUsers(user.organization, objectName);
-            if (needUsers && needUsers.includes(userId)) {
-                isNeedManager = true;
-                managedObjects.push(objectName);
+    if (!isNeedManager) {
+        // Находим все объекты, для которых пользователь является ответственным из всех организаций
+        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
             }
         }
     }
@@ -882,12 +930,18 @@ async function showManagedChangeStatusMenu(ctx, needId) {
     let isNeedManager = userId === ADMIN_ID;
     const managedObjects = [];
     
-    if (!isNeedManager && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
-        for (const objectName of user.selectedObjects) {
-            const needUsers = await getNeedUsers(user.organization, objectName);
-            if (needUsers && needUsers.includes(userId)) {
-                isNeedManager = true;
-                managedObjects.push(objectName);
+    if (!isNeedManager) {
+        // Находим все объекты, для которых пользователь является ответственным из всех организаций
+        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
+        const allSettings = await getAllNeedUsers();
+        
+        for (const setting of allSettings) {
+            if (setting.userIds && setting.userIds.includes(userId)) {
+                const normalizedObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+                if (normalizedObjectName && !managedObjects.includes(normalizedObjectName)) {
+                    managedObjects.push(normalizedObjectName);
+                    isNeedManager = true;
+                }
             }
         }
     }
