@@ -3693,6 +3693,7 @@ ${objectsList}
                 'materials': 'Материалы',
                 'equipment': 'Оборудование',
                 'special_equipment': 'Спецтехника',
+                'protective_clothing': 'Спецодежда',
                 'office_supplies': 'Канцтовары',
                 'accommodation': 'Проживание',
                 'services': 'Услуги'
@@ -3861,6 +3862,7 @@ ${objectsList}
                 'materials': 'Материалы',
                 'equipment': 'Оборудование',
                 'special_equipment': 'Спецтехника',
+                'protective_clothing': 'Спецодежда',
                 'office_supplies': 'Канцтовары',
                 'accommodation': 'Проживание',
                 'services': 'Услуги'
