@@ -99,7 +99,7 @@ async function notifyResponsibleUsersNewNeed(telegram, need, userOrganization) {
         const authorName = author.fullName || need.fullName || need.userId;
         const needNumber = need.number || '';
         
-        let notificationText = `<blockquote>Новая заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
+        let notificationText = `<blockquote>Новая заявка ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
 ${need.objectName}
 
 ${position ? position : ''}
