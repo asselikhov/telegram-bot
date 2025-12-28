@@ -215,7 +215,7 @@ async function showAnnouncementPreview(ctx) {
         const previewText = `
 📢 ОБЪЯВЛЕНИЕ
 
-${escapeHtml(announcementText)}
+${announcementText}
 
 🏗 Объекты:
 ${objectsList}
@@ -280,15 +280,8 @@ async function sendAnnouncement(ctx) {
         const objectNames = state.selectedObjects;
         const photos = state.announcement.photos || [];
         
-        const objectsList = objectNames.map(obj => `· ${escapeHtml(obj)}`).join('\n');
-        const messageText = `
-📢 ОБЪЯВЛЕНИЕ
-
-${escapeHtml(announcementText)}
-
-🏗 Объекты:
-${objectsList}
-        `.trim();
+        // Отправляем только текст объявления без списка объектов и заголовка
+        const messageText = announcementText;
         
         const objectGroups = await getObjectGroups();
         const date = new Date();
@@ -511,7 +504,7 @@ async function showAnnouncementDetails(ctx, announcementId) {
         let detailsText = `
 📢 ОБЪЯВЛЕНИЕ
 
-${escapeHtml(announcement.text)}
+${announcement.text}
 
 🏗 Объекты:
 ${objectsList}
