@@ -1057,6 +1057,7 @@ module.exports = (bot) => {
     bot.action(/confirm_delete_need_(.+)/, (ctx) => confirmDeleteNeed(ctx, ctx.match[1]));
 
     // Управление заявками для ответственных
+    bot.action('manage_all_needs', (ctx) => manageAllNeeds(ctx));
     bot.action(/manage_needs_object_(\d+)/, (ctx) => {
         const state = ensureUserState(ctx);
         showManagedNeedsDates(ctx, parseInt(ctx.match[1], 10), 0);
