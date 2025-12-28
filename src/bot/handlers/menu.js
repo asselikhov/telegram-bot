@@ -220,11 +220,6 @@ module.exports = (bot) => {
         const { showNeedsMenu } = require('./needs');
         await showNeedsMenu(ctx);
     });
-    
-    bot.action('reports_menu', async (ctx) => {
-        const { showReportsMenu } = require('./report');
-        await showReportsMenu(ctx);
-    });
 };
 
 module.exports.showMainMenu = showMainMenu;
