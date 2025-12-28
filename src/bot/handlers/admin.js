@@ -3892,6 +3892,27 @@ ${objectsList}
             };
 
             const { loadUsers } = require('../../database/userModel');
+            const TYPE_EMOJIS = {
+                'materials': '📦',
+                'equipment': '⚙️',
+                'special_equipment': '🚜',
+                'office_supplies': '📎',
+                'accommodation': '🏠',
+                'services': '🔧'
+            };
+            
+            // Функция для сокращения должности
+            function shortenPosition(position) {
+                if (!position) return '';
+                const positionShort = {
+                    'Производитель работ': 'Произв. работ',
+                    'Инженерно-технический работник': 'ИТР',
+                    'Руководитель': 'Руководитель',
+                    'Менеджер': 'Менеджер'
+                };
+                return positionShort[position] || position;
+            }
+            
             const users = await loadUsers();
             const author = users[need.userId] || {};
             

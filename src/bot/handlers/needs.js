@@ -939,26 +939,27 @@ async function showManagedNeedDetails(ctx, needId) {
 
         await clearPreviousMessages(ctx, userId);
 
+        const allUsers = await loadUsers();
+        const author = allUsers[need.userId] || {};
+        
         const formattedDate = parseAndFormatDate(need.date);
-        const time = new Date(need.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
+        const time = new Date(need.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const typeName = TYPE_NAMES[need.type] || need.type;
+        const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
         const urgencyInfo = URGENCY_NAMES[need.urgency] || { name: need.urgency, emoji: '' };
         const statusName = STATUS_NAMES[need.status] || need.status;
 
-        let needText = `
-<b>ЗАЯВКА НА ПОТРЕБНОСТИ</b>
-📅 Дата: ${formattedDate}
-🏢 Объект: ${escapeHtml(need.objectName)}
-👷 Автор: ${escapeHtml(need.fullName)}
-📦 Тип: ${typeName}
+        let needText = `Заявка на ${typeName.toLowerCase()}
+${escapeHtml(need.objectName)}
+${formattedDate} ${time}
+
+${author.position ? shortenPosition(author.position) : ''}${author.organization ? '\n' + escapeHtml(author.organization) : ''}
+${escapeHtml(author.fullName || need.fullName || 'Не указано')}
+
+${typeEmoji} Тип: ${typeName}
 📝 Наименование: ${escapeHtml(need.name)}
-`;
-        if (need.quantity !== null && need.quantity !== undefined) {
-            needText += `🔢 Количество: ${need.quantity}\n`;
-        }
-        needText += `${urgencyInfo.emoji} Срочность: ${urgencyInfo.name}\n`;
-        needText += `📊 Статус: ${statusName}\n`;
-        needText += `⏰ Время: ${time}`;
+📅 Срочность: ${urgencyInfo.name}
+📊 Статус: ${statusName}`;
 
         const buttons = [
             [Markup.button.callback('✏️ Редактировать', `manage_edit_need_${needId}`)],
