@@ -4801,9 +4801,29 @@ ${fullName}
         addMessageId(ctx, message.message_id);
     });
 
-    bot.action(/admin_set_need_status_(.+)_(.+)/, async (ctx) => {
-        const needId = ctx.match[1];
-        const status = ctx.match[2];
+    bot.action(/admin_set_need_status_(.+)/, async (ctx) => {
+        // Извлекаем needId и status, учитывая что needId может содержать подчеркивания
+        // Статусы: new, in_progress, completed, rejected
+        const callbackData = ctx.match[1];
+        const statuses = ['in_progress', 'completed', 'rejected', 'new'];
+        let needId = '';
+        let status = '';
+        
+        // Ищем статус в конце строки (с учетом подчеркиваний)
+        for (const stat of statuses) {
+            if (callbackData.endsWith(`_${stat}`)) {
+                status = stat;
+                needId = callbackData.slice(0, -(stat.length + 1)); // Убираем "_статус"
+                break;
+            }
+        }
+        
+        if (!status || !needId) {
+            console.error('[NEED DEBUG] admin_set_need_status - Failed to parse:', callbackData);
+            return ctx.reply('Ошибка: неверный формат данных.');
+        }
+        
+        console.log('[NEED DEBUG] admin_set_need_status - needId:', needId, 'status:', status);
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
 
