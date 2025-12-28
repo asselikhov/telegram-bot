@@ -1488,6 +1488,8 @@ ${escapeHtml(report.materials)}</blockquote>
             status: 'new',
             fullName: users[userId].fullName || ''
         };
+        
+        console.log(`[NEED_SAVE] Сохранение заявки: needId=${needId}, userId=${userId}, objectName="${need.objectName}", type=${need.type}, name="${need.name}"`);
 
         try {
             await saveNeed(userId, need);
