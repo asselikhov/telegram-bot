@@ -404,13 +404,34 @@ async function showNeedItems(ctx, objectIndex, dateIndex, page = 0) {
         return position || '';
     };
 
+    // Функция для сокращения ФИО: "Иванов Иван Иванович" -> "Иванов И.И."
+    const formatFullName = (fullName) => {
+        if (!fullName) return '';
+        const parts = fullName.trim().split(/\s+/);
+        if (parts.length === 0) return '';
+        if (parts.length === 1) return parts[0];
+        
+        const lastName = parts[0];
+        const firstName = parts.length > 1 ? parts[1] : '';
+        const middleName = parts.length > 2 ? parts[2] : '';
+        
+        let result = lastName;
+        if (firstName) {
+            result += ` ${firstName.charAt(0).toUpperCase()}.`;
+        }
+        if (middleName) {
+            result += `${middleName.charAt(0).toUpperCase()}.`;
+        }
+        return result;
+    };
+
     const users = await loadUsers();
     const itemButtons = currentNeeds.map(([needId, need]) => {
         const typeName = TYPE_NAMES[need.type] || need.type;
         const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
         const needUser = users[need.userId] || {};
         const position = formatPosition(needUser.position || '');
-        const fullName = needUser.fullName || need.fullName || '';
+        const fullName = formatFullName(needUser.fullName || need.fullName || '');
         const label = `${typeEmoji} ${typeName} -> ${position} ${fullName}`.trim();
         return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `select_need_item_${needId}`)];
     });
@@ -1449,13 +1470,34 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
             return position || '';
         };
 
+        // Функция для сокращения ФИО: "Иванов Иван Иванович" -> "Иванов И.И."
+        const formatFullName = (fullName) => {
+            if (!fullName) return '';
+            const parts = fullName.trim().split(/\s+/);
+            if (parts.length === 0) return '';
+            if (parts.length === 1) return parts[0];
+            
+            const lastName = parts[0];
+            const firstName = parts.length > 1 ? parts[1] : '';
+            const middleName = parts.length > 2 ? parts[2] : '';
+            
+            let result = lastName;
+            if (firstName) {
+                result += ` ${firstName.charAt(0).toUpperCase()}.`;
+            }
+            if (middleName) {
+                result += `${middleName.charAt(0).toUpperCase()}.`;
+            }
+            return result;
+        };
+
         const users = await loadUsers();
         const itemButtons = currentNeeds.map(([needId, need]) => {
             const typeName = TYPE_NAMES[need.type] || need.type;
             const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
             const needUser = users[need.userId] || {};
             const position = formatPosition(needUser.position || '');
-            const fullName = needUser.fullName || need.fullName || '';
+            const fullName = formatFullName(needUser.fullName || need.fullName || '');
             const label = `${typeEmoji} ${typeName} -> ${position} ${fullName}`.trim();
             return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `manage_select_need_${needId}`)];
         });
@@ -1570,12 +1612,34 @@ async function showManagedNeedsArchive(ctx, objectIndex, page = 0) {
             return position || '';
         };
 
+        // Функция для сокращения ФИО: "Иванов Иван Иванович" -> "Иванов И.И."
+        const formatFullName = (fullName) => {
+            if (!fullName) return '';
+            const parts = fullName.trim().split(/\s+/);
+            if (parts.length === 0) return '';
+            if (parts.length === 1) return parts[0];
+            
+            const lastName = parts[0];
+            const firstName = parts.length > 1 ? parts[1] : '';
+            const middleName = parts.length > 2 ? parts[2] : '';
+            
+            let result = lastName;
+            if (firstName) {
+                result += ` ${firstName.charAt(0).toUpperCase()}.`;
+            }
+            if (middleName) {
+                result += `${middleName.charAt(0).toUpperCase()}.`;
+            }
+            return result;
+        };
+
         const itemButtons = currentNeeds.map(([needId, need]) => {
             const typeName = TYPE_NAMES[need.type] || need.type;
+            const typeEmoji = TYPE_EMOJIS[need.type] || '📦';
             const needUser = users[need.userId] || {};
             const position = formatPosition(needUser.position || '');
-            const fullName = needUser.fullName || need.fullName || '';
-            const label = `📦 ${typeName} -> ${position} ${fullName}`.trim();
+            const fullName = formatFullName(needUser.fullName || need.fullName || '');
+            const label = `${typeEmoji} ${typeName} -> ${position} ${fullName}`.trim();
             return [Markup.button.callback(label.length > 64 ? label.substring(0, 61) + '...' : label, `manage_select_need_${needId}`)];
         });
 
