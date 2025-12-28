@@ -88,10 +88,10 @@ async function showAdminPanel(ctx) {
             Markup.inlineKeyboard([
                 [Markup.button.callback('📋 Просмотреть заявки', 'view_applications')],
                 [Markup.button.callback('👥 Управление пользователями', 'admin_users')],
-                [Markup.button.callback('📈 Статистика', 'admin_statistics')],
                 [Markup.button.callback('🏢 Управление организациями', 'admin_organizations')],
                 [Markup.button.callback('🏗 Управление объектами', 'admin_objects')],
                 [Markup.button.callback('🔔 Настройки уведомлений', 'admin_notifications')],
+                [Markup.button.callback('📈 Статистика', 'admin_statistics')],
                 [Markup.button.callback('↩️ Назад', 'main_menu')]
             ])
         );
