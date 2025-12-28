@@ -488,11 +488,13 @@ async function confirmDeleteNeed(ctx, needId) {
 }
 
 async function manageAllNeeds(ctx) {
+    console.log('[MANAGED_NEEDS] manageAllNeeds CALLED');
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const user = users[userId];
 
     if (!user || !user.isApproved) {
+        console.log('[MANAGED_NEEDS] manageAllNeeds: пользователь не найден или не одобрен');
         await clearPreviousMessages(ctx, userId);
         const message = await ctx.reply('У вас нет прав для управления заявками.');
         addMessageId(ctx, message.message_id);
@@ -1072,7 +1074,7 @@ module.exports = (bot) => {
             state.step = 'needName';
         }
 
-        const message = await ctx.reply('📝 Введите наименование:');
+        const message = await ctx.reply('📝 Введите наименование и количество:');
         addMessageId(ctx, message.message_id);
     });
 
@@ -1176,12 +1178,7 @@ module.exports = (bot) => {
 
     // Управление заявками для ответственных
     // Важно: более специфичные паттерны должны быть зарегистрированы раньше
-    console.log('[NEEDS_HANDLERS] Registering manage_all_needs handler...');
-    bot.action('manage_all_needs', (ctx) => {
-        console.log('[MANAGED_NEEDS] manage_all_needs action triggered');
-        manageAllNeeds(ctx);
-    });
-    console.log('[NEEDS_HANDLERS] Registering manage_needs_object handlers...');
+    bot.action('manage_all_needs', (ctx) => manageAllNeeds(ctx));
     bot.action(/manage_needs_object_(\d+)_date_(\d+)_page_(\d+)/, (ctx) => {
         console.log(`[MANAGED_NEEDS] Action handler called: manage_needs_object_${ctx.match[1]}_date_${ctx.match[2]}_page_${ctx.match[3]}`);
         showManagedNeedsItems(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), parseInt(ctx.match[3], 10));
