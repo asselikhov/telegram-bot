@@ -17,7 +17,8 @@ const TYPE_NAMES = {
     'special_equipment': 'Спецтехника',
     'office_supplies': 'Канцтовары',
     'accommodation': 'Проживание',
-    'services': 'Услуги'
+    'services': 'Услуги',
+    'protective_clothing': 'Спецодежда'
 };
 
 // Маппинг срочности
@@ -183,6 +184,7 @@ async function createNeed(ctx) {
         [Markup.button.callback('📦 Материалы', 'select_need_type_materials')],
         [Markup.button.callback('⚙️ Оборудование', 'select_need_type_equipment')],
         [Markup.button.callback('🚜 Спецтехника', 'select_need_type_special_equipment')],
+        [Markup.button.callback('👔 Спецодежда', 'select_need_type_protective_clothing')],
         [Markup.button.callback('📎 Канцтовары', 'select_need_type_office_supplies')],
         [Markup.button.callback('🏠 Проживание', 'select_need_type_accommodation')],
         [Markup.button.callback('🔧 Услуги', 'select_need_type_services')],
