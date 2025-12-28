@@ -7,23 +7,42 @@ const { getOrganizationObjects, getObjects, getObjectGroups, getGeneralGroupChat
 const { addMessageId } = require('../utils/stateHelper');
 const { escapeHtml } = require('../utils/htmlHelper');
 
-async function showDownloadMenu(ctx) {
+async function showReportsMenu(ctx) {
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
-
-    if (!users[userId]?.isApproved) {
-        return ctx.reply('У вас нет прав для выгрузки данных.');
-    }
+    const user = users[userId] || {};
 
     await clearPreviousMessages(ctx, userId);
 
+    const buttons = [];
+
+    // Проверяем, должен ли пользователь подавать отчеты
+    let shouldShowCreateReport = false;
+    if (user.isApproved && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
+        for (const objectName of user.selectedObjects) {
+            const reportUsers = await getReportUsers(user.organization, objectName);
+            if (reportUsers && reportUsers.includes(userId)) {
+                shouldShowCreateReport = true;
+                break;
+            }
+        }
+    }
+
+    if (shouldShowCreateReport) {
+        buttons.push([Markup.button.callback('📝 Создать отчет', 'create_report')]);
+    }
+
+    buttons.push([Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')]);
+
+    if (user.isApproved) {
+        buttons.push([Markup.button.callback('📤 Выгрузить отчеты', 'download_reports')]);
+    }
+
+    buttons.push([Markup.button.callback('↩️ Назад', 'main_menu')]);
+
     const message = await ctx.reply(
-        '📤 Выгрузка данных\nВыберите, что хотите выгрузить:',
-        Markup.inlineKeyboard([
-            [Markup.button.callback('📋 Отчеты', 'download_type_reports')],
-            [Markup.button.callback('👥 Люди', 'download_type_users')],
-            [Markup.button.callback('↩️ Назад', 'main_menu')]
-        ])
+        '📋 Отчеты\nВыберите действие:',
+        Markup.inlineKeyboard(buttons)
     );
     addMessageId(ctx, message.message_id);
 }
@@ -42,7 +61,7 @@ async function showDownloadReport(ctx, page = 0) {
     }
     const userOrganization = users[userId].organization;
     const availableObjects = await getOrganizationObjects(userOrganization);
-    
+
     if (!availableObjects.length) {
         return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
     }
@@ -72,7 +91,7 @@ async function showDownloadReport(ctx, page = 0) {
         if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `download_report_page_${pageNum + 1}`));
     }
     if (paginationButtons.length > 0) buttons.push(paginationButtons);
-    buttons.push([Markup.button.callback('↩️ Назад', 'main_menu')]);
+        buttons.push([Markup.button.callback('↩️ Назад', 'reports_menu')]);
 
     const message = await ctx.reply(
         `Выберите объект для выгрузки отчета (Страница ${pageNum + 1} из ${totalPages}):`,
@@ -262,7 +281,7 @@ async function showDownloadUsers(ctx, page = 0) {
     }
     const userOrganization = users[userId].organization;
     const availableObjects = await getOrganizationObjects(userOrganization);
-    
+
     if (!availableObjects.length) {
         return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
     }
@@ -292,7 +311,7 @@ async function showDownloadUsers(ctx, page = 0) {
         if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `download_users_page_${pageNum + 1}`));
     }
     if (paginationButtons.length > 0) buttons.push(paginationButtons);
-    buttons.push([Markup.button.callback('↩️ Назад', 'main_menu')]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
 
     const message = await ctx.reply(
         `Выберите объект для выгрузки людей (Страница ${pageNum + 1} из ${totalPages}):`,
@@ -487,7 +506,7 @@ async function createReport(ctx) {
     }
 
     const buttons = userObjects.map((obj, index) => [Markup.button.callback(obj, `select_object_${index}`)]);
-    buttons.push([Markup.button.callback('↩️ Назад', 'main_menu')]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'reports_menu')]);
 
     const message = await ctx.reply('Выберите объект из списка:', Markup.inlineKeyboard(buttons));
     addMessageId(ctx, message.message_id);
@@ -510,7 +529,7 @@ async function showReportObjects(ctx) {
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
     const buttons = uniqueObjects.map((obj, index) => [Markup.button.callback(obj, `select_report_object_${index}`)]);
-    buttons.push([Markup.button.callback('↩️ Назад', 'profile')]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'reports_menu')]);
 
     const message = await ctx.reply('Выберите объект для просмотра отчетов:', Markup.inlineKeyboard(buttons));
     addMessageId(ctx, message.message_id);
@@ -632,7 +651,7 @@ async function showReportDetails(ctx, reportId) {
     const formattedDate = parseAndFormatDate(report.date);
     const time = new Date(report.timestamp).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
     const reportText = `
-📅 ОТЧЕТ ЗА ${formattedDate}
+📅 ОТЧЕТ ЗА ${formattedDate}  
 🏢 ${escapeHtml(report.objectName)}
 👷 ${escapeHtml(report.fullName)}
 
@@ -640,7 +659,7 @@ async function showReportDetails(ctx, reportId) {
 ${escapeHtml(report.workDone)}</blockquote>
 <blockquote><b>ПОСТАВЛЕННЫЕ МАТЕРИАЛЫ:</b>
 ${escapeHtml(report.materials)}</blockquote>
-Время: ${time}
+Время: ${time}  
     `.trim();
 
     const uniqueObjects = [...new Set(Object.values(reports).map(r => r.objectName))];
@@ -741,7 +760,7 @@ async function finishEditReport(ctx, reportId) {
         photos: state.report.photos
     };
     const newReportText = `
-📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)
+📅 ОТЧЕТ ЗА ${formattedDate} (ОБНОВЛЁН)  
 🏢 ${escapeHtml(newReport.objectName)}
 👷 ${escapeHtml(users[userId].fullName)}
 
@@ -812,10 +831,12 @@ ${escapeHtml(newReport.materials)}</blockquote>
     state.report = {};
 }
 
+module.exports.showReportsMenu = showReportsMenu;
+
 module.exports = (bot) => {
-    bot.action('download_report', async (ctx) => await showDownloadMenu(ctx));
-    bot.action('download_type_reports', async (ctx) => await showDownloadReport(ctx, 0));
-    bot.action('download_type_users', async (ctx) => await showDownloadUsers(ctx, 0));
+    bot.action('reports_menu', async (ctx) => await showReportsMenu(ctx));
+    bot.action('download_reports', async (ctx) => await showDownloadReport(ctx, 0));
+    bot.action('download_users', async (ctx) => await showDownloadUsers(ctx, 0));
     bot.action(/download_report_page_(\d+)/, async (ctx) => await showDownloadReport(ctx, parseInt(ctx.match[1], 10)));
     bot.action(/download_report_file_(\d+)/, (ctx) => downloadReportFile(ctx, parseInt(ctx.match[1], 10)));
     bot.action(/download_users_page_(\d+)/, async (ctx) => await showDownloadUsers(ctx, parseInt(ctx.match[1], 10)));

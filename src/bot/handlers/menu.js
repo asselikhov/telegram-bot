@@ -24,29 +24,12 @@ async function showMainMenu(ctx) {
     `.trim();
 
     const buttons = [
-        [Markup.button.callback('👤 Личный кабинет', 'profile')]
+        [Markup.button.callback('👤 Личный кабинет', 'profile')],
+        [Markup.button.callback('📋 Отчеты', 'reports_menu')],
+        [Markup.button.callback('🚨 Проблемы', 'problems')],
+        [Markup.button.callback('📦 Потребности', 'needs')]
     ];
     
-    // Проверяем, должен ли пользователь подавать отчеты
-    let shouldShowCreateReport = false;
-    if (user.isApproved && user.organization && user.selectedObjects && user.selectedObjects.length > 0) {
-        for (const objectName of user.selectedObjects) {
-            const reportUsers = await getReportUsers(user.organization, objectName);
-            if (reportUsers && reportUsers.includes(userId)) {
-                shouldShowCreateReport = true;
-                break;
-            }
-        }
-    }
-    
-    if (shouldShowCreateReport) {
-        buttons.splice(1, 0, [Markup.button.callback('📝 Создать отчет', 'create_report')]);
-    }
-    if (user.isApproved) {
-        buttons.splice(1, 0, [Markup.button.callback('📤 Выгрузить', 'download_report')]);
-    }
-    buttons.push([Markup.button.callback('🚨 Проблемы', 'problems')]);
-    buttons.push([Markup.button.callback('📦 Потребности', 'needs')]);
     if (userId === ADMIN_ID) {
         buttons.push([Markup.button.callback('👑 Админ-панель', 'admin_panel')]);
     }
@@ -157,10 +140,14 @@ ${statusEmoji} ${displayStatus}
     // Основные кнопки меню
     const buttons = [
         [Markup.button.callback('✏️ Изменить данные', 'edit_data')],
-        [Markup.button.callback('📋 Посмотреть мои отчеты', 'view_reports')],
-        [Markup.button.callback('🔑 Пригласительный код', userId === ADMIN_ID ? 'admin_invite_code_menu' : 'generate_invite_code')],
-        [Markup.button.callback('↩️ Назад', 'main_menu')]
     ];
+    
+    if (user.isApproved) {
+        buttons.push([Markup.button.callback('📤 Выгрузить людей', 'download_users')]);
+    }
+    
+    buttons.push([Markup.button.callback('🔑 Пригласительный код', userId === ADMIN_ID ? 'admin_invite_code_menu' : 'generate_invite_code')]);
+    buttons.push([Markup.button.callback('↩️ Назад', 'main_menu')]);
 
     const message = await ctx.reply(profileText, {
         parse_mode: 'Markdown',
@@ -232,6 +219,11 @@ module.exports = (bot) => {
     bot.action('needs', async (ctx) => {
         const { showNeedsMenu } = require('./needs');
         await showNeedsMenu(ctx);
+    });
+    
+    bot.action('reports_menu', async (ctx) => {
+        const { showReportsMenu } = require('./report');
+        await showReportsMenu(ctx);
     });
 };
 
