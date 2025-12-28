@@ -162,17 +162,10 @@ function entitiesToHtml(text, entities) {
             }
             
             if (matchingIndex !== -1) {
-                // Проверяем, есть ли еще закрывающие теги на этой позиции (после текущего)
-                const otherCloseTagsAtSamePos = tags.filter((t, idx) => 
-                    idx > tagIndex && !t.isOpen && t.pos === pos
-                );
-                
-                // Сохраняем теги, которые нужно будет открыть обратно
-                const tagsToReopen = [];
-                
                 // Закрываем все теги после найденного (в обратном порядке LIFO)
+                // Это нужно для правильной вложенности HTML
                 while (openTagsStack.length > matchingIndex + 1) {
-                    const { type: closedType, tag: closedTag } = openTagsStack.pop();
+                    const { type: closedType } = openTagsStack.pop();
                     const closeTagMap = {
                         'bold': '</b>',
                         'italic': '</i>',
@@ -185,27 +178,11 @@ function entitiesToHtml(text, entities) {
                         'text_mention': '</a>'
                     };
                     result += closeTagMap[closedType] || '';
-                    
-                    // Сохраняем для повторного открытия только если этот тег не закрывается на той же позиции
-                    const closesAtSamePos = otherCloseTagsAtSamePos.some(t => t.type === closedType);
-                    if (!closesAtSamePos) {
-                        tagsToReopen.push({ type: closedType, tag: closedTag });
-                    }
                 }
                 
                 // Закрываем нужный тег
                 result += tag;
                 openTagsStack.pop();
-                
-                // Открываем обратно теги, которые были закрыты (в обратном порядке, чтобы сохранить исходный порядок)
-                // Только если нет других закрывающих тегов на той же позиции
-                if (otherCloseTagsAtSamePos.length === 0) {
-                    for (let i = tagsToReopen.length - 1; i >= 0; i--) {
-                        const tagInfo = tagsToReopen[i];
-                        result += tagInfo.tag;
-                        openTagsStack.push(tagInfo);
-                    }
-                }
             } else {
                 // Если не нашли соответствующий открывающий тег, просто добавляем закрывающий
                 result += tag;
