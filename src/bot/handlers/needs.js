@@ -234,7 +234,9 @@ async function showUserNeeds(ctx) {
     await clearPreviousMessages(ctx, userId);
 
     if (Object.keys(needs).length === 0) {
-        const message = await ctx.reply('У вас пока нет заявок.');
+        const message = await ctx.reply('У вас пока нет заявок.', Markup.inlineKeyboard([
+            [Markup.button.callback('↩️ Назад', 'needs')]
+        ]));
         addMessageId(ctx, message.message_id);
         return;
     }
