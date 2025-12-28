@@ -286,23 +286,34 @@ module.exports = (bot) => {
                 }
                 state.need.name = name;
                 state.step = 'needUrgency';
-                const urgencyText = `🔥 Срочно 
+                const urgencyText = `<blockquote>
+<b><u>🔥 Срочно</u></b>
 Нужно сегодня / максимум завтра. 
 Работа встанет, если не привезти
-⏳ В ближайшее время 
+</blockquote>
+
+<blockquote>
+<b><u>⏳ В ближайшее время</u></b>
 Нужно в течение 1–3 дней. 
 Можно планировать поставку
-📅 Планово 
+</blockquote>
+
+<blockquote>
+<b><u>📅 Планово</u></b>
 Нужно позже 3 дней. 
 Для включения в общий график закупок
-Выберите срочность:`;
+</blockquote>
+⏰ Выберите срочность:`;
                 const urgencyMessage = await ctx.reply(
                     urgencyText,
-                    Markup.inlineKeyboard([
-                        [Markup.button.callback('🔥 Срочно', 'set_need_urgency_urgent')],
-                        [Markup.button.callback('⏳ В ближайшее время', 'set_need_urgency_soon')],
-                        [Markup.button.callback('📅 Планово', 'set_need_urgency_planned')]
-                    ])
+                    {
+                        parse_mode: 'HTML',
+                        ...Markup.inlineKeyboard([
+                            [Markup.button.callback('🔥 Срочно', 'set_need_urgency_urgent')],
+                            [Markup.button.callback('⏳ В ближайшее время', 'set_need_urgency_soon')],
+                            [Markup.button.callback('📅 Планово', 'set_need_urgency_planned')]
+                        ])
+                    }
                 );
                 state.messageIds = [urgencyMessage.message_id];
                 break;
