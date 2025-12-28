@@ -615,8 +615,8 @@ async function manageAllNeeds(ctx) {
         const inProgressSoon = inProgressNeeds.filter(n => n.urgency === 'soon').length;
         const inProgressPlanned = inProgressNeeds.filter(n => n.urgency === 'planned').length;
         
-        // Формирование текста статистики
-        let statsText = `Не закрытых заявок: ${notClosedCount}\n`;
+        // Формирование текста статистики с HTML форматированием
+        let statsText = `<b><u>Не закрытых заявок: ${notClosedCount}, в том числе:</u></b>\n`;
         
         if (newNeeds.length > 0) {
             const urgencyParts = [];
@@ -635,11 +635,11 @@ async function manageAllNeeds(ctx) {
         }
         
         if (completedNeeds.length > 0) {
-            statsText += `\nВыполненных заявок: ${completedNeeds.length}\n`;
+            statsText += `\n<b><u>Выполненных заявок: ${completedNeeds.length}</u></b>\n`;
         }
         
         if (rejectedNeeds.length > 0) {
-            statsText += `\nОтклоненных заявок: ${rejectedNeeds.length}`;
+            statsText += `\n<b><u>Отклоненных заявок: ${rejectedNeeds.length}</u></b>`;
         }
 
         const buttons = uniqueObjects.map((obj, index) => {
@@ -653,7 +653,10 @@ async function manageAllNeeds(ctx) {
         buttons.push([Markup.button.callback('↩️ Назад', 'needs')]);
 
         const messageText = `⚙️ Управление заявками\n\n${statsText}\nВыберите объект:`;
-        const message = await ctx.reply(messageText, Markup.inlineKeyboard(buttons));
+        const message = await ctx.reply(messageText, {
+            parse_mode: 'HTML',
+            ...Markup.inlineKeyboard(buttons)
+        });
         addMessageId(ctx, message.message_id);
         
         const state = ensureUserState(ctx);
