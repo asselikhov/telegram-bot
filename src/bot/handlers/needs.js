@@ -514,14 +514,18 @@ async function manageAllNeeds(ctx) {
         if (userId !== ADMIN_ID) {
             const needsMap = {};
             Object.values(allNeeds).forEach(need => {
-                if (managedObjects.includes(need.objectName)) {
+                // Нормализуем названия объектов для сравнения
+                const needObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+                if (needObjectName && managedObjects.includes(needObjectName)) {
                     needsMap[need.needId] = need;
                 }
             });
             filteredNeeds = needsMap;
         }
 
-        const uniqueObjects = [...new Set(Object.values(filteredNeeds).map(n => n.objectName))];
+        // Фильтруем только заявки с валидным objectName (как в showAllNeedsByObjects)
+        const needsArray = Object.values(filteredNeeds).filter(n => n && n.objectName);
+        const uniqueObjects = [...new Set(needsArray.map(n => n.objectName.trim()).filter(obj => obj))];
 
         if (uniqueObjects.length === 0) {
             await clearPreviousMessages(ctx, userId);
@@ -706,7 +710,9 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
         if (userId !== ADMIN_ID) {
             const needsMap = {};
             Object.values(allNeeds).forEach(need => {
-                if (managedObjects.includes(need.objectName)) {
+                // Нормализуем названия объектов для сравнения
+                const needObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+                if (needObjectName && managedObjects.includes(needObjectName)) {
                     needsMap[need.needId] = need;
                 }
             });
@@ -714,17 +720,21 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
         }
 
         const state = ensureUserState(ctx);
-        let uniqueObjects;
-        if (state && state.managedNeedsObjectsList) {
-            uniqueObjects = state.managedNeedsObjectsList;
-        } else {
-            uniqueObjects = [...new Set(Object.values(filteredNeeds).map(n => n.objectName))];
-            if (state) {
-                state.managedNeedsObjectsList = uniqueObjects;
-            }
+        // Фильтруем только заявки с валидным objectName (как в showAllNeedsByObjects)
+        const needsArray = Object.values(filteredNeeds).filter(n => n && n.objectName);
+        const uniqueObjects = [...new Set(needsArray.map(n => n.objectName.trim()).filter(obj => obj))];
+        
+        // Сохраняем список объектов в state
+        if (state) {
+            state.managedNeedsObjectsList = uniqueObjects;
         }
+        
         const objectName = uniqueObjects[objectIndex];
-        const normalizedObjectName = objectName && objectName.trim();
+        if (!objectName) {
+            console.log(`[MANAGED_NEEDS] ОШИБКА: объект не найден по индексу ${objectIndex}, uniqueObjects.length=${uniqueObjects.length}`);
+            return ctx.reply('Ошибка: объект не найден.');
+        }
+        const normalizedObjectName = objectName.trim();
         const objectNeeds = Object.entries(filteredNeeds).filter(([_, n]) =>
             n.objectName && n.objectName.trim() === normalizedObjectName
         );
@@ -741,15 +751,28 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
             return parseDate(b).getTime() - parseDate(a).getTime();
         });
         
+        console.log(`[MANAGED_NEEDS] showManagedNeedsItems START: objectIndex=${objectIndex}, objectName="${objectName}", dateIndex=${dateIndex}, page=${page}`);
+        console.log(`[MANAGED_NEEDS] uniqueDatesSorted (${uniqueDatesSorted.length}):`, JSON.stringify(uniqueDatesSorted));
+        
         // Используем текущий список дат (не используем state.managedNeedsDatesList, так как он может быть для другого объекта)
         const selectedDate = uniqueDatesSorted[dateIndex];
+        console.log(`[MANAGED_NEEDS] selectedDate по индексу ${dateIndex}: "${selectedDate}"`);
+        
         if (!selectedDate) {
+            console.log(`[MANAGED_NEEDS] ОШИБКА: дата не найдена по индексу ${dateIndex}, uniqueDatesSorted.length=${uniqueDatesSorted.length}`);
             return ctx.reply('Ошибка: дата не найдена.');
         }
 
         await clearPreviousMessages(ctx, userId);
 
-        const dateNeeds = sortedNeeds.filter(([_, n]) => parseAndFormatDate(n.date) === selectedDate);
+        // Фильтруем заявки по выбранной дате
+        console.log(`[MANAGED_NEEDS] Всего заявок для объекта: ${sortedNeeds.length}`);
+        const dateNeeds = sortedNeeds.filter(([_, n]) => {
+            const needDate = parseAndFormatDate(n.date);
+            return needDate === selectedDate;
+        });
+        
+        console.log(`[MANAGED_NEEDS] Найдено заявок для даты "${selectedDate}": ${dateNeeds.length}`);
 
         const itemsPerPage = 10;
         const totalPages = Math.ceil(dateNeeds.length / itemsPerPage);
