@@ -52,9 +52,11 @@ async function notifyNeedAuthorStatusChange(telegram, need, oldStatus, newStatus
         const newStatusEmoji = newStatusName === 'Выполнена' ? '✅' : newStatusName === 'Новая' ? '🆕' : newStatusName === 'В обработке' ? '🔄' : newStatusName === 'Отклонена' ? '❌' : '';
         
         const needNumber = need.number || '';
-        const notificationText = `⚠️Изменен статус вашей заявки на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''} по объекту ${need.objectName} 📅 ${dateStr} ${timeStr}\n\n` +
-            `<blockquote>Наименование: ${need.name}\n` +
-            `Статус изменен: ${oldStatusEmoji} ${oldStatusName} → ${newStatusEmoji} ${newStatusName}</blockquote>`;
+        const notificationText = `<blockquote>Изменен статус заявки на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''} 
+${oldStatusEmoji} ${oldStatusName} → ${newStatusEmoji} ${newStatusName}
+${need.objectName} 
+${dateStr} ${timeStr}
+Наименование: ${need.name}</blockquote>`;
         
         await telegram.sendMessage(need.userId, notificationText, {
             parse_mode: 'HTML'
@@ -73,19 +75,27 @@ async function notifyResponsibleUsersNewNeed(telegram, need, userOrganization) {
         const { loadUsers } = require('../../database/userModel');
         const users = await loadUsers();
         const author = users[need.userId] || {};
-        const authorName = author.fullName || need.userId;
         
-        let notificationText = `📦 Новая заявка на потребности\n\n` +
-            `Объект: ${need.objectName}\n` +
-            `Автор: ${authorName}\n` +
-            `Тип: ${typeName}\n` +
-            `Наименование: ${need.name}\n`;
+        // Функция для форматирования должности (сокращение)
+        const formatPosition = (position) => {
+            if (position === 'Производитель работ') return 'Произв. работ';
+            return position || '';
+        };
         
-        if (need.quantity !== null && need.quantity !== undefined) {
-            notificationText += `Количество: ${need.quantity}\n`;
-        }
-        notificationText += `Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}\n`;
-        notificationText += `Дата: ${need.date}`;
+        const position = formatPosition(author.position || '');
+        const organization = author.organization || '';
+        const authorName = author.fullName || need.fullName || need.userId;
+        const needNumber = need.number || '';
+        
+        let notificationText = `<blockquote>Новая заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
+${need.objectName}
+
+${position ? position : ''}
+${organization ? organization : ''}
+${authorName}
+
+Наименование: ${need.name}
+Срочность: ${urgencyInfo.emoji} ${urgencyInfo.name}</blockquote>`;
         
         // Get ALL responsible users for this object from ALL organizations
         const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
@@ -112,7 +122,9 @@ async function notifyResponsibleUsersNewNeed(telegram, need, userOrganization) {
         
         // Send notification to each responsible user
         const notificationPromises = responsibleUserIdsArray.map(respUserId => {
-            return telegram.sendMessage(respUserId, notificationText).catch(err => {
+            return telegram.sendMessage(respUserId, notificationText, {
+                parse_mode: 'HTML'
+            }).catch(err => {
                 console.error(`Ошибка отправки уведомления ответственному пользователю ${respUserId}:`, err);
             });
         });
@@ -441,8 +453,8 @@ async function showNeedDetails(ctx, needId) {
     const needNumber = need.number || '';
 
     let needText = `<blockquote>Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
-по объекту ${escapeHtml(need.objectName)}
-📅 ${dateStr} ${timeStr}
+${escapeHtml(need.objectName)}
+${dateStr} ${timeStr}
 
 ${position ? escapeHtml(position) : ''}
 ${organization ? escapeHtml(organization) : ''}
@@ -1617,8 +1629,8 @@ async function showManagedNeedDetails(ctx, needId) {
         const needNumber = need.number || '';
 
         let needText = `<blockquote>Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
-по объекту ${need.objectName}
-📅 ${dateStr} ${timeStr}
+${need.objectName}
+${dateStr} ${timeStr}
 
 ${position ? position : ''}
 ${organization ? organization : ''}

@@ -4679,8 +4679,8 @@ ${objectsList}
             const needNumber = need.number || '';
 
             let needText = `<blockquote>Заявка на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
-по объекту ${need.objectName}
-📅 ${dateStr} ${timeStr}
+${need.objectName}
+${dateStr} ${timeStr}
 
 ${position ? position : ''}
 ${organization ? organization : ''}
