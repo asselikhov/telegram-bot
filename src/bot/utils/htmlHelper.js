@@ -149,7 +149,7 @@ function entitiesToHtml(text, entities) {
 
         if (isOpen) {
             // Открывающий тег - добавляем в стек и в результат
-            openTagsStack.push({ type, tag });
+            openTagsStack.push({ type, tag, pos });
             result += tag;
         } else {
             // Закрывающий тег - находим соответствующий открывающий в стеке (с конца)
@@ -162,10 +162,24 @@ function entitiesToHtml(text, entities) {
             }
             
             if (matchingIndex !== -1) {
-                // Закрываем все теги после найденного (в обратном порядке LIFO)
-                // Это нужно для правильной вложенности HTML
-                while (openTagsStack.length > matchingIndex + 1) {
-                    const { type: closedType } = openTagsStack.pop();
+                // Находим все закрывающие теги на этой позиции, которые идут после текущего
+                const closeTagsAtSamePos = tags.filter((t, idx) => 
+                    idx > tagIndex && !t.isOpen && t.pos === pos
+                );
+                
+                // Закрываем только те теги после найденного, которые также закрываются на этой позиции
+                const tagsToClose = [];
+                for (let i = matchingIndex + 1; i < openTagsStack.length; i++) {
+                    const stackTag = openTagsStack[i];
+                    // Проверяем, есть ли закрывающий тег для этого типа на этой позиции
+                    if (closeTagsAtSamePos.some(t => t.type === stackTag.type)) {
+                        tagsToClose.push({ index: i, tag: stackTag });
+                    }
+                }
+                
+                // Закрываем теги в обратном порядке (LIFO)
+                for (let i = tagsToClose.length - 1; i >= 0; i--) {
+                    const { type: closedType } = tagsToClose[i].tag;
                     const closeTagMap = {
                         'bold': '</b>',
                         'italic': '</i>',
@@ -178,11 +192,23 @@ function entitiesToHtml(text, entities) {
                         'text_mention': '</a>'
                     };
                     result += closeTagMap[closedType] || '';
+                    // Удаляем из стека (учитываем, что индексы сдвигаются)
+                    openTagsStack.splice(tagsToClose[i].index, 1);
                 }
                 
                 // Закрываем нужный тег
                 result += tag;
-                openTagsStack.pop();
+                // Находим индекс снова, так как он мог измениться после удаления тегов
+                let finalIndex = -1;
+                for (let i = openTagsStack.length - 1; i >= 0; i--) {
+                    if (openTagsStack[i].type === type) {
+                        finalIndex = i;
+                        break;
+                    }
+                }
+                if (finalIndex !== -1) {
+                    openTagsStack.splice(finalIndex, 1);
+                }
             } else {
                 // Если не нашли соответствующий открывающий тег, просто добавляем закрывающий
                 result += tag;
