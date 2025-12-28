@@ -95,7 +95,15 @@ async function notifyNeedAuthorStatusChange(telegram, need, oldStatus, newStatus
         const newStatusEmoji = newStatusName === 'Выполнена' ? '✅' : newStatusName === 'Новая' ? '🆕' : newStatusName === 'В обработке' ? '🔄' : newStatusName === 'Отклонена' ? '❌' : '';
         
         const needNumber = need.number || '';
-        const notificationText = `<blockquote>Изменен статус заявки ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}<br>${oldStatusEmoji} ${oldStatusName} → ${newStatusEmoji} ${newStatusName}<br>${need.objectName}<br><br>${position ? position : ''}<br>${organization ? organization : ''}<br>${authorName}<br><br>Наименование: ${need.name}</blockquote>`;
+        const notificationText = `<blockquote>Изменен статус заявки ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
+${oldStatusEmoji} ${oldStatusName} → ${newStatusEmoji} ${newStatusName}
+${need.objectName}
+
+${position ? position : ''}
+${organization ? organization : ''}
+${authorName}
+
+Наименование: ${need.name}</blockquote>`;
         
         await telegram.sendMessage(need.userId, notificationText, {
             parse_mode: 'HTML'
@@ -104,6 +112,101 @@ async function notifyNeedAuthorStatusChange(telegram, need, oldStatus, newStatus
         });
     } catch (error) {
         console.error('Ошибка в notifyNeedAuthorStatusChange:', error);
+    }
+}
+
+async function notifyResponsibleUsersStatusChange(telegram, need, oldStatus, newStatus) {
+    try {
+        const oldStatusName = STATUS_NAMES[oldStatus] || oldStatus;
+        const newStatusName = STATUS_NAMES[newStatus] || newStatus;
+        const typeName = TYPE_NAMES[need.type] || need.type;
+        
+        // Получаем данные автора
+        const { loadUsers } = require('../../database/userModel');
+        const users = await loadUsers();
+        const author = users[need.userId] || {};
+        
+        // Функция для форматирования должности (сокращение)
+        const formatPosition = (position) => {
+            if (position === 'Производитель работ') return 'Произв. работ';
+            return position || '';
+        };
+        
+        // Функция для форматирования имени (сокращение)
+        const formatFullName = (fullName) => {
+            if (!fullName) return '';
+            const parts = fullName.trim().split(/\s+/);
+            if (parts.length === 0) return '';
+            if (parts.length === 1) return parts[0];
+            
+            const lastName = parts[0];
+            const firstName = parts.length > 1 ? parts[1] : '';
+            const middleName = parts.length > 2 ? parts[2] : '';
+            
+            let result = lastName;
+            if (firstName) {
+                result += ` ${firstName.charAt(0).toUpperCase()}.`;
+            }
+            if (middleName) {
+                result += `${middleName.charAt(0).toUpperCase()}.`;
+            }
+            return result;
+        };
+        
+        const position = formatPosition(author.position || '');
+        const organization = author.organization || '';
+        const authorName = formatFullName(author.fullName || need.fullName || '');
+        
+        // Эмодзи для статусов
+        const oldStatusEmoji = oldStatusName === 'Выполнена' ? '✅' : oldStatusName === 'Новая' ? '🆕' : oldStatusName === 'В обработке' ? '🔄' : oldStatusName === 'Отклонена' ? '❌' : '';
+        const newStatusEmoji = newStatusName === 'Выполнена' ? '✅' : newStatusName === 'Новая' ? '🆕' : newStatusName === 'В обработке' ? '🔄' : newStatusName === 'Отклонена' ? '❌' : '';
+        
+        const needNumber = need.number || '';
+        const notificationText = `<blockquote>Изменен статус заявки ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''}
+${oldStatusEmoji} ${oldStatusName} → ${newStatusEmoji} ${newStatusName}
+${need.objectName}
+
+${position ? position : ''}
+${organization ? organization : ''}
+${authorName}
+
+Наименование: ${need.name}</blockquote>`;
+        
+        // Get ALL responsible users for this object from ALL organizations
+        const { getAllNeedUsers } = require('../../database/objectNeedUsersModel');
+        const allSettings = await getAllNeedUsers();
+        const normalizedObjectName = need.objectName ? need.objectName.trim() : need.objectName;
+        
+        // Собираем всех ответственных пользователей для данного объекта из всех организаций
+        const allResponsibleUserIds = new Set();
+        for (const setting of allSettings) {
+            const settingObjectName = setting.objectName ? setting.objectName.trim() : setting.objectName;
+            // Сравниваем нормализованные названия объектов
+            if (settingObjectName === normalizedObjectName && setting.userIds && setting.userIds.length > 0) {
+                setting.userIds.forEach(userId => allResponsibleUserIds.add(userId));
+            }
+        }
+        
+        const responsibleUserIdsArray = Array.from(allResponsibleUserIds);
+        
+        if (responsibleUserIdsArray.length === 0) {
+            return; // No responsible users to notify
+        }
+        
+        console.log(`[NEED_NOTIFICATION] Отправка уведомлений об изменении статуса заявки для объекта "${need.objectName}" ответственным пользователям:`, responsibleUserIdsArray);
+        
+        // Send notification to each responsible user
+        const notificationPromises = responsibleUserIdsArray.map(respUserId => {
+            return telegram.sendMessage(respUserId, notificationText, {
+                parse_mode: 'HTML'
+            }).catch(err => {
+                console.error(`Ошибка отправки уведомления ответственному пользователю ${respUserId}:`, err);
+            });
+        });
+        
+        await Promise.all(notificationPromises);
+    } catch (error) {
+        console.error('Ошибка в notifyResponsibleUsersStatusChange:', error);
     }
 }
 
@@ -2214,9 +2317,10 @@ module.exports = (bot) => {
             need.status = status;
             await saveNeed(need.userId, need);
             
-            // Уведомляем автора заявки об изменении статуса
+            // Уведомляем автора заявки и ответственных пользователей об изменении статуса
             if (oldStatus !== status) {
                 await notifyNeedAuthorStatusChange(ctx.telegram, need, oldStatus, status);
+                await notifyResponsibleUsersStatusChange(ctx.telegram, need, oldStatus, status);
             }
             
             await clearPreviousMessages(ctx, userId);
@@ -2296,3 +2400,4 @@ module.exports = (bot) => {
 module.exports.showNeedsMenu = showNeedsMenu;
 module.exports.notifyNeedAuthorStatusChange = notifyNeedAuthorStatusChange;
 module.exports.notifyResponsibleUsersNewNeed = notifyResponsibleUsersNewNeed;
+module.exports.notifyResponsibleUsersStatusChange = notifyResponsibleUsersStatusChange;

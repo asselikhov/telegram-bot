@@ -75,7 +75,7 @@ const {
     validateTimeFormat 
 } = require('../utils/notificationHelper');
 const { ensureUserState, addMessageId } = require('../utils/stateHelper');
-const { notifyNeedAuthorStatusChange } = require('./needs');
+const { notifyNeedAuthorStatusChange, notifyResponsibleUsersStatusChange } = require('./needs');
 const { escapeHtml } = require('../utils/htmlHelper');
 const { 
     saveAnnouncement, 
@@ -4839,9 +4839,10 @@ ${fullName}
             await saveNeed(need.userId, need);
             clearConfigCache();
             
-            // Уведомляем автора заявки об изменении статуса
+            // Уведомляем автора заявки и ответственных пользователей об изменении статуса
             if (oldStatus !== status) {
                 await notifyNeedAuthorStatusChange(ctx.telegram, need, oldStatus, status);
+                await notifyResponsibleUsersStatusChange(ctx.telegram, need, oldStatus, status);
             }
             
             await clearPreviousMessages(ctx, userId);
