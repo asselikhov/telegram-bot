@@ -192,7 +192,7 @@ async function sendStatisticsNotifications() {
         .map(report => report.objectName ? report.objectName.trim() : null)
         .filter(objName => objName !== null)
     );
-    
+
     // Обрабатываем каждую организацию
     for (const [orgName, orgChatInfo] of Object.entries(generalGroupChatIds)) {
       if (!orgChatInfo || !orgChatInfo.chatId) {
