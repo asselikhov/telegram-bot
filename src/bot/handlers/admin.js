@@ -91,7 +91,6 @@ async function showAdminPanel(ctx) {
                 [Markup.button.callback('📈 Статистика', 'admin_statistics')],
                 [Markup.button.callback('🏢 Управление организациями', 'admin_organizations')],
                 [Markup.button.callback('🏗 Управление объектами', 'admin_objects')],
-                [Markup.button.callback('📦 Управление потребностями', 'admin_needs')],
                 [Markup.button.callback('🔔 Настройки уведомлений', 'admin_notifications')],
                 [Markup.button.callback('↩️ Назад', 'main_menu')]
             ])
