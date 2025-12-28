@@ -64,7 +64,7 @@ async function notifyNeedAuthorStatusChange(telegram, need, oldStatus, newStatus
         const newStatusEmoji = newStatusName === 'Выполнена' ? '✅' : newStatusName === 'Новая' ? '🆕' : newStatusName === 'В обработке' ? '🔄' : newStatusName === 'Отклонена' ? '❌' : '';
         
         const needNumber = need.number || '';
-        const notificationText = `<blockquote>Изменен статус заявки на ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''} 
+        const notificationText = `<blockquote>Изменен статус заявки ${typeName.toLowerCase()}${needNumber ? ` №${needNumber}` : ''} 
 ${oldStatusEmoji} ${oldStatusName} → ${newStatusEmoji} ${newStatusName}
 ${need.objectName} 
 ${dateStr} ${timeStr}
