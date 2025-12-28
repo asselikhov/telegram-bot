@@ -1961,11 +1961,11 @@ module.exports = (bot) => {
             console.log('[NEED DEBUG] ====== confirm_delete_need handler CALLED ======');
             console.log('[NEED DEBUG] confirm_delete_need handler - received needId:', needId);
             console.log('[NEED DEBUG] confirm_delete_need handler - callback data:', ctx.callbackQuery?.data);
-            await ctx.answerCallbackQuery().catch(err => console.error('[NEED DEBUG] Error answering callback query:', err));
+            await ctx.answerCbQuery().catch(err => console.error('[NEED DEBUG] Error answering callback query:', err));
             await confirmDeleteNeed(ctx, needId);
         } catch (error) {
             console.error('[NEED DEBUG] Error in confirm_delete_need handler:', error);
-            await ctx.answerCallbackQuery('Ошибка при удалении заявки').catch(() => {});
+            await ctx.answerCbQuery('Ошибка при удалении заявки').catch(() => {});
         }
     });
     bot.action(/delete_need_(.+)/, (ctx) => {
