@@ -653,6 +653,9 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
             return parseDate(b).getTime() - parseDate(a).getTime();
         });
 
+        console.log(`[MANAGED_NEEDS] showManagedNeedsDates: objectIndex=${objectIndex}, objectName="${objectName}", page=${page}`);
+        console.log(`[MANAGED_NEEDS] uniqueDates (${uniqueDates.length}):`, JSON.stringify(uniqueDates));
+
         const itemsPerPage = 10;
         const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
         const pageNum = typeof page === 'number' ? page : 0;
@@ -661,6 +664,7 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
         const currentDates = uniqueDates.slice(startIndex, endIndex);
 
         if (currentDates.length === 0) {
+            console.log(`[MANAGED_NEEDS] showManagedNeedsDates: нет дат для отображения`);
             return ctx.reply('Ошибка: нет дат для отображения.');
         }
 
@@ -669,10 +673,11 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
             state.managedNeedsDatesList = uniqueDates;
         }
 
-            const dateButtons = currentDates.map((date, index) => {
-                const dateIndexInFullList = uniqueDates.indexOf(date);
-                return [Markup.button.callback(date, `manage_needs_object_${objectIndex}_date_${dateIndexInFullList}`)];
-            }).reverse();
+        const dateButtons = currentDates.map((date, index) => {
+            const dateIndexInFullList = uniqueDates.indexOf(date);
+            console.log(`[MANAGED_NEEDS] Creating date button: date="${date}", dateIndexInFullList=${dateIndexInFullList}`);
+            return [Markup.button.callback(date, `manage_needs_object_${objectIndex}_date_${dateIndexInFullList}`)];
+        });
 
         const buttons = [];
         const paginationButtons = [];
@@ -696,11 +701,15 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
 }
 
 async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
+    console.log(`[MANAGED_NEEDS] showManagedNeedsItems CALLED: objectIndex=${objectIndex}, dateIndex=${dateIndex}, page=${page}`);
     const userId = ctx.from.id.toString();
     const users = await loadUsers();
     const user = users[userId];
 
-    if (!user || !user.isApproved) return;
+    if (!user || !user.isApproved) {
+        console.log(`[MANAGED_NEEDS] showManagedNeedsItems: пользователь не найден или не одобрен`);
+        return;
+    }
 
     let isNeedManager = userId === ADMIN_ID;
     const managedObjects = [];
@@ -1161,19 +1170,24 @@ module.exports = (bot) => {
     bot.action(/confirm_delete_need_(.+)/, (ctx) => confirmDeleteNeed(ctx, ctx.match[1]));
 
     // Управление заявками для ответственных
+    // Важно: более специфичные паттерны должны быть зарегистрированы раньше
     bot.action('manage_all_needs', (ctx) => manageAllNeeds(ctx));
-    bot.action(/manage_needs_object_(\d+)/, (ctx) => {
-        const state = ensureUserState(ctx);
-        showManagedNeedsDates(ctx, parseInt(ctx.match[1], 10), 0);
-    });
-    bot.action(/manage_needs_object_(\d+)_dates_page_(\d+)/, (ctx) => {
-        showManagedNeedsDates(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10));
+    bot.action(/manage_needs_object_(\d+)_date_(\d+)_page_(\d+)/, (ctx) => {
+        console.log(`[MANAGED_NEEDS] Action handler called: manage_needs_object_${ctx.match[1]}_date_${ctx.match[2]}_page_${ctx.match[3]}`);
+        showManagedNeedsItems(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), parseInt(ctx.match[3], 10));
     });
     bot.action(/manage_needs_object_(\d+)_date_(\d+)/, (ctx) => {
+        console.log(`[MANAGED_NEEDS] Action handler called: manage_needs_object_${ctx.match[1]}_date_${ctx.match[2]}`);
         showManagedNeedsItems(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), 0);
     });
-    bot.action(/manage_needs_object_(\d+)_date_(\d+)_page_(\d+)/, (ctx) => {
-        showManagedNeedsItems(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10), parseInt(ctx.match[3], 10));
+    bot.action(/manage_needs_object_(\d+)_dates_page_(\d+)/, (ctx) => {
+        console.log(`[MANAGED_NEEDS] Action handler called: manage_needs_object_${ctx.match[1]}_dates_page_${ctx.match[2]}`);
+        showManagedNeedsDates(ctx, parseInt(ctx.match[1], 10), parseInt(ctx.match[2], 10));
+    });
+    bot.action(/manage_needs_object_(\d+)/, (ctx) => {
+        console.log(`[MANAGED_NEEDS] Action handler called: manage_needs_object_${ctx.match[1]}`);
+        const state = ensureUserState(ctx);
+        showManagedNeedsDates(ctx, parseInt(ctx.match[1], 10), 0);
     });
     bot.action(/manage_select_need_(.+)/, (ctx) => showManagedNeedDetails(ctx, ctx.match[1]));
     bot.action(/manage_edit_need_(.+)/, (ctx) => showManagedEditNeedMenu(ctx, ctx.match[1]));
