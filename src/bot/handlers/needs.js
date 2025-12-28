@@ -619,7 +619,16 @@ async function showManagedNeedsDates(ctx, objectIndex, page = 0) {
             n.objectName && n.objectName.trim() === normalizedObjectName
         );
         const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
-        const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+        const uniqueDatesArray = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+        // Сортируем даты в обратном порядке (новые первыми)
+        const uniqueDates = uniqueDatesArray.sort((a, b) => {
+            // Парсим даты в формате ДД.ММ.ГГГГ для сравнения
+            const parseDate = (dateStr) => {
+                const [day, month, year] = dateStr.split('.').map(Number);
+                return new Date(year, month - 1, day);
+            };
+            return parseDate(b).getTime() - parseDate(a).getTime();
+        });
 
         const itemsPerPage = 10;
         const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
@@ -721,15 +730,19 @@ async function showManagedNeedsItems(ctx, objectIndex, dateIndex, page = 0) {
         );
 
         const sortedNeeds = objectNeeds.sort((a, b) => b[1].timestamp.localeCompare(a[1].timestamp));
-        const uniqueDates = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+        // Получаем уникальные даты и сортируем их в обратном порядке (новые первыми)
+        const uniqueDatesArray = [...new Set(sortedNeeds.map(([, n]) => parseAndFormatDate(n.date)))];
+        const uniqueDatesSorted = uniqueDatesArray.sort((a, b) => {
+            // Парсим даты в формате ДД.ММ.ГГГГ для сравнения
+            const parseDate = (dateStr) => {
+                const [day, month, year] = dateStr.split('.').map(Number);
+                return new Date(year, month - 1, day);
+            };
+            return parseDate(b).getTime() - parseDate(a).getTime();
+        });
         
-        // Используем сохраненный список дат из state, если он есть, иначе используем текущий
-        let datesList = uniqueDates;
-        if (state && state.managedNeedsDatesList && state.managedNeedsDatesList.length === uniqueDates.length) {
-            datesList = state.managedNeedsDatesList;
-        }
-        
-        const selectedDate = datesList[dateIndex];
+        // Используем текущий список дат (не используем state.managedNeedsDatesList, так как он может быть для другого объекта)
+        const selectedDate = uniqueDatesSorted[dateIndex];
         if (!selectedDate) {
             return ctx.reply('Ошибка: дата не найдена.');
         }
