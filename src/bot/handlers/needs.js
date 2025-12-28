@@ -844,6 +844,33 @@ async function downloadAllNeedsExcel(ctx) {
             alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
+        
+        // Стили для цветового выделения строк
+        const completedRowCenteredStyle = {
+            font: { name: 'Arial', size: 9 },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        const completedRowPaddedStyle = {
+            font: { name: 'Arial', size: 9 },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } },
+            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        
+        const rejectedRowCenteredStyle = {
+            font: { name: 'Arial', size: 9 },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        const rejectedRowPaddedStyle = {
+            font: { name: 'Arial', size: 9 },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } },
+            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
 
         worksheet.getRow(1).values = ['№', 'Объект', 'Дата', 'Время', 'Тип', 'Наименование', 'Срочность', 'Статус', 'Должность', 'Организация', 'ФИО'];
         worksheet.getRow(1).eachCell(cell => { cell.style = headerStyle; });
@@ -905,17 +932,47 @@ async function downloadAllNeedsExcel(ctx) {
                 fullName
             ];
 
-            worksheet.getCell(`A${currentRow}`).style = centeredCellStyle;
-            worksheet.getCell(`B${currentRow}`).style = paddedCellStyle;
-            worksheet.getCell(`C${currentRow}`).style = centeredCellStyle;
-            worksheet.getCell(`D${currentRow}`).style = centeredCellStyle;
-            worksheet.getCell(`E${currentRow}`).style = centeredCellStyle;
-            worksheet.getCell(`F${currentRow}`).style = paddedCellStyle;
-            worksheet.getCell(`G${currentRow}`).style = centeredCellStyle;
-            worksheet.getCell(`H${currentRow}`).style = centeredCellStyle;
-            worksheet.getCell(`I${currentRow}`).style = paddedCellStyle;
-            worksheet.getCell(`J${currentRow}`).style = paddedCellStyle;
-            worksheet.getCell(`K${currentRow}`).style = paddedCellStyle;
+            // Применяем цветовое выделение в зависимости от статуса
+            if (need.status === 'completed') {
+                // Светло-зеленый для выполненных
+                worksheet.getCell(`A${currentRow}`).style = completedRowCenteredStyle;
+                worksheet.getCell(`B${currentRow}`).style = completedRowPaddedStyle;
+                worksheet.getCell(`C${currentRow}`).style = completedRowCenteredStyle;
+                worksheet.getCell(`D${currentRow}`).style = completedRowCenteredStyle;
+                worksheet.getCell(`E${currentRow}`).style = completedRowCenteredStyle;
+                worksheet.getCell(`F${currentRow}`).style = completedRowPaddedStyle;
+                worksheet.getCell(`G${currentRow}`).style = completedRowCenteredStyle;
+                worksheet.getCell(`H${currentRow}`).style = completedRowCenteredStyle;
+                worksheet.getCell(`I${currentRow}`).style = completedRowPaddedStyle;
+                worksheet.getCell(`J${currentRow}`).style = completedRowPaddedStyle;
+                worksheet.getCell(`K${currentRow}`).style = completedRowPaddedStyle;
+            } else if (need.status === 'rejected') {
+                // Светло-красный для отклоненных
+                worksheet.getCell(`A${currentRow}`).style = rejectedRowCenteredStyle;
+                worksheet.getCell(`B${currentRow}`).style = rejectedRowPaddedStyle;
+                worksheet.getCell(`C${currentRow}`).style = rejectedRowCenteredStyle;
+                worksheet.getCell(`D${currentRow}`).style = rejectedRowCenteredStyle;
+                worksheet.getCell(`E${currentRow}`).style = rejectedRowCenteredStyle;
+                worksheet.getCell(`F${currentRow}`).style = rejectedRowPaddedStyle;
+                worksheet.getCell(`G${currentRow}`).style = rejectedRowCenteredStyle;
+                worksheet.getCell(`H${currentRow}`).style = rejectedRowCenteredStyle;
+                worksheet.getCell(`I${currentRow}`).style = rejectedRowPaddedStyle;
+                worksheet.getCell(`J${currentRow}`).style = rejectedRowPaddedStyle;
+                worksheet.getCell(`K${currentRow}`).style = rejectedRowPaddedStyle;
+            } else {
+                // Обычные стили для остальных статусов
+                worksheet.getCell(`A${currentRow}`).style = centeredCellStyle;
+                worksheet.getCell(`B${currentRow}`).style = paddedCellStyle;
+                worksheet.getCell(`C${currentRow}`).style = centeredCellStyle;
+                worksheet.getCell(`D${currentRow}`).style = centeredCellStyle;
+                worksheet.getCell(`E${currentRow}`).style = centeredCellStyle;
+                worksheet.getCell(`F${currentRow}`).style = paddedCellStyle;
+                worksheet.getCell(`G${currentRow}`).style = centeredCellStyle;
+                worksheet.getCell(`H${currentRow}`).style = centeredCellStyle;
+                worksheet.getCell(`I${currentRow}`).style = paddedCellStyle;
+                worksheet.getCell(`J${currentRow}`).style = paddedCellStyle;
+                worksheet.getCell(`K${currentRow}`).style = paddedCellStyle;
+            }
 
             currentRow++;
         }
