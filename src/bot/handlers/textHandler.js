@@ -303,9 +303,16 @@ module.exports = (bot) => {
                 }
                 // Конвертируем entities в HTML, если они есть
                 const entities = ctx.message.entities || ctx.message.caption_entities || [];
-                const formattedText = entities.length > 0 
-                    ? entitiesToHtml(ctx.message.text, entities)
-                    : escapeHtml(ctx.message.text.trim());
+                let formattedText;
+                if (entities.length > 0) {
+                    formattedText = entitiesToHtml(ctx.message.text, entities);
+                    console.log('[ANNOUNCEMENT DEBUG] Entities:', JSON.stringify(entities, null, 2));
+                    console.log('[ANNOUNCEMENT DEBUG] Original text:', ctx.message.text);
+                    console.log('[ANNOUNCEMENT DEBUG] Formatted text:', formattedText);
+                } else {
+                    formattedText = escapeHtml(ctx.message.text.trim());
+                    console.log('[ANNOUNCEMENT DEBUG] No entities found');
+                }
                 
                 state.announcement.text = formattedText;
                 state.step = 'announcementPhotos';
