@@ -238,7 +238,9 @@ async function showUserNeeds(ctx) {
         return;
     }
 
-    const uniqueObjects = [...new Set(Object.values(needs).map(n => n.objectName))];
+    // Фильтруем только заявки с валидным objectName
+    const needsArray = Object.values(needs).filter(n => n && n.objectName);
+    const uniqueObjects = [...new Set(needsArray.map(n => n.objectName.trim()).filter(obj => obj))];
     const buttons = uniqueObjects.map((obj, index) => [Markup.button.callback(obj, `select_need_list_object_${index}`)]);
     buttons.push([Markup.button.callback('↩️ Назад', 'needs')]);
 
@@ -259,7 +261,16 @@ async function showNeedDates(ctx, objectIndex, page = 0) {
         n.objectName && n.objectName.trim() === normalizedObjectName
     );
     const sortedNeeds = objectNeeds.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-    const uniqueDates = [...new Set(sortedNeeds.map(n => parseAndFormatDate(n.date)))];
+    const uniqueDatesArray = [...new Set(sortedNeeds.map(n => parseAndFormatDate(n.date)))];
+    // Сортируем даты в обратном порядке (новые первыми)
+    const uniqueDates = uniqueDatesArray.sort((a, b) => {
+        // Парсим даты в формате ДД.ММ.ГГГГ для сравнения
+        const parseDate = (dateStr) => {
+            const [day, month, year] = dateStr.split('.').map(Number);
+            return new Date(year, month - 1, day);
+        };
+        return parseDate(b).getTime() - parseDate(a).getTime();
+    });
 
     const itemsPerPage = 10;
     const totalPages = Math.ceil(uniqueDates.length / itemsPerPage);
@@ -273,9 +284,10 @@ async function showNeedDates(ctx, objectIndex, page = 0) {
         return ctx.reply('Ошибка: нет дат для отображения.');
     }
 
-    const dateButtons = currentDates.map((date, index) =>
-        [Markup.button.callback(date, `select_need_date_${objectIndex}_${startIndex + index}`)]
-    ).reverse();
+    const dateButtons = currentDates.map((date, index) => {
+        const dateIndexInFullList = uniqueDates.indexOf(date);
+        return [Markup.button.callback(date, `select_need_date_${objectIndex}_${dateIndexInFullList}`)];
+    });
 
     const buttons = [];
     const paginationButtons = [];
