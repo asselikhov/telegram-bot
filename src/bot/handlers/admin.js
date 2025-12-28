@@ -3575,7 +3575,7 @@ ${objectsList}
             const currentObjects = uniqueObjects.slice(startIndex, endIndex);
 
             const buttons = currentObjects.map((obj, index) => {
-                const objectNeeds = Object.values(allNeeds).filter(n => 
+                const objectNeeds = needsArray.filter(n => 
                     n.objectName && n.objectName.trim() === obj.trim()
                 );
                 return [Markup.button.callback(`${obj} (${objectNeeds.length})`, `admin_needs_object_${uniqueObjects.indexOf(obj)}`)];
