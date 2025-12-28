@@ -309,9 +309,16 @@ async function showNeedDates(ctx, objectIndex, page = 0) {
 async function showNeedItems(ctx, objectIndex, dateIndex, page = 0) {
     const userId = ctx.from.id.toString();
     const needs = await loadUserNeeds(userId);
-    const uniqueObjects = [...new Set(Object.values(needs).map(n => n.objectName))];
+    // Фильтруем только заявки с валидным objectName
+    const needsArray = Object.values(needs).filter(n => n && n.objectName);
+    const uniqueObjects = [...new Set(needsArray.map(n => n.objectName.trim()).filter(obj => obj))];
     const objectName = uniqueObjects[objectIndex];
-    const normalizedObjectName = objectName && objectName.trim();
+    
+    if (!objectName) {
+        console.log(`[USER_NEEDS] showNeedItems: объект не найден по индексу ${objectIndex}, uniqueObjects.length=${uniqueObjects.length}`);
+        return ctx.reply('Ошибка: объект не найден.');
+    }
+    const normalizedObjectName = objectName.trim();
     const objectNeeds = Object.entries(needs).filter(([_, n]) =>
         n.objectName && n.objectName.trim() === normalizedObjectName
     );
