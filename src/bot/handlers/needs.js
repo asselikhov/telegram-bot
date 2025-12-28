@@ -655,7 +655,7 @@ async function manageAllNeeds(ctx) {
         const messageText = `⚙️ Управление заявками\n\n${statsText}\nВыберите объект:`;
         const message = await ctx.reply(messageText, {
             parse_mode: 'HTML',
-            ...Markup.inlineKeyboard(buttons)
+            reply_markup: Markup.inlineKeyboard(buttons).reply_markup
         });
         addMessageId(ctx, message.message_id);
         
