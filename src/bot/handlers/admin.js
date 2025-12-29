@@ -210,6 +210,7 @@ async function showAnnouncementPreview(ctx) {
         const announcementText = state.announcement.text;
         const objectNames = state.selectedObjects;
         const photos = state.announcement.photos || [];
+        const videos = state.announcement.videos || [];
         
         const objectsList = objectNames.map(obj => `· ${escapeHtml(obj)}`).join('\n');
         const previewText = `
@@ -228,13 +229,24 @@ ${objectsList}
             state.mediaGroupIds = [];
         }
         
-        if (photos.length > 0) {
-            const mediaGroup = photos.map((photoId, index) => ({
-                type: 'photo',
-                media: photoId,
-                caption: index === 0 ? previewText.slice(0, 1024) : undefined,
-                parse_mode: 'HTML'
-            }));
+        if (photos.length > 0 || videos.length > 0) {
+            const mediaGroup = [];
+            photos.forEach((photoId, index) => {
+                mediaGroup.push({
+                    type: 'photo',
+                    media: photoId,
+                    caption: index === 0 && videos.length === 0 ? previewText.slice(0, 1024) : undefined,
+                    parse_mode: 'HTML'
+                });
+            });
+            videos.forEach((videoId, index) => {
+                mediaGroup.push({
+                    type: 'video',
+                    media: videoId,
+                    caption: index === 0 && photos.length === 0 ? previewText.slice(0, 1024) : undefined,
+                    parse_mode: 'HTML'
+                });
+            });
             const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
             state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
         } else {
@@ -279,6 +291,7 @@ async function sendAnnouncement(ctx) {
         const announcementText = state.announcement.text;
         const objectNames = state.selectedObjects;
         const photos = state.announcement.photos || [];
+        const videos = state.announcement.videos || [];
         
         // Отправляем только текст объявления без списка объектов и заголовка
         const messageText = announcementText;
@@ -301,13 +314,24 @@ async function sendAnnouncement(ctx) {
             }
             
             try {
-                if (photos.length > 0) {
-                    const mediaGroup = photos.map((photoId, index) => ({
-                        type: 'photo',
-                        media: photoId,
-                        caption: index === 0 ? messageText.slice(0, 1024) : undefined,
-                        parse_mode: 'HTML'
-                    }));
+                if (photos.length > 0 || videos.length > 0) {
+                    const mediaGroup = [];
+                    photos.forEach((photoId, index) => {
+                        mediaGroup.push({
+                            type: 'photo',
+                            media: photoId,
+                            caption: index === 0 && videos.length === 0 ? messageText.slice(0, 1024) : undefined,
+                            parse_mode: 'HTML'
+                        });
+                    });
+                    videos.forEach((videoId, index) => {
+                        mediaGroup.push({
+                            type: 'video',
+                            media: videoId,
+                            caption: index === 0 && photos.length === 0 ? messageText.slice(0, 1024) : undefined,
+                            parse_mode: 'HTML'
+                        });
+                    });
                     const messages = await ctx.telegram.sendMediaGroup(groupChatId, mediaGroup);
                     groupMessageIds[groupChatId] = messages[0].message_id;
                 } else {
@@ -330,6 +354,7 @@ async function sendAnnouncement(ctx) {
             timestamp,
             groupMessageIds,
             photos,
+            videos,
             fullName: user.fullName || ''
         };
         
@@ -517,6 +542,9 @@ ${objectsList}
         if (announcement.photos && announcement.photos.length > 0) {
             detailsText += `\n📸 Фото: ${announcement.photos.length} шт.`;
         }
+        if (announcement.videos && announcement.videos.length > 0) {
+            detailsText += `\n🎥 Видео: ${announcement.videos.length} шт.`;
+        }
         
         const buttons = [
             [Markup.button.callback('✏️ Редактировать', `admin_announcement_edit_${announcementId}`)],
@@ -524,13 +552,28 @@ ${objectsList}
             [Markup.button.callback('↩️ Назад', 'admin_announcements_list')]
         ];
         
-        if (announcement.photos && announcement.photos.length > 0) {
-            const mediaGroup = announcement.photos.map((photoId, index) => ({
-                type: 'photo',
-                media: photoId,
-                caption: index === 0 ? detailsText.slice(0, 1024) : undefined,
-                parse_mode: 'HTML'
-            }));
+        if ((announcement.photos && announcement.photos.length > 0) || (announcement.videos && announcement.videos.length > 0)) {
+            const mediaGroup = [];
+            if (announcement.photos && announcement.photos.length > 0) {
+                announcement.photos.forEach((photoId, index) => {
+                    mediaGroup.push({
+                        type: 'photo',
+                        media: photoId,
+                        caption: index === 0 && (!announcement.videos || announcement.videos.length === 0) ? detailsText.slice(0, 1024) : undefined,
+                        parse_mode: 'HTML'
+                    });
+                });
+            }
+            if (announcement.videos && announcement.videos.length > 0) {
+                announcement.videos.forEach((videoId, index) => {
+                    mediaGroup.push({
+                        type: 'video',
+                        media: videoId,
+                        caption: index === 0 && (!announcement.photos || announcement.photos.length === 0) ? detailsText.slice(0, 1024) : undefined,
+                        parse_mode: 'HTML'
+                    });
+                });
+            }
             const messages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
             messages.forEach(msg => addMessageId(ctx, msg.message_id));
         }
@@ -814,14 +857,15 @@ module.exports = (bot) => {
         state.editingAnnouncementId = announcementId;
         state.announcement = {
             photos: [...(announcement.photos || [])],
+            videos: [...(announcement.videos || [])],
             text: announcement.text
         };
         state.mediaGroupIds = [];
         await clearPreviousMessages(ctx, userId);
         const message = await ctx.reply(
-            '📸 Прикрепите новые изображения к объявлению или нажмите "Готово" для завершения',
+            '📸 Прикрепите новые изображения или видео к объявлению или нажмите "Готово" для завершения',
             Markup.inlineKeyboard([
-                [Markup.button.callback('Удалить все фото', `admin_announcement_delete_all_photos_${announcementId}`)],
+                [Markup.button.callback('Удалить все медиа', `admin_announcement_delete_all_media_${announcementId}`)],
                 [Markup.button.callback('Готово', `finish_edit_announcement_photos_${announcementId}`)]
             ])
         );
@@ -858,13 +902,14 @@ module.exports = (bot) => {
         await deleteAnnouncementHandler(ctx, announcementId);
     });
     
-    bot.action(/admin_announcement_delete_all_photos_(.+)/, async (ctx) => {
+    bot.action(/admin_announcement_delete_all_media_(.+)/, async (ctx) => {
         const userId = ctx.from.id.toString();
         if (userId !== ADMIN_ID) return;
         const announcementId = ctx.match[1];
         const state = ensureUserState(ctx);
         if (state.announcement) {
             state.announcement.photos = [];
+            state.announcement.videos = [];
         }
         if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
             for (const msgId of state.mediaGroupIds) {
@@ -872,7 +917,7 @@ module.exports = (bot) => {
             }
             state.mediaGroupIds = [];
         }
-        await ctx.answerCbQuery('Все фото удалены');
+        await ctx.answerCbQuery('Все медиа удалены');
     });
     
     bot.action(/finish_edit_announcement_photos_(.+)/, async (ctx) => {
@@ -892,13 +937,14 @@ module.exports = (bot) => {
         state.messageIds = [];
         
         const photos = state.announcement ? (state.announcement.photos || []) : [];
-        await updateAnnouncement(announcementId, { photos });
+        const videos = state.announcement ? (state.announcement.videos || []) : [];
+        await updateAnnouncement(announcementId, { photos, videos });
         
         state.step = null;
         state.editingAnnouncementId = null;
         state.announcement = null;
         
-        await ctx.reply('✅ Фото объявления обновлены.');
+        await ctx.reply('✅ Медиа объявления обновлены.');
         await showAnnouncementDetails(ctx, announcementId);
     });
     

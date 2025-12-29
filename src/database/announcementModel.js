@@ -35,7 +35,7 @@ async function saveAnnouncement(userId, announcement) {
     try {
         await ensureIndexes();
         const announcementsCollection = (await getDb()).collection('announcements');
-        const { announcementId, userId: announcementUserId, text, objectNames, date, timestamp, groupMessageIds, photos, fullName } = announcement;
+        const { announcementId, userId: announcementUserId, text, objectNames, date, timestamp, groupMessageIds, photos, videos, fullName } = announcement;
         
         if (!announcementId) {
             throw new Error('announcementId is required and cannot be null or undefined');
@@ -55,6 +55,9 @@ async function saveAnnouncement(userId, announcement) {
         // Сохраняем photos как JSON строку
         const photosJson = JSON.stringify(photos || []);
         
+        // Сохраняем videos как JSON строку
+        const videosJson = JSON.stringify(videos || []);
+        
         const result = await announcementsCollection.replaceOne(
             { announcementid: announcementId },
             {
@@ -66,6 +69,7 @@ async function saveAnnouncement(userId, announcement) {
                 timestamp: timestamp || new Date().toISOString(),
                 groupmessageids: groupMessageIdsJson,
                 photos: photosJson,
+                videos: videosJson,
                 fullname: fullName || ''
             },
             { upsert: true }
@@ -86,6 +90,7 @@ async function loadAllAnnouncements() {
     announcements.forEach(row => {
         let groupMessageIds = row.groupmessageids;
         let photos = row.photos;
+        let videos = row.videos;
         
         try {
             groupMessageIds = JSON.parse(groupMessageIds || '{}');
@@ -99,6 +104,12 @@ async function loadAllAnnouncements() {
             photos = [];
         }
         
+        try {
+            videos = JSON.parse(videos || '[]');
+        } catch (e) {
+            videos = [];
+        }
+        
         announcementsMap[row.announcementid] = {
             announcementId: row.announcementid,
             userId: row.userid,
@@ -108,6 +119,7 @@ async function loadAllAnnouncements() {
             timestamp: row.timestamp,
             groupMessageIds,
             photos,
+            videos,
             fullName: row.fullname || ''
         };
     });
@@ -126,6 +138,7 @@ async function loadAnnouncement(announcementId) {
     
     let groupMessageIds = row.groupmessageids;
     let photos = row.photos;
+    let videos = row.videos;
     
     try {
         groupMessageIds = JSON.parse(groupMessageIds || '{}');
@@ -139,6 +152,12 @@ async function loadAnnouncement(announcementId) {
         photos = [];
     }
     
+    try {
+        videos = JSON.parse(videos || '[]');
+    } catch (e) {
+        videos = [];
+    }
+    
     return {
         announcementId: row.announcementid,
         userId: row.userid,
@@ -148,6 +167,7 @@ async function loadAnnouncement(announcementId) {
         timestamp: row.timestamp,
         groupMessageIds,
         photos,
+        videos,
         fullName: row.fullname || ''
     };
 }
@@ -185,6 +205,9 @@ async function updateAnnouncement(announcementId, updateData) {
     }
     if (updateData.photos !== undefined) {
         update.photos = JSON.stringify(updateData.photos || []);
+    }
+    if (updateData.videos !== undefined) {
+        update.videos = JSON.stringify(updateData.videos || []);
     }
     
     const result = await announcementsCollection.updateOne(
