@@ -179,20 +179,30 @@ async function sendReportReminders() {
 
 async function sendStatisticsNotifications() {
   try {
+    console.log('[STATISTICS] Начало отправки статистики');
     // Загружаем настройки уведомлений типа 'statistics'
     const settings = await getNotificationSettings('statistics');
+    console.log('[STATISTICS] Настройки:', { enabled: settings.enabled, time: settings.time, timezone: settings.timezone });
     
     // Проверяем, включены ли уведомления
     if (!settings.enabled) {
-      console.log('Уведомления статистики отключены, пропускаем отправку');
+      console.log('[STATISTICS] Уведомления статистики отключены, пропускаем отправку');
       return;
     }
 
     const moscowTime = new Date().toLocaleString('en-US', { timeZone: settings.timezone || 'Europe/Moscow' });
     const currentDate = new Date(moscowTime);
     const formattedDate = formatDate(currentDate);
+    console.log('[STATISTICS] Текущая дата для статистики:', formattedDate);
 
     const generalGroupChatIds = await getGeneralGroupChatIds();
+    console.log('[STATISTICS] Найдено групп для организаций:', Object.keys(generalGroupChatIds).length);
+    
+    if (Object.keys(generalGroupChatIds).length === 0) {
+      console.log('[STATISTICS] Нет настроенных групп для отправки статистики. Проверьте настройки generalGroupChatIds в базе данных.');
+      return;
+    }
+    
     const allObjects = await getAllObjects();
     const allReports = await loadAllReports();
     const allReportsArray = Object.values(allReports);
@@ -209,10 +219,16 @@ async function sendStatisticsNotifications() {
     );
 
     // Обрабатываем каждую организацию
+    let sentCount = 0;
+    let skippedCount = 0;
     for (const [orgName, orgChatInfo] of Object.entries(generalGroupChatIds)) {
       if (!orgChatInfo || !orgChatInfo.chatId) {
+        console.log(`[STATISTICS] Пропущена организация "${orgName}": нет chatId`);
+        skippedCount++;
         continue; // Пропускаем организации без группы
       }
+      
+      console.log(`[STATISTICS] Обработка организации "${orgName}" с chatId: ${orgChatInfo.chatId}`);
 
       try {
         // Получаем объекты организации
@@ -333,12 +349,16 @@ async function sendStatisticsNotifications() {
           parse_mode: 'HTML',
           link_preview_options: { is_disabled: true }
         });
+        console.log(`[STATISTICS] Статистика успешно отправлена в группу организации "${orgName}"`);
+        sentCount++;
       } catch (error) {
-        console.error(`Ошибка отправки статистики для организации ${orgName}:`, error);
+        console.error(`[STATISTICS] Ошибка отправки статистики для организации ${orgName}:`, error);
       }
     }
+    
+    console.log(`[STATISTICS] Завершено: отправлено ${sentCount}, пропущено ${skippedCount}, всего организаций ${Object.keys(generalGroupChatIds).length}`);
   } catch (error) {
-    console.error('Ошибка при отправке статистики:', error);
+    console.error('[STATISTICS] Ошибка при отправке статистики:', error);
   }
 }
 
@@ -375,16 +395,20 @@ async function setupAllNotificationCrons() {
     if (allSettings.statistics && allSettings.statistics.enabled) {
       try {
         const cronExpression = parseTimeToCron(allSettings.statistics.time, allSettings.statistics.timezone);
+        console.log(`[STATISTICS] Настройка cron задачи: выражение=${cronExpression}, время=${allSettings.statistics.time}, таймзона=${allSettings.statistics.timezone}`);
         cronTasks['statistics'] = cron.schedule(cronExpression, () => {
-          console.log(`Запуск задачи отправки статистики в ${allSettings.statistics.time}`);
+          const now = new Date().toLocaleString('ru-RU', { timeZone: allSettings.statistics.timezone || 'Europe/Moscow' });
+          console.log(`[STATISTICS] Запуск задачи отправки статистики в ${allSettings.statistics.time} (текущее время: ${now})`);
           sendStatisticsNotifications();
         }, {
           timezone: allSettings.statistics.timezone || "Europe/Moscow"
         });
-        console.log(`Настроена задача уведомлений статистики: ${allSettings.statistics.time} (${allSettings.statistics.timezone})`);
+        console.log(`[STATISTICS] Настроена задача уведомлений статистики: ${allSettings.statistics.time} (${allSettings.statistics.timezone})`);
       } catch (error) {
-        console.error('Ошибка настройки задачи уведомлений статистики:', error);
+        console.error('[STATISTICS] Ошибка настройки задачи уведомлений статистики:', error);
       }
+    } else {
+      console.log('[STATISTICS] Уведомления статистики отключены или не настроены');
     }
     
   } catch (error) {
