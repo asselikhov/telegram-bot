@@ -1411,6 +1411,82 @@ module.exports = (bot) => {
         }
     });
 
+    bot.on('video', async (ctx) => {
+        const userId = ctx.from.id.toString();
+        const state = ctx.state.userStates[userId];
+        if (!state || (state.step !== 'announcementPhotos' && state.step !== 'editAnnouncementPhotos') || ctx.message.media_group_id) return;
+
+        const videoId = ctx.message.video.file_id;
+        
+        if (state.step === 'announcementPhotos') {
+            if (!state.announcement) {
+                state.announcement = {};
+            }
+            state.announcement.videos = state.announcement.videos || [];
+            state.announcement.videos.push(videoId);
+        } else if (state.step === 'editAnnouncementPhotos') {
+            if (!state.announcement) {
+                state.announcement = {};
+            }
+            state.announcement.videos = state.announcement.videos || [];
+            state.announcement.videos.push(videoId);
+        }
+
+        const photosArray = state.announcement?.photos || [];
+        const videosArray = state.announcement?.videos || [];
+
+        if (state.mediaGroupIds && state.mediaGroupIds.length > 0) {
+            for (const msgId of state.mediaGroupIds) {
+                await ctx.telegram.deleteMessage(ctx.chat.id, msgId).catch(e => {});
+            }
+            state.mediaGroupIds = [];
+        }
+
+        const mediaGroup = [];
+        photosArray.forEach((photoId, index) => {
+            mediaGroup.push({
+                type: 'photo',
+                media: photoId,
+                caption: index === 0 && videosArray.length === 0 ? 
+                    `Добавлено ${photosArray.length} фото:` : undefined
+            });
+        });
+        videosArray.forEach((videoId, index) => {
+            mediaGroup.push({
+                type: 'video',
+                media: videoId,
+                caption: index === 0 && photosArray.length === 0 ? 
+                    `Добавлено ${videosArray.length} видео:` : undefined
+            });
+        });
+
+        if (mediaGroup.length > 0) {
+            const mediaGroupMessages = await ctx.telegram.sendMediaGroup(ctx.chat.id, mediaGroup);
+            state.mediaGroupIds = mediaGroupMessages.map(msg => msg.message_id);
+        }
+
+        const totalMedia = photosArray.length + videosArray.length;
+        const mediaTypes = [];
+        if (photosArray.length > 0) mediaTypes.push(`${photosArray.length} фото`);
+        if (videosArray.length > 0) mediaTypes.push(`${videosArray.length} видео`);
+        const text = `Медиа добавлено (${mediaTypes.join(', ')}). Отправьте еще или нажмите "Готово" для завершения.`;
+        const keyboard = Markup.inlineKeyboard([
+            [Markup.button.callback('Готово', state.step === 'announcementPhotos' ? 'finish_announcement_photos' : `finish_edit_announcement_photos_${state.editingAnnouncementId || ''}`)]
+        ]);
+
+        if (state.messageIds && state.messageIds.length > 0) {
+            const existingMessageId = state.messageIds[0];
+            try {
+                await ctx.telegram.deleteMessage(ctx.chat.id, existingMessageId);
+            } catch (e) {}
+            const newMessage = await ctx.reply(text, keyboard);
+            state.messageIds = [newMessage.message_id];
+        } else {
+            const newMessage = await ctx.reply(text, keyboard);
+            state.messageIds = [newMessage.message_id];
+        }
+    });
+
     bot.action('finish_report', async (ctx) => {
         const userId = ctx.from.id.toString();
         const state = ctx.state.userStates[userId];
