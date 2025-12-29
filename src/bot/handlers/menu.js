@@ -54,35 +54,8 @@ async function showProfile(ctx) {
     const statusEmoji = user.status === 'Online' ? '🟢' : user.status === 'Offline' ? '🔴' : '⏳';
     const displayStatus = user.status || 'Не указан';
 
-    // Формируем название организации со ссылкой
-    let organizationText = user.organization || 'Не указана';
-    if (user.organization) {
-        const orgChatInfo = generalGroupChatIds[user.organization];
-        if (orgChatInfo && orgChatInfo.chatId) {
-            try {
-                const chat = await ctx.telegram.getChat(orgChatInfo.chatId);
-                let orgUrl;
-                if (chat.username) {
-                    orgUrl = `https://t.me/${chat.username}`;
-                } else {
-                    try {
-                        orgUrl = await ctx.telegram.exportChatInviteLink(orgChatInfo.chatId);
-                    } catch (inviteError) {
-                        console.error('Ошибка при генерации invite link для организации:', inviteError);
-                        // Оставляем текст без ссылки
-                    }
-                }
-                if (orgUrl) {
-                    // Экранируем только квадратные скобки в названии для Markdown ссылок
-                    const escapedOrgName = user.organization.replace(/[\[\]]/g, '\\$&');
-                    organizationText = `[${escapedOrgName}](${orgUrl})`;
-                }
-            } catch (error) {
-                console.error('Ошибка при получении информации о чате организации:', error);
-                // Оставляем текст без ссылки
-            }
-        }
-    }
+    // Формируем название организации без ссылки
+    const organizationText = user.organization || 'Не указана';
 
     // Формируем список объектов со ссылками
     let objectsList;
