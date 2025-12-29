@@ -16,7 +16,7 @@ const statusActions = require('./actions/status');
 const { loadUsers } = require('../database/userModel');
 const { loadUserReports } = require('../database/reportModel');
 const { formatDate } = require('./utils');
-const { getNotificationSettings, getAllNotificationSettings, getObjectGroups, getGeneralGroupChatIds, getOrganizationObjects, getReportUsers, getAllOrganizationObjectsMap } = require('../database/configService');
+const { getNotificationSettings, getAllNotificationSettings, getObjectGroups, getGeneralGroupChatIds, getOrganizationObjects, getReportUsers } = require('../database/configService');
 const { getAllObjects } = require('../database/objectModel');
 const { loadAllReports } = require('../database/reportModel');
 const { loadAllNeeds } = require('../database/needModel');
@@ -195,12 +195,19 @@ async function sendStatisticsNotifications() {
     const formattedDate = formatDate(currentDate);
     console.log('[STATISTICS] Текущая дата для статистики:', formattedDate);
 
+    const generalGroupChatIds = await getGeneralGroupChatIds();
+    console.log('[STATISTICS] Найдено групп для организаций:', Object.keys(generalGroupChatIds).length);
+    
+    if (Object.keys(generalGroupChatIds).length === 0) {
+      console.log('[STATISTICS] Нет настроенных групп для отправки статистики. Проверьте настройки generalGroupChatIds в базе данных.');
+      return;
+    }
+    
     const allObjects = await getAllObjects();
     const allReports = await loadAllReports();
     const allReportsArray = Object.values(allReports);
     const allNeeds = await loadAllNeeds();
     const allNeedsArray = Object.values(allNeeds);
-    const orgObjectsMap = await getAllOrganizationObjectsMap();
     
     // Получаем отчеты за сегодня
     const todayReports = allReportsArray.filter(report => report.date === formattedDate);
@@ -211,58 +218,21 @@ async function sendStatisticsNotifications() {
         .filter(objName => objName !== null)
     );
 
-    // Получаем все объекты со статусом "В работе" и с настроенным telegramGroupId
-    const objectsInWorkWithGroups = allObjects.filter(obj => 
-      obj.status === 'В работе' && obj.telegramGroupId
-    );
-    
-    console.log(`[STATISTICS] Найдено объектов в работе с группами: ${objectsInWorkWithGroups.length}`);
-    
-    if (objectsInWorkWithGroups.length === 0) {
-      console.log('[STATISTICS] Нет объектов в работе с настроенными группами для отправки статистики.');
-      return;
-    }
-
-    // Группируем объекты по организациям для подсчета статистики
-    const orgStatsMap = {};
-    for (const obj of objectsInWorkWithGroups) {
-      // Находим организацию объекта
-      let objOrg = null;
-      for (const [orgName, orgObjects] of Object.entries(orgObjectsMap)) {
-        if (orgObjects.includes(obj.name)) {
-          objOrg = orgName;
-          break;
-        }
-      }
-      
-      if (!objOrg) {
-        console.log(`[STATISTICS] Объект "${obj.name}" не привязан к организации, пропускаем`);
-        continue;
-      }
-      
-      if (!orgStatsMap[objOrg]) {
-        orgStatsMap[objOrg] = {
-          objects: [],
-          objectGroups: []
-        };
-      }
-      
-      orgStatsMap[objOrg].objects.push(obj.name);
-      orgStatsMap[objOrg].objectGroups.push({
-        name: obj.name,
-        chatId: obj.telegramGroupId
-      });
-    }
-
     // Обрабатываем каждую организацию
     let sentCount = 0;
     let skippedCount = 0;
-    for (const [orgName, orgData] of Object.entries(orgStatsMap)) {
-      console.log(`[STATISTICS] Обработка организации "${orgName}" с ${orgData.objectGroups.length} группами объектов`);
+    for (const [orgName, orgChatInfo] of Object.entries(generalGroupChatIds)) {
+      if (!orgChatInfo || !orgChatInfo.chatId) {
+        console.log(`[STATISTICS] Пропущена организация "${orgName}": нет chatId`);
+        skippedCount++;
+        continue; // Пропускаем организации без группы
+      }
+      
+      console.log(`[STATISTICS] Обработка организации "${orgName}" с chatId: ${orgChatInfo.chatId}`);
 
       try {
-        // Получаем все объекты организации для подсчета статистики
-        const allOrgObjects = await getOrganizationObjects(orgName);
+        // Получаем объекты организации
+        const orgObjects = await getOrganizationObjects(orgName);
         
         // Фильтруем только объекты со статусом "В работе" (исключаем "Заморожен" и другие статусы)
         const objectsInWork = allOrgObjects.filter(objName => {
@@ -356,7 +326,7 @@ async function sendStatisticsNotifications() {
         );
         
         // Подсчитываем не закрытые потребности (статусы "Новая" и "В обработке") для объектов организации
-        const orgObjectsSet = new Set(allOrgObjects.map(obj => obj.trim()));
+        const orgObjectsSet = new Set(orgObjects.map(obj => obj.trim()));
         const openNeeds = allNeedsArray.filter(need => 
           (need.status === 'new' || need.status === 'in_progress') &&
           need.objectName && orgObjectsSet.has(need.objectName.trim())
@@ -376,26 +346,19 @@ async function sendStatisticsNotifications() {
         statsMessage += `3) Не закрытых потребностей: ${openNeeds.length}\n`;
         statsMessage += `</blockquote>`;
         
-        // Отправляем статистику в группы всех объектов организации
-        for (const objGroup of orgData.objectGroups) {
-          try {
-            await bot.telegram.sendMessage(objGroup.chatId, statsMessage, {
-              parse_mode: 'HTML',
-              link_preview_options: { is_disabled: true }
-            });
-            console.log(`[STATISTICS] Статистика успешно отправлена в группу объекта "${objGroup.name}" (${objGroup.chatId})`);
-            sentCount++;
-          } catch (error) {
-            console.error(`[STATISTICS] Ошибка отправки статистики в группу объекта "${objGroup.name}":`, error);
-            skippedCount++;
-          }
-        }
+        // Отправляем в группу организации
+        await bot.telegram.sendMessage(orgChatInfo.chatId, statsMessage, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true }
+        });
+        console.log(`[STATISTICS] Статистика успешно отправлена в группу организации "${orgName}"`);
+        sentCount++;
       } catch (error) {
-        console.error(`[STATISTICS] Ошибка обработки организации ${orgName}:`, error);
+        console.error(`[STATISTICS] Ошибка отправки статистики для организации ${orgName}:`, error);
       }
     }
     
-    console.log(`[STATISTICS] Завершено: отправлено ${sentCount}, пропущено ${skippedCount}, всего организаций ${Object.keys(orgStatsMap).length}`);
+    console.log(`[STATISTICS] Завершено: отправлено ${sentCount}, пропущено ${skippedCount}, всего организаций ${Object.keys(generalGroupChatIds).length}`);
   } catch (error) {
     console.error('[STATISTICS] Ошибка при отправке статистики:', error);
   }
