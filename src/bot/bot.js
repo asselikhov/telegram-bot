@@ -364,8 +364,46 @@ async function sendStatisticsNotifications() {
   }
 }
 
+async function checkOrganizationGroups() {
+  try {
+    const generalGroupChatIds = await getGeneralGroupChatIds();
+    console.log('\n' + '='.repeat(60));
+    console.log('ПРОВЕРКА НАСТРОЕК ГРУПП ОРГАНИЗАЦИЙ');
+    console.log('='.repeat(60));
+    
+    const orgName = 'ООО "Стройка58"';
+    const orgGroup = generalGroupChatIds[orgName];
+    
+    if (orgGroup) {
+      if (orgGroup.chatId) {
+        console.log(`✅ Организация "${orgName}" настроена:`);
+        console.log(`   ChatId: ${orgGroup.chatId}`);
+        console.log(`   ReportSources: ${orgGroup.reportSources ? orgGroup.reportSources.join(', ') : 'нет'}`);
+      } else {
+        console.log(`⚠️  Организация "${orgName}" найдена, но ChatId НЕ НАСТРОЕН!`);
+        console.log(`   Статистика НЕ будет отправляться для этой организации.`);
+      }
+    } else {
+      console.log(`❌ Организация "${orgName}" НЕ НАЙДЕНА в настройках групп!`);
+    }
+    
+    console.log('\nВсе организации с группами:');
+    for (const [name, info] of Object.entries(generalGroupChatIds)) {
+      const status = info.chatId ? '✅' : '❌';
+      console.log(`  ${status} ${name}: ${info.chatId || 'НЕ НАСТРОЕН'}`);
+    }
+    
+    console.log('='.repeat(60) + '\n');
+  } catch (error) {
+    console.error('[CHECK_ORGS] Ошибка при проверке групп организаций:', error);
+  }
+}
+
 async function setupAllNotificationCrons() {
   try {
+    // Проверяем настройки групп организаций
+    await checkOrganizationGroups();
+    
     // Останавливаем все существующие задачи
     for (const [type, task] of Object.entries(cronTasks)) {
       if (task) {
