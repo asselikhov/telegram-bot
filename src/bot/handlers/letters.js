@@ -190,6 +190,12 @@ async function showDownloadLetters(ctx, page = 0) {
         if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `download_letters_page_${pageNum + 1}`));
     }
     if (paginationButtons.length > 0) buttons.push(paginationButtons);
+    
+    // Для организации "ООО "Стройка58"" добавляем кнопку "Все письма"
+    if (userOrganization === 'ООО "Стройка58"') {
+        buttons.push([Markup.button.callback('📋 Все письма', 'download_all_letters')]);
+    }
+    
     buttons.push([Markup.button.callback('↩️ Назад', 'letters_menu')]);
 
     const message = await ctx.reply(
@@ -336,6 +342,135 @@ async function downloadLettersFile(ctx, objectIndex) {
     }
 }
 
+async function downloadAllLetters(ctx) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+
+    if (!users[userId]) {
+        return ctx.reply('Ошибка: пользователь не найден в базе данных.');
+    }
+
+    const userOrganization = users[userId].organization;
+    
+    // Проверяем, что пользователь из организации "ООО "Стройка58""
+    if (userOrganization !== 'ООО "Стройка58"') {
+        return ctx.reply('У вас нет прав для выгрузки всех писем.');
+    }
+
+    try {
+        await ctx.reply('Загрузка данных из Google Sheets...');
+
+        // Читаем все данные из Google Sheets без фильтрации
+        const allLetters = await readLettersData();
+
+        if (allLetters.length === 0) {
+            return ctx.reply('Письма не найдены в таблице.');
+        }
+
+        await clearPreviousMessages(ctx, userId);
+
+        // Создаем Excel файл
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Все письма');
+
+        const titleStyle = {
+            font: { name: 'Arial', size: 12, bold: true },
+            alignment: { horizontal: 'center' }
+        };
+        const headerStyle = {
+            font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } },
+            alignment: { horizontal: 'center', vertical: 'middle' },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        const cellStyle = {
+            font: { name: 'Arial', size: 9 },
+            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+
+        // Заголовок
+        worksheet.mergeCells('A1:L1');
+        const titleCell = worksheet.getCell('A1');
+        titleCell.value = 'Все письма';
+        titleCell.style = titleStyle;
+
+        // Заголовки колонок
+        const headers = ['Тип', 'Организации', 'ВХ №', 'ИС №', 'Дата документа', 'Дата регистрации', 
+                        'Контрагент', 'Роль', 'Объект', 'Исх. № контрагента', 'Содержание', 'Ссылка на файл'];
+        const headerRow = worksheet.getRow(2);
+        headerRow.values = headers;
+        headerRow.eachCell((cell) => {
+            cell.style = headerStyle;
+        });
+
+        // Настраиваем ширину колонок
+        worksheet.columns = [
+            { key: 'type', width: 12 },
+            { key: 'organizations', width: 20 },
+            { key: 'incoming', width: 12 },
+            { key: 'outgoing', width: 12 },
+            { key: 'docDate', width: 15 },
+            { key: 'regDate', width: 15 },
+            { key: 'counterparty', width: 20 },
+            { key: 'role', width: 15 },
+            { key: 'object', width: 20 },
+            { key: 'counterpartyOutgoing', width: 18 },
+            { key: 'content', width: 40 },
+            { key: 'fileLink', width: 30 }
+        ];
+
+        // Данные
+        let currentRow = 3;
+        for (const letter of allLetters) {
+            const row = worksheet.getRow(currentRow);
+            row.values = [
+                letter['Тип'] || '',
+                letter['Организации'] || '',
+                letter['ВХ №'] || '',
+                letter['ИС №'] || '',
+                letter['Дата документа'] || '',
+                letter['Дата регистрации'] || '',
+                letter['Контрагент'] || '',
+                letter['Роль'] || '',
+                letter['Объект'] || '',
+                letter['Исх. № контрагента'] || '',
+                letter['Содержание'] || '',
+                letter['Ссылка на файл'] || ''
+            ];
+            
+            row.eachCell((cell) => {
+                cell.style = cellStyle;
+            });
+            
+            // Если есть ссылка на файл, делаем её гиперссылкой
+            if (letter['Ссылка на файл'] && letter['Ссылка на файл'].toString().trim()) {
+                const linkCell = worksheet.getCell(`L${currentRow}`);
+                const linkUrl = letter['Ссылка на файл'].toString().trim();
+                linkCell.value = { text: linkUrl, hyperlink: linkUrl };
+                linkCell.style = {
+                    ...cellStyle,
+                    font: { ...cellStyle.font, color: { argb: 'FF0000FF' }, underline: true }
+                };
+            }
+            
+            currentRow++;
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const { formatDate } = require('../utils');
+        const filename = `Все_письма_${formatDate(new Date())}.xlsx`;
+
+        const documentMessage = await ctx.replyWithDocument({ source: buffer, filename });
+        if (ctx.state.userStates && ctx.state.userStates[userId]) {
+            ctx.state.userStates[userId].messageIds.push(documentMessage.message_id);
+        }
+    } catch (error) {
+        console.error('Ошибка при выгрузке всех писем:', error);
+        await ctx.reply(`Ошибка при выгрузке всех писем: ${error.message}`);
+    }
+}
+
 module.exports.showLettersMenu = showLettersMenu;
 
 module.exports = (bot) => {
@@ -343,4 +478,5 @@ module.exports = (bot) => {
     bot.action('download_letters', async (ctx) => await showDownloadLetters(ctx, 0));
     bot.action(/download_letters_page_(\d+)/, async (ctx) => await showDownloadLetters(ctx, parseInt(ctx.match[1], 10)));
     bot.action(/download_letters_file_(\d+)/, (ctx) => downloadLettersFile(ctx, parseInt(ctx.match[1], 10)));
+    bot.action('download_all_letters', async (ctx) => await downloadAllLetters(ctx));
 };
