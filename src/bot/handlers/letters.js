@@ -107,6 +107,27 @@ async function readLettersData() {
         
         // Первая строка - заголовки
         const headers = rows[0];
+        
+        // Логируем заголовки для отладки
+        console.log('Заголовки из Google Sheets:', headers);
+        
+        // Нормализуем заголовки (убираем пробелы в начале и конце)
+        const normalizedHeaders = headers.map(h => h ? h.toString().trim() : '');
+        
+        // Создаем мапу для быстрого поиска столбцов с учетом возможных вариантов названий
+        const headerMap = {};
+        normalizedHeaders.forEach((header, index) => {
+            if (header) {
+                // Сохраняем оригинальное название
+                headerMap[header] = index;
+                // Также сохраняем варианты с разным регистром и пробелами
+                const lowerHeader = header.toLowerCase();
+                if (!headerMap[lowerHeader]) {
+                    headerMap[lowerHeader] = index;
+                }
+            }
+        });
+        
         const data = [];
         
         // Преобразуем данные в объекты
@@ -115,10 +136,18 @@ async function readLettersData() {
             if (!row || row.length === 0) continue;
             
             const rowData = {};
-            headers.forEach((header, index) => {
-                rowData[header] = row[index] || '';
+            normalizedHeaders.forEach((header, index) => {
+                if (header) {
+                    rowData[header] = row[index] || '';
+                }
             });
             data.push(rowData);
+        }
+        
+        // Логируем пример данных для отладки
+        if (data.length > 0) {
+            console.log('Пример данных из Google Sheets (первая строка):', data[0]);
+            console.log('Доступные ключи:', Object.keys(data[0]));
         }
         
         return data;
@@ -126,6 +155,20 @@ async function readLettersData() {
         console.error('Ошибка при чтении данных из таблицы:', error);
         throw error;
     }
+}
+
+// Вспомогательная функция для получения значения "Организации" с учетом возможных вариантов названия
+function getOrganizationsValue(letter) {
+    if (letter['Организации']) {
+        return letter['Организации'];
+    } else if (letter['Организация']) {
+        return letter['Организация'];
+    } else if (letter['организации']) {
+        return letter['организации'];
+    } else if (letter['организация']) {
+        return letter['организация'];
+    }
+    return '';
 }
 
 async function showLettersMenu(ctx) {
@@ -296,9 +339,10 @@ async function downloadLettersFile(ctx, objectIndex) {
         let currentRow = 3;
         for (const letter of objectLetters) {
             const row = worksheet.getRow(currentRow);
+            
             row.values = [
                 letter['Тип'] || '',
-                letter['Организации'] || '',
+                getOrganizationsValue(letter),
                 letter['ВХ №'] || '',
                 letter['ИС №'] || '',
                 letter['Дата документа'] || '',
@@ -391,13 +435,13 @@ async function downloadAllLetters(ctx) {
         };
 
         // Заголовок
-        worksheet.mergeCells('A1:L1');
+        worksheet.mergeCells('A1:M1');
         const titleCell = worksheet.getCell('A1');
         titleCell.value = 'Все письма';
         titleCell.style = titleStyle;
 
         // Заголовки колонок
-        const headers = ['Тип', 'Организации', 'ВХ №', 'ИС №', 'Дата документа', 'Дата регистрации', 
+        const headers = ['№ п/п', 'Тип', 'Организации', 'ВХ №', 'ИС №', 'Дата документа', 'Дата регистрации', 
                         'Контрагент', 'Роль', 'Объект', 'Исх. № контрагента', 'Содержание', 'Ссылка на файл'];
         const headerRow = worksheet.getRow(2);
         headerRow.values = headers;
@@ -407,6 +451,7 @@ async function downloadAllLetters(ctx) {
 
         // Настраиваем ширину колонок
         worksheet.columns = [
+            { key: 'number', width: 8 },
             { key: 'type', width: 12 },
             { key: 'organizations', width: 20 },
             { key: 'incoming', width: 12 },
@@ -423,11 +468,13 @@ async function downloadAllLetters(ctx) {
 
         // Данные
         let currentRow = 3;
+        let rowNumber = 1;
         for (const letter of allLetters) {
             const row = worksheet.getRow(currentRow);
             row.values = [
+                rowNumber++,
                 letter['Тип'] || '',
-                letter['Организации'] || '',
+                getOrganizationsValue(letter),
                 letter['ВХ №'] || '',
                 letter['ИС №'] || '',
                 letter['Дата документа'] || '',
@@ -444,9 +491,16 @@ async function downloadAllLetters(ctx) {
                 cell.style = cellStyle;
             });
             
+            // Выравнивание для порядкового номера
+            const numberCell = worksheet.getCell(`A${currentRow}`);
+            numberCell.style = {
+                ...cellStyle,
+                alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }
+            };
+            
             // Если есть ссылка на файл, делаем её гиперссылкой
             if (letter['Ссылка на файл'] && letter['Ссылка на файл'].toString().trim()) {
-                const linkCell = worksheet.getCell(`L${currentRow}`);
+                const linkCell = worksheet.getCell(`M${currentRow}`);
                 const linkUrl = letter['Ссылка на файл'].toString().trim();
                 linkCell.value = { text: linkUrl, hyperlink: linkUrl };
                 linkCell.style = {
