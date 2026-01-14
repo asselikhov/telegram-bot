@@ -253,6 +253,22 @@ async function downloadLettersFile(ctx, objectIndex) {
             return ctx.reply(`Письма для объекта "${objectName}" не найдены.`);
         }
 
+        // Сортируем письма по дате документа (от новых к старым)
+        objectLetters.sort((a, b) => {
+            const parseDate = (dateStr) => {
+                if (!dateStr || !dateStr.toString().trim()) return new Date(0);
+                const dateStrTrimmed = dateStr.toString().trim();
+                const parts = dateStrTrimmed.split('.');
+                if (parts.length !== 3) return new Date(0);
+                const [day, month, year] = parts.map(Number);
+                if (isNaN(day) || isNaN(month) || isNaN(year)) return new Date(0);
+                return new Date(year, month - 1, day);
+            };
+            const dateA = parseDate(a['Дата документа']);
+            const dateB = parseDate(b['Дата документа']);
+            return dateB.getTime() - dateA.getTime(); // Новые первыми (убывание)
+        });
+
         await clearPreviousMessages(ctx, userId);
 
         // Создаем Excel файл
@@ -422,6 +438,22 @@ async function downloadAllLetters(ctx) {
         if (allLetters.length === 0) {
             return ctx.reply('Письма не найдены в таблице.');
         }
+
+        // Сортируем письма по дате документа (от новых к старым)
+        allLetters.sort((a, b) => {
+            const parseDate = (dateStr) => {
+                if (!dateStr || !dateStr.toString().trim()) return new Date(0);
+                const dateStrTrimmed = dateStr.toString().trim();
+                const parts = dateStrTrimmed.split('.');
+                if (parts.length !== 3) return new Date(0);
+                const [day, month, year] = parts.map(Number);
+                if (isNaN(day) || isNaN(month) || isNaN(year)) return new Date(0);
+                return new Date(year, month - 1, day);
+            };
+            const dateA = parseDate(a['Дата документа']);
+            const dateB = parseDate(b['Дата документа']);
+            return dateB.getTime() - dateA.getTime(); // Новые первыми (убывание)
+        });
 
         await clearPreviousMessages(ctx, userId);
 
@@ -741,6 +773,22 @@ async function downloadANFile(ctx, objectIndex) {
             return ctx.reply(`Записи АН для объекта "${objectName}" не найдены.`);
         }
 
+        // Сортируем записи АН по дате записи (от новых к старым)
+        objectANRecords.sort((a, b) => {
+            const parseDate = (dateStr) => {
+                if (!dateStr || !dateStr.toString().trim()) return new Date(0);
+                const dateStrTrimmed = dateStr.toString().trim();
+                const parts = dateStrTrimmed.split('.');
+                if (parts.length !== 3) return new Date(0);
+                const [day, month, year] = parts.map(Number);
+                if (isNaN(day) || isNaN(month) || isNaN(year)) return new Date(0);
+                return new Date(year, month - 1, day);
+            };
+            const dateA = parseDate(a['Дата записи']);
+            const dateB = parseDate(b['Дата записи']);
+            return dateB.getTime() - dateA.getTime(); // Новые первыми (убывание)
+        });
+
         await clearPreviousMessages(ctx, userId);
 
         // Создаем Excel файл
@@ -893,6 +941,22 @@ async function downloadAllANRecords(ctx) {
         if (allANRecords.length === 0) {
             return ctx.reply('Записи АН не найдены в таблице.');
         }
+
+        // Сортируем записи АН по дате записи (от новых к старым)
+        allANRecords.sort((a, b) => {
+            const parseDate = (dateStr) => {
+                if (!dateStr || !dateStr.toString().trim()) return new Date(0);
+                const dateStrTrimmed = dateStr.toString().trim();
+                const parts = dateStrTrimmed.split('.');
+                if (parts.length !== 3) return new Date(0);
+                const [day, month, year] = parts.map(Number);
+                if (isNaN(day) || isNaN(month) || isNaN(year)) return new Date(0);
+                return new Date(year, month - 1, day);
+            };
+            const dateA = parseDate(a['Дата записи']);
+            const dateB = parseDate(b['Дата записи']);
+            return dateB.getTime() - dateA.getTime(); // Новые первыми (убывание)
+        });
 
         await clearPreviousMessages(ctx, userId);
 
