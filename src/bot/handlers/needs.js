@@ -1345,7 +1345,12 @@ async function downloadAllNeedsExcel(ctx) {
         }
 
         // Настройка ширины колонок по содержимому с ограничением до 40
-        worksheet.columns.forEach((column) => {
+        worksheet.columns.forEach((column, index) => {
+            // Для столбца "№ п/п" устанавливаем фиксированную небольшую ширину
+            if (column.key === 'number') {
+                column.width = 8;
+                return;
+            }
             let maxLength = 0;
             column.eachCell({ includeEmpty: false }, (cell) => {
                 const cellValue = cell.value ? cell.value.toString() : '';
