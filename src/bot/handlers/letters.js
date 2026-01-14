@@ -290,20 +290,20 @@ async function downloadLettersFile(ctx, objectIndex) {
             cell.style = headerStyle;
         });
 
-        // Настраиваем ширину колонок
+        // Определяем колонки (нужно для вычисления ширины)
         worksheet.columns = [
-            { key: 'type', width: 12 },
-            { key: 'organizations', width: 20 },
-            { key: 'incoming', width: 12 },
-            { key: 'outgoing', width: 12 },
-            { key: 'docDate', width: 15 },
-            { key: 'regDate', width: 15 },
-            { key: 'counterparty', width: 20 },
-            { key: 'role', width: 15 },
-            { key: 'object', width: 20 },
-            { key: 'counterpartyOutgoing', width: 18 },
-            { key: 'content', width: 40 },
-            { key: 'fileLink', width: 30 }
+            { key: 'type', width: 10 },
+            { key: 'organizations', width: 10 },
+            { key: 'incoming', width: 10 },
+            { key: 'outgoing', width: 10 },
+            { key: 'docDate', width: 10 },
+            { key: 'regDate', width: 10 },
+            { key: 'counterparty', width: 10 },
+            { key: 'role', width: 10 },
+            { key: 'object', width: 10 },
+            { key: 'counterpartyOutgoing', width: 10 },
+            { key: 'content', width: 10 },
+            { key: 'fileLink', width: 10 }
         ];
 
         // Данные
@@ -343,6 +343,20 @@ async function downloadLettersFile(ctx, objectIndex) {
             
             currentRow++;
         }
+
+        // Настройка ширины колонок по содержимому с ограничением до 40
+        worksheet.columns.forEach((column) => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: false }, (cell) => {
+                const cellValue = cell.value ? cell.value.toString() : '';
+                const cellLength = cellValue.length;
+                if (cellLength > maxLength) {
+                    maxLength = cellLength;
+                }
+            });
+            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
+            column.width = Math.min(maxLength + 3, 40);
+        });
 
         const buffer = await workbook.xlsx.writeBuffer();
         const { formatDate } = require('../utils');
@@ -420,21 +434,21 @@ async function downloadAllLetters(ctx) {
             cell.style = headerStyle;
         });
 
-        // Настраиваем ширину колонок
+        // Определяем колонки (нужно для вычисления ширины)
         worksheet.columns = [
-            { key: 'number', width: 8 },
-            { key: 'type', width: 12 },
-            { key: 'organizations', width: 20 },
-            { key: 'incoming', width: 12 },
-            { key: 'outgoing', width: 12 },
-            { key: 'docDate', width: 15 },
-            { key: 'regDate', width: 15 },
-            { key: 'counterparty', width: 20 },
-            { key: 'role', width: 15 },
-            { key: 'object', width: 20 },
-            { key: 'counterpartyOutgoing', width: 18 },
-            { key: 'content', width: 40 },
-            { key: 'fileLink', width: 30 }
+            { key: 'number', width: 10 },
+            { key: 'type', width: 10 },
+            { key: 'organizations', width: 10 },
+            { key: 'incoming', width: 10 },
+            { key: 'outgoing', width: 10 },
+            { key: 'docDate', width: 10 },
+            { key: 'regDate', width: 10 },
+            { key: 'counterparty', width: 10 },
+            { key: 'role', width: 10 },
+            { key: 'object', width: 10 },
+            { key: 'counterpartyOutgoing', width: 10 },
+            { key: 'content', width: 10 },
+            { key: 'fileLink', width: 10 }
         ];
 
         // Данные
@@ -475,6 +489,20 @@ async function downloadAllLetters(ctx) {
             
             currentRow++;
         }
+
+        // Настройка ширины колонок по содержимому с ограничением до 40
+        worksheet.columns.forEach((column) => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: false }, (cell) => {
+                const cellValue = cell.value ? cell.value.toString() : '';
+                const cellLength = cellValue.length;
+                if (cellLength > maxLength) {
+                    maxLength = cellLength;
+                }
+            });
+            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
+            column.width = Math.min(maxLength + 3, 40);
+        });
 
         const buffer = await workbook.xlsx.writeBuffer();
         const { formatDate } = require('../utils');
@@ -692,16 +720,16 @@ async function downloadANFile(ctx, objectIndex) {
             cell.style = headerStyle;
         });
 
-        // Настраиваем ширину колонок
+        // Определяем колонки (нужно для вычисления ширины)
         worksheet.columns = [
-            { key: 'date', width: 15 },
-            { key: 'organizations', width: 20 },
-            { key: 'journalNumber', width: 12 },
-            { key: 'sheetNumber', width: 15 },
-            { key: 'pointNumber', width: 12 },
-            { key: 'object', width: 20 },
-            { key: 'content', width: 40 },
-            { key: 'fileLink', width: 30 }
+            { key: 'date', width: 10 },
+            { key: 'organizations', width: 10 },
+            { key: 'journalNumber', width: 10 },
+            { key: 'sheetNumber', width: 10 },
+            { key: 'pointNumber', width: 10 },
+            { key: 'object', width: 10 },
+            { key: 'content', width: 10 },
+            { key: 'fileLink', width: 10 }
         ];
 
         // Данные
@@ -736,6 +764,20 @@ async function downloadANFile(ctx, objectIndex) {
             
             currentRow++;
         }
+
+        // Настройка ширины колонок по содержимому с ограничением до 40
+        worksheet.columns.forEach((column) => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: false }, (cell) => {
+                const cellValue = cell.value ? cell.value.toString() : '';
+                const cellLength = cellValue.length;
+                if (cellLength > maxLength) {
+                    maxLength = cellLength;
+                }
+            });
+            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
+            column.width = Math.min(maxLength + 3, 40);
+        });
 
         const buffer = await workbook.xlsx.writeBuffer();
         const { formatDate } = require('../utils');
@@ -805,16 +847,16 @@ async function downloadAllANRecords(ctx) {
             cell.style = headerStyle;
         });
 
-        // Настраиваем ширину колонок
+        // Определяем колонки (нужно для вычисления ширины)
         worksheet.columns = [
-            { key: 'date', width: 15 },
-            { key: 'organizations', width: 20 },
-            { key: 'journalNumber', width: 12 },
-            { key: 'sheetNumber', width: 15 },
-            { key: 'pointNumber', width: 12 },
-            { key: 'object', width: 20 },
-            { key: 'content', width: 40 },
-            { key: 'fileLink', width: 30 }
+            { key: 'date', width: 10 },
+            { key: 'organizations', width: 10 },
+            { key: 'journalNumber', width: 10 },
+            { key: 'sheetNumber', width: 10 },
+            { key: 'pointNumber', width: 10 },
+            { key: 'object', width: 10 },
+            { key: 'content', width: 10 },
+            { key: 'fileLink', width: 10 }
         ];
 
         // Данные
@@ -849,6 +891,20 @@ async function downloadAllANRecords(ctx) {
             
             currentRow++;
         }
+
+        // Настройка ширины колонок по содержимому с ограничением до 40
+        worksheet.columns.forEach((column) => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: false }, (cell) => {
+                const cellValue = cell.value ? cell.value.toString() : '';
+                const cellLength = cellValue.length;
+                if (cellLength > maxLength) {
+                    maxLength = cellLength;
+                }
+            });
+            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
+            column.width = Math.min(maxLength + 3, 40);
+        });
 
         const buffer = await workbook.xlsx.writeBuffer();
         const { formatDate } = require('../utils');

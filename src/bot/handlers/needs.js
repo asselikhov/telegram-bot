@@ -1243,17 +1243,17 @@ async function downloadAllNeedsExcel(ctx) {
         worksheet.getRow(1).eachCell(cell => { cell.style = headerStyle; });
 
         worksheet.columns = [
-            { key: 'number', width: 8 },
-            { key: 'objectName', width: 30 },
-            { key: 'date', width: 12 },
+            { key: 'number', width: 10 },
+            { key: 'objectName', width: 10 },
+            { key: 'date', width: 10 },
             { key: 'time', width: 10 },
-            { key: 'type', width: 15 },
-            { key: 'name', width: 40 },
-            { key: 'urgency', width: 20 },
-            { key: 'status', width: 15 },
-            { key: 'position', width: 25 },
-            { key: 'organization', width: 30 },
-            { key: 'fullName', width: 30 }
+            { key: 'type', width: 10 },
+            { key: 'name', width: 10 },
+            { key: 'urgency', width: 10 },
+            { key: 'status', width: 10 },
+            { key: 'position', width: 10 },
+            { key: 'organization', width: 10 },
+            { key: 'fullName', width: 10 }
         ];
 
         // Сортируем заявки по дате (новые первыми)
@@ -1343,6 +1343,20 @@ async function downloadAllNeedsExcel(ctx) {
 
             currentRow++;
         }
+
+        // Настройка ширины колонок по содержимому с ограничением до 40
+        worksheet.columns.forEach((column) => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: false }, (cell) => {
+                const cellValue = cell.value ? cell.value.toString() : '';
+                const cellLength = cellValue.length;
+                if (cellLength > maxLength) {
+                    maxLength = cellLength;
+                }
+            });
+            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
+            column.width = Math.min(maxLength + 3, 40);
+        });
 
         const buffer = await workbook.xlsx.writeBuffer();
         const filename = `all_needs_${formatDate(new Date())}.xlsx`;

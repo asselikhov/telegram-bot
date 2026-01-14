@@ -3087,16 +3087,16 @@ ${objectsList}
         
         // Заголовки (добавлен столбец "Ответственный" перед "Статус")
         worksheet.columns = [
-            { header: 'Должность', key: 'position', width: 25 },
-            { header: 'Организация', key: 'organization', width: 30 },
-            { header: 'ФИО', key: 'fullName', width: 30 },
-            { header: 'Контактный телефон', key: 'phone', width: 15 },
-            { header: 'Дата рождения', key: 'birthdate', width: 15 },
-            { header: 'Ответственный', key: 'responsible', width: 25 },
-            { header: 'Статус', key: 'status', width: 15 },
-            { header: 'Одобрен', key: 'isApproved', width: 12 },
-            { header: 'Дата регистрации', key: 'createdAt', width: 18 },
-            { header: 'Количество отчетов', key: 'reportsCount', width: 18 }
+            { header: 'Должность', key: 'position', width: 10 },
+            { header: 'Организация', key: 'organization', width: 10 },
+            { header: 'ФИО', key: 'fullName', width: 10 },
+            { header: 'Контактный телефон', key: 'phone', width: 10 },
+            { header: 'Дата рождения', key: 'birthdate', width: 10 },
+            { header: 'Ответственный', key: 'responsible', width: 10 },
+            { header: 'Статус', key: 'status', width: 10 },
+            { header: 'Одобрен', key: 'isApproved', width: 10 },
+            { header: 'Дата регистрации', key: 'createdAt', width: 10 },
+            { header: 'Количество отчетов', key: 'reportsCount', width: 10 }
         ];
         
         // Применяем стили к заголовкам
@@ -3126,6 +3126,20 @@ ${objectsList}
                 cell.style = cellStyle;
             });
         }
+        
+        // Настройка ширины колонок по содержимому с ограничением до 40
+        worksheet.columns.forEach((column) => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: false }, (cell) => {
+                const cellValue = cell.value ? cell.value.toString() : '';
+                const cellLength = cellValue.length;
+                if (cellLength > maxLength) {
+                    maxLength = cellLength;
+                }
+            });
+            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
+            column.width = Math.min(maxLength + 3, 40);
+        });
         
         // Фиксируем первую строку
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];

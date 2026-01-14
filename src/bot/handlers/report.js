@@ -251,6 +251,20 @@ async function downloadReportFile(ctx, objectIndex) {
         currentRow++;
     }
 
+    // Настройка ширины колонок по содержимому с ограничением до 40
+    worksheet.columns.forEach((column) => {
+        let maxLength = 0;
+        column.eachCell({ includeEmpty: false }, (cell) => {
+            const cellValue = cell.value ? cell.value.toString() : '';
+            const cellLength = cellValue.length;
+            if (cellLength > maxLength) {
+                maxLength = cellLength;
+            }
+        });
+        // Устанавливаем ширину = длина + отступ (2-3), но не более 40
+        column.width = Math.min(maxLength + 3, 40);
+    });
+
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `${objectName}_reports_${formatDate(new Date())}.xlsx`;
 
@@ -419,6 +433,17 @@ async function downloadUsersFile(ctx, objectIndex) {
         cell.style = headerStyle;
     });
 
+    // Определяем колонки (нужно для вычисления ширины)
+    worksheet.columns = [
+        { key: 'position', width: 10 },
+        { key: 'organization', width: 10 },
+        { key: 'fullName', width: 10 },
+        { key: 'phone', width: 10 },
+        { key: 'birthdate', width: 10 },
+        { key: 'responsible', width: 10 },
+        { key: 'status', width: 10 }
+    ];
+
     // Данные
     let currentRow = 3;
     for (const [uid, user] of objectUsers) {
@@ -435,27 +460,26 @@ async function downloadUsersFile(ctx, objectIndex) {
         ];
         
         // Применяем стили
-        row.getCell(1).style = centeredCellStyle; // Должность
-        row.getCell(2).style = centeredCellStyle; // Организация
-        row.getCell(3).style = paddedCellStyle; // ФИО
-        row.getCell(4).style = paddedCellStyle; // Контактный телефон
-        row.getCell(5).style = centeredCellStyle; // Дата рождения
-        row.getCell(6).style = centeredCellStyle; // Ответственный
-        row.getCell(7).style = centeredCellStyle; // Статус
+        row.eachCell((cell) => {
+            cell.style = centeredCellStyle;
+        });
         
         currentRow++;
     }
 
-    // Настройка ширины колонок
-    worksheet.columns = [
-        { key: 'position', width: 25 },
-        { key: 'organization', width: 30 },
-        { key: 'fullName', width: 30 },
-        { key: 'phone', width: 20 },
-        { key: 'birthdate', width: 15 },
-        { key: 'responsible', width: 25 },
-        { key: 'status', width: 15 }
-    ];
+    // Настройка ширины колонок по содержимому с ограничением до 40
+    worksheet.columns.forEach((column) => {
+        let maxLength = 0;
+        column.eachCell({ includeEmpty: false }, (cell) => {
+            const cellValue = cell.value ? cell.value.toString() : '';
+            const cellLength = cellValue.length;
+            if (cellLength > maxLength) {
+                maxLength = cellLength;
+            }
+        });
+        // Устанавливаем ширину = длина + отступ (2-3), но не более 40
+        column.width = Math.min(maxLength + 3, 40);
+    });
 
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `${objectName}_users_${formatDate(new Date())}.xlsx`;
