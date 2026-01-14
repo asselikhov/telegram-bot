@@ -27,7 +27,6 @@ async function getGoogleAuthClient() {
         // 2. Локальный файл через переменную окружения
         // 3. JSON из переменной окружения
         const fs = require('fs');
-        const path = require('path');
         
         // Проверяем Secret File на Render (приоритет)
         const renderSecretPath = '/etc/secrets/office-484311-c559451bf1b3.json';
