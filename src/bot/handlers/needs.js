@@ -984,7 +984,12 @@ async function manageAllNeeds(ctx) {
         const inProgressPlanned = inProgressNeeds.filter(n => n.urgency === 'planned').length;
         
         // Формирование текста статистики с HTML форматированием
-        let statsText = `<b><u>Не закрытых заявок: ${notClosedCount}, в том числе:</u></b>\n`;
+        let statsText = '';
+        if (notClosedCount > 0) {
+            statsText = `<b><u>Не закрытых заявок: ${notClosedCount}, в том числе:</u></b>\n`;
+        } else {
+            statsText = `<b><u>Не закрытых заявок: ${notClosedCount}</u></b>\n`;
+        }
         
         if (newNeeds.length > 0) {
             const urgencyParts = [];
@@ -1239,8 +1244,9 @@ async function downloadAllNeedsExcel(ctx) {
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
 
-        worksheet.getRow(1).values = ['№', 'Объект', 'Дата', 'Время', 'Тип', 'Наименование', 'Срочность', 'Статус', 'Должность', 'Организация', 'ФИО'];
-        worksheet.getRow(1).eachCell(cell => { cell.style = headerStyle; });
+        const headerRow = worksheet.getRow(1);
+        headerRow.values = ['№', 'Объект', 'Дата', 'Время', 'Тип', 'Наименование', 'Срочность', 'Статус', 'Должность', 'Организация', 'ФИО'];
+        headerRow.eachCell(cell => { cell.style = headerStyle; });
 
         worksheet.columns = [
             { key: 'number', width: 10 },
@@ -1359,9 +1365,35 @@ async function downloadAllNeedsExcel(ctx) {
                     maxLength = cellLength;
                 }
             });
-            // Устанавливаем ширину = длина + минимальный отступ (1), но не более 40
-            column.width = Math.min(maxLength + 1, 40);
+            // Устанавливаем ширину = длина + минимальный отступ (1), но не менее 10 и не более 40
+            column.width = Math.max(10, Math.min(maxLength + 1, 40));
         });
+
+        // Устанавливаем высоту строки заголовка
+        headerRow.height = 20;
+
+        // Замораживаем строку заголовка (строка 1)
+        worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+        // Добавляем автофильтры
+        worksheet.autoFilter = 'A1:K1';
+
+        // Настройки печати
+        worksheet.pageSetup = {
+            orientation: 'landscape',
+            fitToPage: true,
+            fitToWidth: 1,
+            fitToHeight: 0,
+            printTitlesRow: '1:1',
+            margins: {
+                left: 0.7,
+                right: 0.7,
+                top: 0.75,
+                bottom: 0.75,
+                header: 0.3,
+                footer: 0.3
+            }
+        };
 
         const buffer = await workbook.xlsx.writeBuffer();
         const filename = `all_needs_${formatDate(new Date())}.xlsx`;

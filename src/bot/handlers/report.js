@@ -155,8 +155,9 @@ async function downloadReportFile(ctx, objectIndex) {
     worksheet.getCell('A1').value = objectName;
     worksheet.getCell('A1').style = titleStyle;
 
-    worksheet.getRow(2).values = ['Дата', 'Выполненные работы', 'Поставленные материалы', 'ИТР', 'Изображения'];
-    worksheet.getRow(2).eachCell(cell => { cell.style = headerStyle; });
+    const headerRow = worksheet.getRow(2);
+    headerRow.values = ['Дата', 'Выполненные работы', 'Поставленные материалы', 'ИТР', 'Изображения'];
+    headerRow.eachCell(cell => { cell.style = headerStyle; });
     worksheet.columns = [
         { key: 'date', width: 12 },
         { key: 'workDone', width: 40 },
@@ -261,9 +262,35 @@ async function downloadReportFile(ctx, objectIndex) {
                 maxLength = cellLength;
             }
         });
-        // Устанавливаем ширину = длина + минимальный отступ (1), но не более 40
-        column.width = Math.min(maxLength + 1, 40);
+        // Устанавливаем ширину = длина + минимальный отступ (1), но не менее 10 и не более 40
+        column.width = Math.max(10, Math.min(maxLength + 1, 40));
     });
+
+    // Устанавливаем высоту строки заголовка
+    headerRow.height = 20;
+
+    // Замораживаем строку заголовка (строка 2)
+    worksheet.views = [{ state: 'frozen', ySplit: 2 }];
+
+    // Добавляем автофильтры
+    worksheet.autoFilter = 'A2:E2';
+
+    // Настройки печати
+    worksheet.pageSetup = {
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        printTitlesRow: '2:2',
+        margins: {
+            left: 0.7,
+            right: 0.7,
+            top: 0.75,
+            bottom: 0.75,
+            header: 0.3,
+            footer: 0.3
+        }
+    };
 
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `${objectName}_reports_${formatDate(new Date())}.xlsx`;
@@ -477,9 +504,35 @@ async function downloadUsersFile(ctx, objectIndex) {
                 maxLength = cellLength;
             }
         });
-        // Устанавливаем ширину = длина + минимальный отступ (1), но не более 40
-        column.width = Math.min(maxLength + 1, 40);
+        // Устанавливаем ширину = длина + минимальный отступ (1), но не менее 10 и не более 40
+        column.width = Math.max(10, Math.min(maxLength + 1, 40));
     });
+
+    // Устанавливаем высоту строки заголовка
+    headerRow.height = 20;
+
+    // Замораживаем строку заголовка (строка 2)
+    worksheet.views = [{ state: 'frozen', ySplit: 2 }];
+
+    // Добавляем автофильтры
+    worksheet.autoFilter = 'A2:G2';
+
+    // Настройки печати
+    worksheet.pageSetup = {
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        printTitlesRow: '2:2',
+        margins: {
+            left: 0.7,
+            right: 0.7,
+            top: 0.75,
+            bottom: 0.75,
+            header: 0.3,
+            footer: 0.3
+        }
+    };
 
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `${objectName}_users_${formatDate(new Date())}.xlsx`;

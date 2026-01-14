@@ -3137,12 +3137,36 @@ ${objectsList}
                     maxLength = cellLength;
                 }
             });
-            // Устанавливаем ширину = длина + минимальный отступ (1), но не более 40
-            column.width = Math.min(maxLength + 1, 40);
+            // Устанавливаем ширину = длина + минимальный отступ (1), но не менее 10 и не более 40
+            column.width = Math.max(10, Math.min(maxLength + 1, 40));
         });
+        
+        // Устанавливаем высоту строки заголовка
+        const headerRow = worksheet.getRow(1);
+        headerRow.height = 20;
         
         // Фиксируем первую строку
         worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+        
+        // Добавляем автофильтры
+        worksheet.autoFilter = 'A1:J1';
+        
+        // Настройки печати
+        worksheet.pageSetup = {
+            orientation: 'landscape',
+            fitToPage: true,
+            fitToWidth: 1,
+            fitToHeight: 0,
+            printTitlesRow: '1:1',
+            margins: {
+                left: 0.7,
+                right: 0.7,
+                top: 0.75,
+                bottom: 0.75,
+                header: 0.3,
+                footer: 0.3
+            }
+        };
         
         const buffer = await workbook.xlsx.writeBuffer();
         const filename = `users_export_${formatDate(new Date()).replace(/\./g, '_')}.xlsx`;
