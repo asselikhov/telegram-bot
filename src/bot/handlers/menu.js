@@ -25,7 +25,7 @@ async function showMainMenu(ctx) {
     const buttons = [
         [Markup.button.callback('👤 Личный кабинет', 'profile')],
         [Markup.button.callback('📋 Отчеты', 'reports_menu')],
-        [Markup.button.callback('✉️ Письма', 'letters_menu')],
+        [Markup.button.callback('📬 Корреспонденция', 'letters_menu')],
         [Markup.button.callback('📦 Потребности', 'needs')]
     ];
     
