@@ -17,7 +17,7 @@ const statusActions = require('./actions/status');
 const { loadUsers } = require('../database/userModel');
 const { loadUserReports } = require('../database/reportModel');
 const { formatDate } = require('./utils');
-const { getNotificationSettings, getAllNotificationSettings, getObjectGroups, getGeneralGroupChatIds, getOrganizationObjects, getReportUsers } = require('../database/configService');
+const { getNotificationSettings, getAllNotificationSettings, getObjectGroups, getGeneralGroupChatIds, getOrganizationObjects, getReportUsers, getAllReportUsersMap } = require('../database/configService');
 const { getAllObjects } = require('../database/objectModel');
 const { loadAllReports } = require('../database/reportModel');
 const { loadAllNeeds } = require('../database/needModel');
@@ -112,63 +112,92 @@ async function sendReportReminders() {
 
     const users = await loadUsers();
     const objectGroups = await getObjectGroups();
+    const allReports = await loadAllReports();
+    
+    // Фильтруем отчеты за сегодня
+    const todayReports = Object.values(allReports).filter(report => report.date === formattedDate);
 
-    // Проверяем каждого пользователя
+    // Получаем карту всех ответственных пользователей
+    const allReportUsersMap = await getAllReportUsersMap();
+
+    // Собираем уникальные пары организация+объект, по которым нужно проверить напоминания
+    const objectReportKeys = new Set();
     for (const [userId, user] of Object.entries(users)) {
-      // Пропускаем пользователей, которые не одобрены или находятся в отпуске
       if (!user.isApproved || user.status !== 'Online') {
         continue;
       }
-
-      const reports = await loadUserReports(userId);
-      const todayReports = Object.values(reports).filter(report => report.date === formattedDate);
-
-      // Проверяем каждый объект пользователя
       for (const objectName of user.selectedObjects) {
-        // Получаем список пользователей, которые должны подавать отчеты для пары организация+объект
-        const reportUsers = await getReportUsers(user.organization, objectName);
-        
-        // Проверяем, должен ли этот пользователь подавать отчет по этому объекту
-        if (reportUsers && reportUsers.includes(userId)) {
-          // Нормализуем названия объектов для сравнения (убираем пробелы в начале и конце)
-          const normalizedObjectName = objectName && objectName.trim();
-          const hasReport = todayReports.some(report => 
-              report.objectName && report.objectName.trim() === normalizedObjectName
-          );
-          if (!hasReport) {
-            const groupChatId = objectGroups[objectName];
-            if (groupChatId) {
-              // Форматируем сообщение с использованием шаблона
-              let template = settings.messageTemplate;
-              // Исправляем шаблон, если он не содержит blockquote
-              if (template && !template.includes('<blockquote>')) {
-                // Если шаблон начинается с "⚠️ Напоминание\n", оборачиваем остальное в blockquote
-                if (template.startsWith('⚠️ Напоминание\n')) {
-                  const content = template.substring('⚠️ Напоминание\n'.length);
-                  template = `⚠️ Напоминание\n<blockquote>${content}</blockquote>`;
-                } else {
-                  // Иначе просто оборачиваем весь шаблон в blockquote
-                  template = `<blockquote>${template}</blockquote>`;
-                }
-              }
-              // Исправляем шаблон, если он не содержит "г." после {date}
-              if (template && !template.includes('{date}г.')) {
-                template = template.replace(/\{date\}(\.|)/g, '{date}г.');
-              }
-              const reminderText = formatNotificationMessage(template, {
-                fullName: user.fullName,
-                date: formattedDate
-              });
-              
-              try {
-                await bot.telegram.sendMessage(groupChatId, reminderText, {
-                  parse_mode: 'HTML',
-                  link_preview_options: { is_disabled: true }
-                });
-              } catch (error) {
-                console.error(`Ошибка отправки напоминания для ${userId} в чат ${groupChatId}:`, error);
-              }
+        const key = `${user.organization}_${objectName}`;
+        if (allReportUsersMap[key] && allReportUsersMap[key].includes(userId)) {
+          objectReportKeys.add(key);
+        }
+      }
+    }
+
+    // Проверяем каждую пару организация+объект
+    for (const key of objectReportKeys) {
+      const [organizationName, objectName] = key.split('_', 2);
+      const reportUsers = allReportUsersMap[key];
+      if (!reportUsers || reportUsers.length === 0) {
+        continue;
+      }
+
+      const normalizedObjectName = objectName && objectName.trim();
+      
+      // Проверяем, есть ли хотя бы один отчет по объекту от любого из ответственных лиц
+      const hasAnyReport = todayReports.some(report => {
+        const reportObjectName = report.objectName ? report.objectName.trim() : report.objectName;
+        if (reportObjectName !== normalizedObjectName) {
+          return false;
+        }
+        // Проверяем, что отчет от одного из ответственных лиц
+        const reportUserId = String(report.userId);
+        return reportUsers.includes(reportUserId);
+      });
+
+      // Если есть хотя бы один отчет по объекту, не отправляем напоминания никому
+      if (hasAnyReport) {
+        continue;
+      }
+
+      // Если отчетов нет, отправляем напоминания всем ответственным лицам, которые не подали отчет
+      for (const userId of reportUsers) {
+        const user = users[userId];
+        if (!user || !user.isApproved || user.status !== 'Online') {
+          continue;
+        }
+
+        const groupChatId = objectGroups[objectName];
+        if (groupChatId) {
+          // Форматируем сообщение с использованием шаблона
+          let template = settings.messageTemplate;
+          // Исправляем шаблон, если он не содержит blockquote
+          if (template && !template.includes('<blockquote>')) {
+            // Если шаблон начинается с "⚠️ Напоминание\n", оборачиваем остальное в blockquote
+            if (template.startsWith('⚠️ Напоминание\n')) {
+              const content = template.substring('⚠️ Напоминание\n'.length);
+              template = `⚠️ Напоминание\n<blockquote>${content}</blockquote>`;
+            } else {
+              // Иначе просто оборачиваем весь шаблон в blockquote
+              template = `<blockquote>${template}</blockquote>`;
             }
+          }
+          // Исправляем шаблон, если он не содержит "г." после {date}
+          if (template && !template.includes('{date}г.')) {
+            template = template.replace(/\{date\}(\.|)/g, '{date}г.');
+          }
+          const reminderText = formatNotificationMessage(template, {
+            fullName: user.fullName,
+            date: formattedDate
+          });
+          
+          try {
+            await bot.telegram.sendMessage(groupChatId, reminderText, {
+              parse_mode: 'HTML',
+              link_preview_options: { is_disabled: true }
+            });
+          } catch (error) {
+            console.error(`Ошибка отправки напоминания для ${userId} в чат ${groupChatId}:`, error);
           }
         }
       }
