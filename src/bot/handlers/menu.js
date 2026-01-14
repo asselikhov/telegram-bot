@@ -25,7 +25,7 @@ async function showMainMenu(ctx) {
     const buttons = [
         [Markup.button.callback('👤 Личный кабинет', 'profile')],
         [Markup.button.callback('📋 Отчеты', 'reports_menu')],
-        [Markup.button.callback('🚨 Проблемы', 'problems')],
+        [Markup.button.callback('✉️ Письма', 'letters_menu')],
         [Markup.button.callback('📦 Потребности', 'needs')]
     ];
     
@@ -171,21 +171,6 @@ module.exports = (bot) => {
         }
         const message = await ctx.reply('Введите новый контактный телефон:');
         addMessageId(ctx, message.message_id);
-    });
-
-    bot.action('problems', async (ctx) => {
-        const userId = ctx.from.id.toString();
-        await clearPreviousMessages(ctx, userId);
-        
-        try {
-            const message = await ctx.reply('🚨 Проблемы\n\nЭта функция находится в разработке.', Markup.inlineKeyboard([
-                [Markup.button.callback('↩️ Назад', 'main_menu')]
-            ]));
-            addMessageId(ctx, message.message_id);
-        } catch (error) {
-            console.error('Ошибка в обработчике problems:', error);
-            await ctx.reply('Произошла ошибка. Попробуйте позже.').catch(() => {});
-        }
     });
 
     bot.action('needs', async (ctx) => {
