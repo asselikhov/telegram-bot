@@ -143,7 +143,7 @@ async function showLettersMenu(ctx) {
 
     const buttons = [
         [Markup.button.callback('📤 Выгрузить письма', 'download_letters')],
-        [Markup.button.callback('📋 Выгрузить записи АН', 'download_an_records')],
+        [Markup.button.callback('📤 Выгрузить записи АН', 'download_an_records')],
         [Markup.button.callback('↩️ Назад', 'main_menu')]
     ];
 
@@ -194,7 +194,7 @@ async function showDownloadLetters(ctx, page = 0) {
     
     // Для организации "ООО "Стройка58"" добавляем кнопку "Все письма"
     if (userOrganization === 'ООО "Стройка58"') {
-        buttons.push([Markup.button.callback('📋 Все письма', 'download_all_letters')]);
+        buttons.push([Markup.button.callback('Все письма', 'download_all_letters')]);
     }
     
     buttons.push([Markup.button.callback('↩️ Назад', 'letters_menu')]);
@@ -557,7 +557,10 @@ async function showDownloadANRecords(ctx, page = 0) {
     }
 
     const userOrganization = users[userId].organization;
-    const availableObjects = await getOrganizationObjects(userOrganization);
+    const allObjects = await getOrganizationObjects(userOrganization);
+    
+    // Убираем объект "Офис" из списка
+    const availableObjects = allObjects.filter(obj => obj !== 'Офис');
 
     if (!availableObjects.length) {
         return ctx.reply('Для вашей организации нет доступных объектов для выгрузки.');
@@ -588,6 +591,9 @@ async function showDownloadANRecords(ctx, page = 0) {
         if (pageNum < totalPages - 1) paginationButtons.push(Markup.button.callback('Вперед ➡️', `download_an_page_${pageNum + 1}`));
     }
     if (paginationButtons.length > 0) buttons.push(paginationButtons);
+    
+    // Добавляем кнопку "Все записи АН" перед кнопкой "Назад"
+    buttons.push([Markup.button.callback('Все записи АН', 'download_all_an_records')]);
     buttons.push([Markup.button.callback('↩️ Назад', 'letters_menu')]);
 
     const message = await ctx.reply(
@@ -606,7 +612,9 @@ async function downloadANFile(ctx, objectIndex) {
     }
 
     const userOrganization = users[userId].organization;
-    const availableObjects = await getOrganizationObjects(userOrganization);
+    const allObjects = await getOrganizationObjects(userOrganization);
+    // Убираем объект "Офис" из списка
+    const availableObjects = allObjects.filter(obj => obj !== 'Офис');
     const objectName = availableObjects[objectIndex];
 
     if (!objectName) {
@@ -725,6 +733,119 @@ async function downloadANFile(ctx, objectIndex) {
     }
 }
 
+async function downloadAllANRecords(ctx) {
+    const userId = ctx.from.id.toString();
+    const users = await loadUsers();
+
+    if (!users[userId]) {
+        return ctx.reply('Ошибка: пользователь не найден в базе данных.');
+    }
+
+    try {
+        await ctx.reply('Загрузка данных из Google Sheets...');
+
+        // Читаем все данные из Google Sheets без фильтрации
+        const allANRecords = await readANData();
+
+        if (allANRecords.length === 0) {
+            return ctx.reply('Записи АН не найдены в таблице.');
+        }
+
+        await clearPreviousMessages(ctx, userId);
+
+        // Создаем Excel файл
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Все записи АН');
+
+        const titleStyle = {
+            font: { name: 'Arial', size: 12, bold: true },
+            alignment: { horizontal: 'center' }
+        };
+        const headerStyle = {
+            font: { name: 'Arial', size: 10, bold: true, color: { argb: 'FFFFFFFF' } },
+            fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } },
+            alignment: { horizontal: 'center', vertical: 'middle' },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+        const cellStyle = {
+            font: { name: 'Arial', size: 9 },
+            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
+            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+        };
+
+        // Заголовок
+        worksheet.mergeCells('A1:H1');
+        const titleCell = worksheet.getCell('A1');
+        titleCell.value = 'Все записи АН';
+        titleCell.style = titleStyle;
+
+        // Заголовки колонок
+        const headers = ['Дата записи', 'Организации', '№ журнала', '№ учетного листа', '№ пункта', 'Объект', 'Содержание', 'Ссылка на файл'];
+        const headerRow = worksheet.getRow(2);
+        headerRow.values = headers;
+        headerRow.eachCell((cell) => {
+            cell.style = headerStyle;
+        });
+
+        // Настраиваем ширину колонок
+        worksheet.columns = [
+            { key: 'date', width: 15 },
+            { key: 'organizations', width: 20 },
+            { key: 'journalNumber', width: 12 },
+            { key: 'sheetNumber', width: 15 },
+            { key: 'pointNumber', width: 12 },
+            { key: 'object', width: 20 },
+            { key: 'content', width: 40 },
+            { key: 'fileLink', width: 30 }
+        ];
+
+        // Данные
+        let currentRow = 3;
+        for (const record of allANRecords) {
+            const row = worksheet.getRow(currentRow);
+            row.values = [
+                record['Дата записи'] || '',
+                record['Организации'] || '',
+                record['№ журнала'] || '',
+                record['№ учетного листа'] || '',
+                record['№ пункта'] || '',
+                record['Объект'] || '',
+                record['Содержание'] || '',
+                record['Ссылка на файл'] || ''
+            ];
+            
+            row.eachCell((cell) => {
+                cell.style = cellStyle;
+            });
+            
+            // Если есть ссылка на файл, делаем её гиперссылкой
+            if (record['Ссылка на файл'] && record['Ссылка на файл'].toString().trim()) {
+                const linkCell = worksheet.getCell(`H${currentRow}`);
+                const linkUrl = record['Ссылка на файл'].toString().trim();
+                linkCell.value = { text: linkUrl, hyperlink: linkUrl };
+                linkCell.style = {
+                    ...cellStyle,
+                    font: { ...cellStyle.font, color: { argb: 'FF0000FF' }, underline: true }
+                };
+            }
+            
+            currentRow++;
+        }
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const { formatDate } = require('../utils');
+        const filename = `Все_записи_АН_${formatDate(new Date())}.xlsx`;
+
+        const documentMessage = await ctx.replyWithDocument({ source: buffer, filename });
+        if (ctx.state.userStates && ctx.state.userStates[userId]) {
+            ctx.state.userStates[userId].messageIds.push(documentMessage.message_id);
+        }
+    } catch (error) {
+        console.error('Ошибка при выгрузке всех записей АН:', error);
+        await ctx.reply(`Ошибка при выгрузке всех записей АН: ${error.message}`);
+    }
+}
+
 module.exports.showLettersMenu = showLettersMenu;
 
 module.exports = (bot) => {
@@ -736,4 +857,5 @@ module.exports = (bot) => {
     bot.action('download_an_records', async (ctx) => await showDownloadANRecords(ctx, 0));
     bot.action(/download_an_page_(\d+)/, async (ctx) => await showDownloadANRecords(ctx, parseInt(ctx.match[1], 10)));
     bot.action(/download_an_file_(\d+)/, (ctx) => downloadANFile(ctx, parseInt(ctx.match[1], 10)));
+    bot.action('download_all_an_records', async (ctx) => await downloadAllANRecords(ctx));
 };
