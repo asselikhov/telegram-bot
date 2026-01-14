@@ -3081,7 +3081,7 @@ ${objectsList}
         
         const cellStyle = {
             font: { name: 'Arial', size: 9 },
-            alignment: { vertical: 'middle', wrapText: true },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
         

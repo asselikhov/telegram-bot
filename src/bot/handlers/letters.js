@@ -271,7 +271,7 @@ async function downloadLettersFile(ctx, objectIndex) {
         };
         const cellStyle = {
             font: { name: 'Arial', size: 9 },
-            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
 
@@ -401,7 +401,7 @@ async function downloadAllLetters(ctx) {
         };
         const cellStyle = {
             font: { name: 'Arial', size: 9 },
-            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
 
@@ -461,13 +461,6 @@ async function downloadAllLetters(ctx) {
             row.eachCell((cell) => {
                 cell.style = cellStyle;
             });
-            
-            // Выравнивание для порядкового номера
-            const numberCell = worksheet.getCell(`A${currentRow}`);
-            numberCell.style = {
-                ...cellStyle,
-                alignment: { horizontal: 'center', vertical: 'middle', wrapText: true }
-            };
             
             // Если есть ссылка на файл, делаем её гиперссылкой
             if (letter['Ссылка на файл'] && letter['Ссылка на файл'].toString().trim()) {
@@ -681,7 +674,7 @@ async function downloadANFile(ctx, objectIndex) {
         };
         const cellStyle = {
             font: { name: 'Arial', size: 9 },
-            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
 
@@ -794,7 +787,7 @@ async function downloadAllANRecords(ctx) {
         };
         const cellStyle = {
             font: { name: 'Arial', size: 9 },
-            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
 

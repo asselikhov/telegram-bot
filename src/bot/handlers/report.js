@@ -147,7 +147,7 @@ async function downloadReportFile(ctx, objectIndex) {
     };
     const paddedCellStyle = {
         font: { name: 'Arial', size: 9 },
-        alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
+        alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
         border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
     };
 

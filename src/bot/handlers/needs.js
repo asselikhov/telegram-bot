@@ -1208,7 +1208,7 @@ async function downloadAllNeedsExcel(ctx) {
         };
         const paddedCellStyle = {
             font: { name: 'Arial', size: 9 },
-            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
         
@@ -1222,7 +1222,7 @@ async function downloadAllNeedsExcel(ctx) {
         const completedRowPaddedStyle = {
             font: { name: 'Arial', size: 9 },
             fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC6EFCE' } },
-            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
         
@@ -1235,7 +1235,7 @@ async function downloadAllNeedsExcel(ctx) {
         const rejectedRowPaddedStyle = {
             font: { name: 'Arial', size: 9 },
             fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } },
-            alignment: { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 },
+            alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
         };
 
