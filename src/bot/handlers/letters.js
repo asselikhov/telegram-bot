@@ -334,7 +334,7 @@ async function downloadLettersFile(ctx, objectIndex) {
             if (letter['Ссылка на файл'] && letter['Ссылка на файл'].toString().trim()) {
                 const linkCell = worksheet.getCell(`L${currentRow}`);
                 const linkUrl = letter['Ссылка на файл'].toString().trim();
-                linkCell.value = { text: linkUrl, hyperlink: linkUrl };
+                linkCell.value = { text: 'Открыть', hyperlink: linkUrl };
                 linkCell.style = {
                     ...cellStyle,
                     font: { ...cellStyle.font, color: { argb: 'FF0000FF' }, underline: true }
@@ -354,8 +354,8 @@ async function downloadLettersFile(ctx, objectIndex) {
                     maxLength = cellLength;
                 }
             });
-            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
-            column.width = Math.min(maxLength + 3, 40);
+            // Устанавливаем ширину = длина + минимальный отступ (1), но не более 40
+            column.width = Math.min(maxLength + 1, 40);
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
@@ -480,7 +480,7 @@ async function downloadAllLetters(ctx) {
             if (letter['Ссылка на файл'] && letter['Ссылка на файл'].toString().trim()) {
                 const linkCell = worksheet.getCell(`M${currentRow}`);
                 const linkUrl = letter['Ссылка на файл'].toString().trim();
-                linkCell.value = { text: linkUrl, hyperlink: linkUrl };
+                linkCell.value = { text: 'Открыть', hyperlink: linkUrl };
                 linkCell.style = {
                     ...cellStyle,
                     font: { ...cellStyle.font, color: { argb: 'FF0000FF' }, underline: true }
@@ -500,8 +500,8 @@ async function downloadAllLetters(ctx) {
                     maxLength = cellLength;
                 }
             });
-            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
-            column.width = Math.min(maxLength + 3, 40);
+            // Устанавливаем ширину = длина + минимальный отступ (1), но не более 40
+            column.width = Math.min(maxLength + 1, 40);
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
@@ -755,7 +755,7 @@ async function downloadANFile(ctx, objectIndex) {
             if (record['Ссылка на файл'] && record['Ссылка на файл'].toString().trim()) {
                 const linkCell = worksheet.getCell(`H${currentRow}`);
                 const linkUrl = record['Ссылка на файл'].toString().trim();
-                linkCell.value = { text: linkUrl, hyperlink: linkUrl };
+                linkCell.value = { text: 'Открыть', hyperlink: linkUrl };
                 linkCell.style = {
                     ...cellStyle,
                     font: { ...cellStyle.font, color: { argb: 'FF0000FF' }, underline: true }
@@ -775,8 +775,8 @@ async function downloadANFile(ctx, objectIndex) {
                     maxLength = cellLength;
                 }
             });
-            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
-            column.width = Math.min(maxLength + 3, 40);
+            // Устанавливаем ширину = длина + минимальный отступ (1), но не более 40
+            column.width = Math.min(maxLength + 1, 40);
         });
 
         const buffer = await workbook.xlsx.writeBuffer();
@@ -882,7 +882,7 @@ async function downloadAllANRecords(ctx) {
             if (record['Ссылка на файл'] && record['Ссылка на файл'].toString().trim()) {
                 const linkCell = worksheet.getCell(`H${currentRow}`);
                 const linkUrl = record['Ссылка на файл'].toString().trim();
-                linkCell.value = { text: linkUrl, hyperlink: linkUrl };
+                linkCell.value = { text: 'Открыть', hyperlink: linkUrl };
                 linkCell.style = {
                     ...cellStyle,
                     font: { ...cellStyle.font, color: { argb: 'FF0000FF' }, underline: true }
@@ -902,8 +902,8 @@ async function downloadAllANRecords(ctx) {
                     maxLength = cellLength;
                 }
             });
-            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
-            column.width = Math.min(maxLength + 3, 40);
+            // Устанавливаем ширину = длина + минимальный отступ (1), но не более 40
+            column.width = Math.min(maxLength + 1, 40);
         });
 
         const buffer = await workbook.xlsx.writeBuffer();

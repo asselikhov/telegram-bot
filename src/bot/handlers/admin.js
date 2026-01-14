@@ -3137,8 +3137,8 @@ ${objectsList}
                     maxLength = cellLength;
                 }
             });
-            // Устанавливаем ширину = длина + отступ (2-3), но не более 40
-            column.width = Math.min(maxLength + 3, 40);
+            // Устанавливаем ширину = длина + минимальный отступ (1), но не более 40
+            column.width = Math.min(maxLength + 1, 40);
         });
         
         // Фиксируем первую строку
