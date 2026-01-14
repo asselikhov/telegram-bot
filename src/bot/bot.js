@@ -27,6 +27,16 @@ const bot = new Telegraf(BOT_TOKEN);
 
 const userStates = {};
 
+// Middleware для проверки типа чата - бот работает только в личных чатах
+bot.use((ctx, next) => {
+  // Проверяем тип чата - пропускаем только личные чаты
+  if (ctx.chat && ctx.chat.type !== 'private') {
+    // Игнорируем все команды и действия в группах и каналах
+    return;
+  }
+  return next();
+});
+
 bot.use((ctx, next) => {
   const userId = ctx.from?.id.toString();
   if (!userId) {

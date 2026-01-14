@@ -107,27 +107,6 @@ async function readLettersData() {
         
         // Первая строка - заголовки
         const headers = rows[0];
-        
-        // Логируем заголовки для отладки
-        console.log('Заголовки из Google Sheets:', headers);
-        
-        // Нормализуем заголовки (убираем пробелы в начале и конце)
-        const normalizedHeaders = headers.map(h => h ? h.toString().trim() : '');
-        
-        // Создаем мапу для быстрого поиска столбцов с учетом возможных вариантов названий
-        const headerMap = {};
-        normalizedHeaders.forEach((header, index) => {
-            if (header) {
-                // Сохраняем оригинальное название
-                headerMap[header] = index;
-                // Также сохраняем варианты с разным регистром и пробелами
-                const lowerHeader = header.toLowerCase();
-                if (!headerMap[lowerHeader]) {
-                    headerMap[lowerHeader] = index;
-                }
-            }
-        });
-        
         const data = [];
         
         // Преобразуем данные в объекты
@@ -136,18 +115,10 @@ async function readLettersData() {
             if (!row || row.length === 0) continue;
             
             const rowData = {};
-            normalizedHeaders.forEach((header, index) => {
-                if (header) {
-                    rowData[header] = row[index] || '';
-                }
+            headers.forEach((header, index) => {
+                rowData[header] = row[index] || '';
             });
             data.push(rowData);
-        }
-        
-        // Логируем пример данных для отладки
-        if (data.length > 0) {
-            console.log('Пример данных из Google Sheets (первая строка):', data[0]);
-            console.log('Доступные ключи:', Object.keys(data[0]));
         }
         
         return data;
